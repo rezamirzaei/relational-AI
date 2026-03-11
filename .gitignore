@@ -9,6 +9,7 @@ dist/
 build/
 node_modules/
 frontend/.next/
+*.tsbuildinfo
 *.pyc
 .env
 .DS_Store
