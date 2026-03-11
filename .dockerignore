@@ -1,0 +1,16 @@
+.git
+.idea
+.venv
+__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.next
+node_modules
+frontend/.next
+frontend/node_modules
+dist
+build
+.coverage
+coverage.xml
+.env
