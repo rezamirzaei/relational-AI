@@ -26,24 +26,60 @@ class RiskLevel(StrEnum):
     CRITICAL = "critical"
 
 
+class CaseStatus(StrEnum):
+    OPEN = "open"
+    INVESTIGATING = "investigating"
+    ESCALATED = "escalated"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class CasePriority(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class CaseDisposition(StrEnum):
+    CONFIRMED_FRAUD = "confirmed-fraud"
+    FALSE_POSITIVE = "false-positive"
+    INCONCLUSIVE = "inconclusive"
+    REFERRED_TO_LAW_ENFORCEMENT = "referred-to-law-enforcement"
+
+
+class AlertStatus(StrEnum):
+    NEW = "new"
+    ACKNOWLEDGED = "acknowledged"
+    INVESTIGATING = "investigating"
+    RESOLVED = "resolved"
+    FALSE_POSITIVE = "false-positive"
+
+
 class ScenarioTag(StrEnum):
     FRAUD = "fraud"
     SYNTHETIC_IDENTITY = "synthetic-identity"
     ACCOUNT_TAKEOVER = "account-takeover"
     DEVICE_RING = "device-ring"
     CROSS_BORDER = "cross-border"
+    MONEY_MULE = "money-mule"
+    BUST_OUT = "bust-out"
+    FIRST_PARTY = "first-party"
 
 
 class TransactionChannel(StrEnum):
     CARD_NOT_PRESENT = "card-not-present"
     WALLET = "wallet"
     BANK_TRANSFER = "bank-transfer"
+    CARD_PRESENT = "card-present"
+    ACH = "ach"
 
 
 class TransactionStatus(StrEnum):
     APPROVED = "approved"
     REVIEW = "review"
     DECLINED = "declined"
+    PENDING = "pending"
 
 
 class TextSignalKind(StrEnum):
@@ -198,8 +234,100 @@ class InvestigationCase(AppModel):
     top_rule_hits: list[RuleHit]
     graph_links: list[GraphLink]
     text_signals: list[TextSignal]
-    suspicious_transactions: list[TransactionRecord]
-    recommended_actions: list[str]
+    suspicious_transactions: list[TransactionRecord] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    graph_analysis: GraphAnalysisResult | None = None
+
+
+class GraphAnalysisResult(AppModel):
+    """Results from graph-based relationship analysis."""
+
+    connected_components: int = Field(ge=0)
+    density: float = Field(ge=0.0, le=1.0)
+    highest_degree_entity: EntityReference | None = None
+    highest_degree_score: int = Field(ge=0, default=0)
+    community_count: int = Field(ge=0, default=0)
+    shortest_path_length: int | None = None
+    hub_entities: list[EntityReference] = Field(default_factory=list)
+    risk_amplification_factor: float = Field(ge=1.0, default=1.0)
+
+
+class FraudCase(AppModel):
+    """A persistent fraud investigation case with lifecycle management."""
+
+    case_id: str
+    scenario_id: str
+    title: str
+    status: CaseStatus = CaseStatus.OPEN
+    priority: CasePriority = CasePriority.MEDIUM
+    assigned_analyst_id: str | None = None
+    assigned_analyst_name: str | None = None
+    risk_score: int = Field(ge=0, le=100)
+    risk_level: RiskLevel
+    summary: str
+    disposition: CaseDisposition | None = None
+    resolution_notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None = None
+    sla_deadline: datetime | None = None
+    comment_count: int = Field(ge=0, default=0)
+    alert_count: int = Field(ge=0, default=0)
+
+
+class CaseComment(AppModel):
+    """A timestamped note attached to a fraud case by an analyst."""
+
+    comment_id: str
+    case_id: str
+    author_id: str
+    author_name: str
+    body: str
+    created_at: datetime
+
+
+class FraudAlert(AppModel):
+    """An auto-generated or manually created alert that may lead to a case."""
+
+    alert_id: str
+    scenario_id: str
+    rule_code: str
+    title: str
+    severity: RiskLevel
+    status: AlertStatus = AlertStatus.NEW
+    narrative: str
+    assigned_analyst_id: str | None = None
+    assigned_analyst_name: str | None = None
+    linked_case_id: str | None = None
+    created_at: datetime
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+
+
+class ActivityEvent(AppModel):
+    """A lightweight event for the dashboard activity feed."""
+
+    event_type: str
+    description: str
+    actor: str | None = None
+    occurred_at: datetime
+    resource_id: str | None = None
+
+
+class DashboardStats(AppModel):
+    """Aggregate metrics for the analyst dashboard overview."""
+
+    total_scenarios: int = Field(ge=0)
+    total_cases: int = Field(ge=0)
+    open_cases: int = Field(ge=0)
+    critical_cases: int = Field(ge=0)
+    total_alerts: int = Field(ge=0)
+    unacknowledged_alerts: int = Field(ge=0)
+    avg_risk_score: float = Field(ge=0.0, le=100.0)
+    cases_by_status: dict[str, int] = Field(default_factory=dict)
+    alerts_by_severity: dict[str, int] = Field(default_factory=dict)
+    recent_activity: list[ActivityEvent] = Field(default_factory=list)
+    risk_distribution: dict[str, int] = Field(default_factory=dict)
 
 
 class OperatorPrincipal(AppModel):

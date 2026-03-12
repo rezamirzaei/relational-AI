@@ -15,6 +15,7 @@ from relational_fraud_intelligence.application.services.case_assembler import (
 from relational_fraud_intelligence.application.services.scenario_overview_factory import (
     build_scenario_overview,
 )
+from relational_fraud_intelligence.infrastructure.graph.analyzer import analyze_scenario_graph
 
 
 class InvestigationService:
@@ -43,10 +44,15 @@ class InvestigationService:
                 text_signals=text_result.signals,
             )
         )
+
+        # Run graph analysis on the scenario relationship network
+        graph_analysis = analyze_scenario_graph(scenario_result.scenario)
+
         return self._case_assembler.assemble(
             AssembleInvestigationCommand(
                 scenario_overview=build_scenario_overview(scenario_result.scenario),
                 text_result=text_result,
                 reasoning_result=reasoning_result,
-            )
+            ),
+            graph_analysis=graph_analysis,
         )

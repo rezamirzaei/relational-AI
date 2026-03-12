@@ -1,12 +1,19 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type OperatorRole = "admin" | "analyst";
+export type CaseStatus = "open" | "investigating" | "escalated" | "resolved" | "closed";
+export type CasePriority = "low" | "medium" | "high" | "critical";
+export type AlertStatus = "new" | "acknowledged" | "investigating" | "resolved" | "false-positive";
+export type CaseDisposition = "confirmed-fraud" | "false-positive" | "inconclusive" | "referred-to-law-enforcement";
 
 export type ScenarioTag =
   | "fraud"
   | "synthetic-identity"
   | "account-takeover"
   | "device-ring"
-  | "cross-border";
+  | "cross-border"
+  | "money-mule"
+  | "bust-out"
+  | "first-party";
 
 export type ScenarioOverview = {
   scenario_id: string;
@@ -27,19 +34,17 @@ export type RuleHit = {
   narrative: string;
 };
 
+export type EntityReference = {
+  entity_type: string;
+  entity_id: string;
+  display_name: string;
+};
+
 export type GraphLink = {
   relation: string;
   explanation: string;
-  source: {
-    entity_type: string;
-    entity_id: string;
-    display_name: string;
-  };
-  target: {
-    entity_type: string;
-    entity_id: string;
-    display_name: string;
-  };
+  source: EntityReference;
+  target: EntityReference;
 };
 
 export type TextSignal = {
@@ -63,6 +68,17 @@ export type TransactionRecord = {
   currency: string;
   channel: string;
   status: string;
+};
+
+export type GraphAnalysisResult = {
+  connected_components: number;
+  density: number;
+  highest_degree_entity: EntityReference | null;
+  highest_degree_score: number;
+  community_count: number;
+  shortest_path_length: number | null;
+  hub_entities: EntityReference[];
+  risk_amplification_factor: number;
 };
 
 export type InvestigationResponse = {
@@ -90,6 +106,7 @@ export type InvestigationResponse = {
     text_signals: TextSignal[];
     suspicious_transactions: TransactionRecord[];
     recommended_actions: string[];
+    graph_analysis: GraphAnalysisResult | null;
   };
 };
 
@@ -148,3 +165,110 @@ export type HealthResponse = {
   seeded_scenarios: number;
   seeded_operators: number;
 };
+
+// ---------------------------------------------------------------------------
+// Cases
+// ---------------------------------------------------------------------------
+
+export type FraudCase = {
+  case_id: string;
+  scenario_id: string;
+  title: string;
+  status: CaseStatus;
+  priority: CasePriority;
+  assigned_analyst_id: string | null;
+  assigned_analyst_name: string | null;
+  risk_score: number;
+  risk_level: RiskLevel;
+  summary: string;
+  disposition: CaseDisposition | null;
+  resolution_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  sla_deadline: string | null;
+  comment_count: number;
+  alert_count: number;
+};
+
+export type CreateCaseResponse = {
+  case: FraudCase;
+};
+
+export type ListCasesResponse = {
+  cases: FraudCase[];
+  total_count: number;
+  page: number;
+  page_size: number;
+};
+
+export type GetCaseResponse = {
+  case: FraudCase;
+};
+
+export type CaseComment = {
+  comment_id: string;
+  case_id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
+// Alerts
+// ---------------------------------------------------------------------------
+
+export type FraudAlert = {
+  alert_id: string;
+  scenario_id: string;
+  rule_code: string;
+  title: string;
+  severity: RiskLevel;
+  status: AlertStatus;
+  narrative: string;
+  assigned_analyst_id: string | null;
+  assigned_analyst_name: string | null;
+  linked_case_id: string | null;
+  created_at: string;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+};
+
+export type ListAlertsResponse = {
+  alerts: FraudAlert[];
+  total_count: number;
+  page: number;
+  page_size: number;
+};
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+
+export type ActivityEvent = {
+  event_type: string;
+  description: string;
+  actor: string | null;
+  occurred_at: string;
+  resource_id: string | null;
+};
+
+export type DashboardStats = {
+  total_scenarios: number;
+  total_cases: number;
+  open_cases: number;
+  critical_cases: number;
+  total_alerts: number;
+  unacknowledged_alerts: number;
+  avg_risk_score: number;
+  cases_by_status: Record<string, number>;
+  alerts_by_severity: Record<string, number>;
+  recent_activity: ActivityEvent[];
+  risk_distribution: Record<string, number>;
+};
+
+export type DashboardStatsResponse = {
+  stats: DashboardStats;
+};
+

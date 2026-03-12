@@ -9,8 +9,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Dashboard } from "@/components/dashboard";
 import {
+  fetchAlerts,
   fetchAuditEvents,
+  fetchCases,
   fetchCurrentOperator,
+  fetchDashboardStats,
   fetchInvestigationClient,
   fetchScenarioCatalog,
   loginOperator,
@@ -25,15 +28,24 @@ import type {
 } from "@/lib/contracts";
 
 vi.mock("@/lib/api", () => ({
+  createCase: vi.fn(),
+  fetchAlerts: vi.fn(),
   fetchAuditEvents: vi.fn(),
+  fetchCases: vi.fn(),
   fetchCurrentOperator: vi.fn(),
+  fetchDashboardStats: vi.fn(),
   fetchInvestigationClient: vi.fn(),
   fetchScenarioCatalog: vi.fn(),
   loginOperator: vi.fn(),
+  updateAlertStatus: vi.fn(),
+  updateCaseStatus: vi.fn(),
 }));
 
+const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchAuditEvents = vi.mocked(fetchAuditEvents);
+const mockedFetchCases = vi.mocked(fetchCases);
 const mockedFetchCurrentOperator = vi.mocked(fetchCurrentOperator);
+const mockedFetchDashboardStats = vi.mocked(fetchDashboardStats);
 const mockedFetchInvestigationClient = vi.mocked(fetchInvestigationClient);
 const mockedFetchScenarioCatalog = vi.mocked(fetchScenarioCatalog);
 const mockedLoginOperator = vi.mocked(loginOperator);
@@ -185,6 +197,16 @@ function buildInvestigationResponse(
       recommended_actions: [
         "Freeze outbound spend pending enhanced verification.",
       ],
+      graph_analysis: {
+        connected_components: 1,
+        density: 0.45,
+        highest_degree_entity: { entity_type: "customer", entity_id: "cust-1", display_name: "Amina Rahman" },
+        highest_degree_score: 4,
+        community_count: 1,
+        shortest_path_length: null,
+        hub_entities: [{ entity_type: "customer", entity_id: "cust-1", display_name: "Amina Rahman" }],
+        risk_amplification_factor: 1.33,
+      },
     },
   };
 }
@@ -201,11 +223,33 @@ function buildLoginResponse(principal: OperatorPrincipal): LoginResponse {
 describe("Dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    mockedFetchAlerts.mockReset();
     mockedFetchAuditEvents.mockReset();
+    mockedFetchCases.mockReset();
     mockedFetchCurrentOperator.mockReset();
+    mockedFetchDashboardStats.mockReset();
     mockedFetchInvestigationClient.mockReset();
     mockedFetchScenarioCatalog.mockReset();
     mockedLoginOperator.mockReset();
+
+    // Default implementations for new APIs
+    mockedFetchDashboardStats.mockResolvedValue({
+      stats: {
+        total_scenarios: 3,
+        total_cases: 0,
+        open_cases: 0,
+        critical_cases: 0,
+        total_alerts: 0,
+        unacknowledged_alerts: 0,
+        avg_risk_score: 0,
+        cases_by_status: {},
+        alerts_by_severity: {},
+        recent_activity: [],
+        risk_distribution: {},
+      },
+    });
+    mockedFetchCases.mockResolvedValue({ cases: [], total_count: 0, page: 1, page_size: 20 });
+    mockedFetchAlerts.mockResolvedValue({ alerts: [], total_count: 0, page: 1, page_size: 20 });
   });
 
   it("renders runtime posture and requires operator sign-in", () => {
@@ -216,7 +260,7 @@ describe("Dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByText("JWT operator auth")).toBeInTheDocument();
+    expect(screen.getByText("Case management")).toBeInTheDocument();
   });
 
   it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
@@ -239,9 +283,14 @@ describe("Dashboard", () => {
       );
     });
 
-    expect(
-      screen.getByText("Synthetic Identity Gift Card Ring requires immediate review."),
-    ).toBeInTheDocument();
+    // Navigate to Investigate tab
+    fireEvent.click(screen.getByRole("button", { name: /Investigate/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Synthetic Identity Gift Card Ring requires immediate review."),
+      ).toBeInTheDocument();
+    });
 
     fireEvent.change(screen.getByLabelText("Search scenarios"), {
       target: { value: "travel" },
@@ -290,7 +339,12 @@ describe("Dashboard", () => {
 
     await waitFor(() => {
       expect(mockedFetchAuditEvents).toHaveBeenCalledWith("admin-token");
-      expect(screen.getByText("Audit Trail")).toBeInTheDocument();
+    });
+
+    // Navigate to Audit Trail tab
+    fireEvent.click(screen.getByRole("button", { name: /Audit Trail/i }));
+
+    await waitFor(() => {
       expect(screen.getByText("investigate-scenario")).toBeInTheDocument();
     });
   });

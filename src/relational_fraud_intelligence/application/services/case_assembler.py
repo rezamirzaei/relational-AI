@@ -2,11 +2,19 @@ from relational_fraud_intelligence.application.dto.investigation import (
     AssembleInvestigationCommand,
     InvestigateScenarioResult,
 )
-from relational_fraud_intelligence.domain.models import InvestigationCase, ProviderSummary
+from relational_fraud_intelligence.domain.models import (
+    GraphAnalysisResult,
+    InvestigationCase,
+    ProviderSummary,
+)
 
 
 class InvestigationCaseAssembler:
-    def assemble(self, command: AssembleInvestigationCommand) -> InvestigateScenarioResult:
+    def assemble(
+        self,
+        command: AssembleInvestigationCommand,
+        graph_analysis: GraphAnalysisResult | None = None,
+    ) -> InvestigateScenarioResult:
         provider_summary = ProviderSummary(
             requested_reasoning_provider=command.reasoning_result.requested_provider,
             active_reasoning_provider=command.reasoning_result.active_provider,
@@ -28,5 +36,6 @@ class InvestigationCaseAssembler:
                 text_signals=command.text_result.signals,
                 suspicious_transactions=command.reasoning_result.suspicious_transactions,
                 recommended_actions=command.reasoning_result.recommended_actions,
+                graph_analysis=graph_analysis,
             )
         )

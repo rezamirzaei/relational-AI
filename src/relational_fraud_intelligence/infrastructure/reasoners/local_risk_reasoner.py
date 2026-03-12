@@ -318,6 +318,148 @@ class TextualFraudContextRule:
         )
 
 
+class VelocityAnomalyRule:
+    """Detects abnormal transaction velocity — too many transactions in a short window."""
+
+    def evaluate(
+        self,
+        index: ScenarioIndex,
+        text_signals: list[TextSignal],
+    ) -> RuleEvaluation | None:
+        _ = text_signals
+        grouped: dict[str, list[TransactionRecord]] = defaultdict(list)
+        for txn in index.transactions:
+            grouped[txn.customer_id].append(txn)
+
+        anomalous_customers: list[str] = []
+        for customer_id, txns in grouped.items():
+            if len(txns) < 3:
+                continue
+            ordered = sorted(txns, key=lambda t: t.occurred_at)
+            # Sliding window: check if 3+ transactions within 30 minutes
+            for i in range(len(ordered) - 2):
+                span_minutes = (
+                    ordered[i + 2].occurred_at - ordered[i].occurred_at
+                ).total_seconds() / 60
+                if span_minutes <= 30:
+                    anomalous_customers.append(customer_id)
+                    break
+
+        if not anomalous_customers:
+            return None
+
+        return RuleEvaluation(
+            rule_hit=RuleHit(
+                rule_code="velocity-anomaly",
+                title="Transaction velocity anomaly",
+                weight=14,
+                narrative=(
+                    "Multiple transactions were concentrated in a tight time window, "
+                    "which is consistent with automated or scripted cash-out behavior."
+                ),
+                evidence=[
+                    EntityReference(
+                        entity_type=EntityType.CUSTOMER,
+                        entity_id=cid,
+                        display_name=index.customers[cid].full_name,
+                    )
+                    for cid in anomalous_customers[:3]
+                ],
+            ),
+        )
+
+
+class RoundAmountDetectionRule:
+    """Detects suspicious round-amount transactions — a sign of structuring."""
+
+    def evaluate(
+        self,
+        index: ScenarioIndex,
+        text_signals: list[TextSignal],
+    ) -> RuleEvaluation | None:
+        _ = text_signals
+        round_txns = [
+            txn
+            for txn in index.transactions
+            if txn.amount >= 500 and txn.amount % 100 == 0
+        ]
+        if len(round_txns) < 2:
+            return None
+
+        total_round = sum(t.amount for t in round_txns)
+        total_all = sum(t.amount for t in index.transactions)
+        ratio = total_round / total_all if total_all > 0 else 0
+
+        if ratio < 0.4:
+            return None
+
+        return RuleEvaluation(
+            rule_hit=RuleHit(
+                rule_code="round-amount-structuring",
+                title="Round-amount structuring",
+                weight=10,
+                narrative=(
+                    f"{len(round_txns)} transactions with exact round amounts "
+                    f"represent {ratio:.0%} of total volume, suggesting structuring to avoid thresholds."
+                ),
+                evidence=[
+                    EntityReference(
+                        entity_type=EntityType.TRANSACTION,
+                        entity_id=txn.transaction_id,
+                        display_name=f"${txn.amount:,.0f}",
+                    )
+                    for txn in round_txns[:3]
+                ],
+            ),
+            suspicious_transactions=round_txns,
+        )
+
+
+class DormantAccountActivationRule:
+    """Detects accounts that were dormant (low balance) then suddenly activated with high-value transactions."""
+
+    def evaluate(
+        self,
+        index: ScenarioIndex,
+        text_signals: list[TextSignal],
+    ) -> RuleEvaluation | None:
+        _ = text_signals
+        flagged_accounts: list[AccountProfile] = []
+
+        for account in index.accounts.values():
+            if account.current_balance < 500 and account.average_monthly_inflow < 1000:
+                # Check if this account has high-value transactions
+                account_txns = [
+                    t for t in index.transactions if t.account_id == account.account_id
+                ]
+                high_value = [t for t in account_txns if t.amount >= 800]
+                if len(high_value) >= 2:
+                    flagged_accounts.append(account)
+
+        if not flagged_accounts:
+            return None
+
+        return RuleEvaluation(
+            rule_hit=RuleHit(
+                rule_code="dormant-account-activation",
+                title="Dormant account activation",
+                weight=12,
+                narrative=(
+                    "Previously low-activity accounts are now processing high-value "
+                    "transactions, a pattern common in account takeover and money mule schemes."
+                ),
+                evidence=[
+                    EntityReference(
+                        entity_type=EntityType.ACCOUNT,
+                        entity_id=account.account_id,
+                        display_name=account.account_id,
+                    )
+                    for account in flagged_accounts
+                ],
+            ),
+        )
+
+
 class AccountTakeoverInvestigatorContextRule:
     def evaluate(
         self,
@@ -358,6 +500,9 @@ class LocalRiskReasoner:
             CrossBorderMismatchRule(),
             HistoricalRiskPressureRule(),
             TextualFraudContextRule(),
+            VelocityAnomalyRule(),
+            RoundAmountDetectionRule(),
+            DormantAccountActivationRule(),
             AccountTakeoverInvestigatorContextRule(),
         ]
 

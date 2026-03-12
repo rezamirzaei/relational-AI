@@ -629,3 +629,267 @@ code {
     width: 100%;
   }
 }
+
+/* Navigation bar */
+.nav-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--surface-strong);
+  backdrop-filter: blur(12px);
+}
+
+.nav-left {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.operator-info {
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-tab:hover {
+  background: rgba(16, 37, 45, 0.06);
+}
+
+.nav-tab.active {
+  background: rgba(16, 37, 45, 0.1);
+  border-color: var(--border-strong);
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--critical);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+/* Dashboard overview */
+.dashboard-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+/* Case and alert cards */
+.case-card,
+.alert-card {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.case-card h3,
+.alert-card h3 {
+  margin: 8px 0 4px;
+  font-family: var(--font-display-stack);
+  font-size: 1.1rem;
+}
+
+.case-card-header,
+.alert-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.case-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  flex-wrap: wrap;
+}
+
+.case-date {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.status-chip.open,
+.status-chip.new {
+  background: rgba(212, 140, 40, 0.15);
+  color: #8a5b13;
+}
+
+.status-chip.investigating,
+.status-chip.acknowledged {
+  background: rgba(51, 92, 122, 0.12);
+  color: var(--neutral);
+}
+
+.status-chip.escalated {
+  background: rgba(175, 75, 49, 0.14);
+  color: var(--critical);
+}
+
+.status-chip.resolved,
+.status-chip.closed {
+  background: rgba(47, 123, 100, 0.15);
+  color: var(--good);
+}
+
+.status-chip.false-positive {
+  background: rgba(16, 37, 45, 0.08);
+  color: var(--ink-muted);
+}
+
+.small-button {
+  padding: 5px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.small-button:hover {
+  background: rgba(16, 37, 45, 0.08);
+}
+
+/* Action bar */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+/* Bar charts */
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-label {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(16, 37, 45, 0.06);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bar-fill.good {
+  background: var(--good);
+}
+
+.bar-fill.warning {
+  background: var(--warning);
+}
+
+.bar-fill.critical,
+.bar-fill.high {
+  background: var(--critical);
+}
+
+.bar-fill.medium {
+  background: var(--warning);
+}
+
+.bar-fill.low {
+  background: var(--good);
+}
+
+.bar-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: right;
+  color: var(--ink-strong);
+}
+
+@media (max-width: 768px) {
+  .nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-right {
+    justify-content: space-between;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

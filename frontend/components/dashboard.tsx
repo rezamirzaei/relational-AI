@@ -3,14 +3,23 @@
 import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
+  createCase,
+  fetchAlerts,
   fetchAuditEvents,
+  fetchCases,
   fetchCurrentOperator,
+  fetchDashboardStats,
   fetchInvestigationClient,
   fetchScenarioCatalog,
   loginOperator,
+  updateAlertStatus,
+  updateCaseStatus,
 } from "@/lib/api";
 import type {
   AuditEvent,
+  DashboardStats,
+  FraudAlert,
+  FraudCase,
   HealthResponse,
   InvestigationResponse,
   OperatorPrincipal,
@@ -21,6 +30,8 @@ type DashboardProps = {
   backendHealth: HealthResponse | null;
   bootstrapError: string | null;
 };
+
+type ActiveView = "overview" | "investigate" | "cases" | "alerts" | "audit";
 
 const tokenStorageKey = "rfi.operator-token";
 const riskMeterWidth: Record<string, number> = {
@@ -50,6 +61,10 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [cases, setCases] = useState<FraudCase[]>([]);
+  const [alerts, setAlerts] = useState<FraudAlert[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [activeView, setActiveView] = useState<ActiveView>("overview");
   const [username, setUsername] = useState("analyst");
   const [password, setPassword] = useState("AnalystPassword123!");
   const [errorMessage, setErrorMessage] = useState<string | null>(bootstrapError);
@@ -69,26 +84,14 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
   const activeInvestigation = investigation?.investigation ?? null;
   const visibleScenarios = scenarios.filter((scenario) => {
     const query = deferredQuery.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
-    return [
-      scenario.title,
-      scenario.industry,
-      scenario.summary,
-      scenario.hypothesis,
-      ...scenario.tags,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(query);
+    if (!query) return true;
+    return [scenario.title, scenario.industry, scenario.summary, scenario.hypothesis, ...scenario.tags]
+      .join(" ").toLowerCase().includes(query);
   });
 
   useEffect(() => {
     const savedToken = window.localStorage.getItem(tokenStorageKey);
-    if (!savedToken) {
-      return;
-    }
+    if (!savedToken) return;
     void hydrateOperatorSession(savedToken);
   }, []);
 
@@ -97,16 +100,17 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
       await loadWorkspace(token);
       setAuthToken(token);
       setLoginError(null);
-    } catch (error) {
+    } catch {
       window.localStorage.removeItem(tokenStorageKey);
       setAuthToken(null);
       setOperator(null);
       setScenarios([]);
       setInvestigation(null);
       setAuditEvents([]);
-      setLoginError(
-        error instanceof Error ? error.message : "Your session could not be restored.",
-      );
+      setCases([]);
+      setAlerts([]);
+      setDashboardStats(null);
+      setLoginError("Your session could not be restored.");
     }
   }
 
@@ -115,7 +119,6 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setIsAuthenticating(true);
     setLoginError(null);
     setErrorMessage(null);
-
     try {
       const result = await loginOperator(username, password);
       window.localStorage.setItem(tokenStorageKey, result.access_token);
@@ -129,50 +132,103 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     }
   }
 
-  async function loadWorkspace(
-    token: string,
-    knownPrincipal?: OperatorPrincipal,
-  ): Promise<void> {
-    const principal =
-      knownPrincipal ?? (await fetchCurrentOperator(token)).principal;
+  async function loadWorkspace(token: string, knownPrincipal?: OperatorPrincipal): Promise<void> {
+    const principal = knownPrincipal ?? (await fetchCurrentOperator(token)).principal;
     const scenarioCatalog = await fetchScenarioCatalog(token);
     const firstScenarioId = scenarioCatalog.scenarios[0]?.scenario_id ?? null;
     const nextInvestigation = firstScenarioId
       ? await fetchInvestigationClient(token, firstScenarioId)
       : null;
-    const nextAuditEvents =
-      principal.role === "admin" ? (await fetchAuditEvents(token)).events : [];
+    const nextAuditEvents = principal.role === "admin" ? (await fetchAuditEvents(token)).events : [];
+
+    let nextStats: DashboardStats | null = null;
+    let nextCases: FraudCase[] = [];
+    let nextAlerts: FraudAlert[] = [];
+    try {
+      const [statsRes, casesRes, alertsRes] = await Promise.all([
+        fetchDashboardStats(token),
+        fetchCases(token),
+        fetchAlerts(token),
+      ]);
+      nextStats = statsRes.stats;
+      nextCases = casesRes.cases;
+      nextAlerts = alertsRes.alerts;
+    } catch {
+      // Non-critical — dashboard still works
+    }
 
     setOperator(principal);
     setScenarios(scenarioCatalog.scenarios);
     setSelectedScenarioId(firstScenarioId);
     setInvestigation(nextInvestigation);
     setAuditEvents(nextAuditEvents);
+    setDashboardStats(nextStats);
+    setCases(nextCases);
+    setAlerts(nextAlerts);
   }
 
   async function handleScenarioSelection(scenarioId: string) {
-    if (!authToken) {
-      return;
-    }
+    if (!authToken) return;
     setSelectedScenarioId(scenarioId);
+    setActiveView("investigate");
     setErrorMessage(null);
-    startTransition(() => {
-      void loadInvestigation(authToken, scenarioId);
-    });
+    startTransition(() => { void loadInvestigation(authToken, scenarioId); });
   }
 
   async function loadInvestigation(token: string, scenarioId: string) {
     try {
       const nextInvestigation = await fetchInvestigationClient(token, scenarioId);
       setInvestigation(nextInvestigation);
+      // Refresh alerts and stats after investigation (alerts auto-generated)
+      try {
+        const [alertsRes, statsRes] = await Promise.all([fetchAlerts(token), fetchDashboardStats(token)]);
+        setAlerts(alertsRes.alerts);
+        setDashboardStats(statsRes.stats);
+      } catch { /* non-critical */ }
       if (operator?.role === "admin") {
         setAuditEvents((await fetchAuditEvents(token)).events);
       }
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not load investigation.",
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Could not load investigation.");
     }
+  }
+
+  async function handleCreateCase() {
+    if (!authToken || !activeInvestigation) return;
+    try {
+      await createCase(authToken, {
+        scenario_id: activeInvestigation.scenario.scenario_id,
+        title: activeInvestigation.scenario.title,
+        summary: activeInvestigation.summary,
+        priority: activeInvestigation.risk_level,
+      });
+      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
+      setCases(casesRes.cases);
+      setDashboardStats(statsRes.stats);
+      setActiveView("cases");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
+    }
+  }
+
+  async function handleAcknowledgeAlert(alertId: string) {
+    if (!authToken) return;
+    try {
+      await updateAlertStatus(authToken, alertId, { status: "acknowledged" });
+      const [alertsRes, statsRes] = await Promise.all([fetchAlerts(authToken), fetchDashboardStats(authToken)]);
+      setAlerts(alertsRes.alerts);
+      setDashboardStats(statsRes.stats);
+    } catch { /* silent */ }
+  }
+
+  async function handleResolveCase(caseId: string) {
+    if (!authToken) return;
+    try {
+      await updateCaseStatus(authToken, caseId, { status: "resolved", disposition: "confirmed-fraud" });
+      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
+      setCases(casesRes.cases);
+      setDashboardStats(statsRes.stats);
+    } catch { /* silent */ }
   }
 
   function handleLogout() {
@@ -183,408 +239,471 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setSelectedScenarioId(null);
     setInvestigation(null);
     setAuditEvents([]);
+    setCases([]);
+    setAlerts([]);
+    setDashboardStats(null);
     setLoginError(null);
     setErrorMessage(null);
     setPassword("");
+    setActiveView("overview");
   }
 
   return (
     <main className="page-shell">
       <header className="ops-header">
         <div>
-          <div className="eyebrow">Fraud Operations Command</div>
+          <div className="eyebrow">Fraud Operations Command Center</div>
           <h1>Relational Fraud Intelligence</h1>
         </div>
         <div className="status-row">
-          <StatusPill
-            label={backendHealth?.database_status ?? "offline"}
-            tone={backendHealth?.database_status === "ready" ? "good" : "critical"}
-          />
-          <StatusPill
-            label={backendHealth?.rate_limit_status ?? "unavailable"}
-            tone={backendHealth?.rate_limit_status === "ready" ? "good" : "warning"}
-          />
-          <StatusPill
-            label={operator?.role ?? "signed-out"}
-            tone={operator ? "neutral" : "warning"}
-          />
+          <StatusPill label={backendHealth?.database_status ?? "offline"} tone={backendHealth?.database_status === "ready" ? "good" : "critical"} />
+          <StatusPill label={backendHealth?.rate_limit_status ?? "unavailable"} tone={backendHealth?.rate_limit_status === "ready" ? "good" : "warning"} />
+          <StatusPill label={operator?.role ?? "signed-out"} tone={operator ? "neutral" : "warning"} />
         </div>
       </header>
 
-      <section className="hero-panel">
-        <div className="hero-copy-block">
-          <p className="hero-copy">
-            A production-focused investigation workspace with operator authentication,
-            audit logging, rate limiting, relational case storage, and explainable fraud
-            reasoning. Analysts sign in before the platform exposes cases or evidence.
-          </p>
-          <div className="hero-ribbon">
-            <span>JWT operator auth</span>
-            <span>RBAC + audit trail</span>
-            <span>Postgres and Redis ready</span>
-          </div>
-        </div>
-
-        <div className="hero-stats">
-          <article className="hero-stat-card">
-            <span className="hero-label">Environment</span>
-            <strong>{backendHealth?.environment ?? "offline"}</strong>
-            <p>Runtime health exposed by the backend.</p>
-          </article>
-          <article className="hero-stat-card">
-            <span className="hero-label">Seeded Cases</span>
-            <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-            <p>Production-style relational investigations available after sign-in.</p>
-          </article>
-          <article className="hero-stat-card">
-            <span className="hero-label">Operators</span>
-            <strong>{backendHealth?.seeded_operators ?? 0}</strong>
-            <p>Bootstrap operator count surfaced for secure environment bring-up.</p>
-          </article>
-        </div>
-      </section>
-
       {!operator || !authToken ? (
-        <section className="surface auth-shell">
-          <div className="section-header">
-            <span>Operator Sign-In</span>
-            <span>Required</span>
-          </div>
-          <form className="auth-form" onSubmit={handleLogin}>
-            <label className="auth-field">
-              <span>Username</span>
-              <input
-                autoComplete="username"
-                name="username"
-                onChange={(event) => setUsername(event.target.value)}
-                type="text"
-                value={username}
-              />
-            </label>
-            <label className="auth-field">
-              <span>Password</span>
-              <input
-                autoComplete="current-password"
-                name="password"
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                value={password}
-              />
-            </label>
-            <button className="primary-button" disabled={isAuthenticating} type="submit">
-              {isAuthenticating ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
-          {loginError ? <div className="error-banner">{loginError}</div> : null}
-          <div className="auth-help">
-            <strong>Default demo operators</strong>
-            <p>`analyst / AnalystPassword123!`</p>
-            <p>`admin / AdminPassword123!`</p>
-          </div>
-        </section>
-      ) : (
-        <section className="workspace-grid">
-          <aside className="surface scenario-rail">
-            <div className="rail-toolbar">
-              <div className="section-header">
-                <span>Scenario Catalog</span>
-                <span>{visibleScenarios.length}</span>
+        <>
+          <section className="hero-panel">
+            <div className="hero-copy-block">
+              <p className="hero-copy">
+                A production-grade fraud investigation platform with case lifecycle management,
+                graph-based entity analysis, automated alert generation, operator authentication,
+                and real-time risk reasoning across relational entity networks.
+              </p>
+              <div className="hero-ribbon">
+                <span>Case management</span>
+                <span>Alert queue</span>
+                <span>Graph analysis</span>
+                <span>10 fraud rules</span>
               </div>
-              <div className="operator-banner">
-                <div>
-                  <span className="hero-label">Signed in</span>
-                  <strong>{operator.display_name}</strong>
-                </div>
-                <button className="secondary-button" onClick={handleLogout} type="button">
-                  Sign out
-                </button>
-              </div>
-              <label className="search-shell">
-                <span className="sr-only">Search scenarios</span>
-                <input
-                  aria-label="Search scenarios"
-                  className="search-input"
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search industry, tag, or narrative"
-                  type="search"
-                  value={searchQuery}
-                />
-              </label>
             </div>
+            <div className="hero-stats">
+              <article className="hero-stat-card">
+                <span className="hero-label">Environment</span>
+                <strong>{backendHealth?.environment ?? "offline"}</strong>
+                <p>Runtime health exposed by the backend.</p>
+              </article>
+              <article className="hero-stat-card">
+                <span className="hero-label">Scenarios</span>
+                <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
+                <p>Relational fraud investigations available.</p>
+              </article>
+              <article className="hero-stat-card">
+                <span className="hero-label">Operators</span>
+                <strong>{backendHealth?.seeded_operators ?? 0}</strong>
+                <p>Bootstrap operator accounts.</p>
+              </article>
+            </div>
+          </section>
 
-            <div className="scenario-list" data-testid="scenario-list">
-              {visibleScenarios.length > 0 ? (
-                visibleScenarios.map((scenario) => {
-                  const isSelected = scenario.scenario_id === selectedScenarioId;
-                  return (
-                    <button
-                      key={scenario.scenario_id}
-                      className={`scenario-card ${isSelected ? "selected" : ""}`}
-                      onClick={() => handleScenarioSelection(scenario.scenario_id)}
-                      type="button"
-                    >
-                      <div className="scenario-card-top">
-                        <span className={`risk-chip ${scenario.baseline_risk}`}>
-                          {scenario.baseline_risk}
-                        </span>
-                        <span className="scenario-industry">{scenario.industry}</span>
-                      </div>
-                      <h2>{scenario.title}</h2>
-                      <p>{scenario.summary}</p>
-                      <div className="tag-row">
-                        {scenario.tags.slice(0, 3).map((tag) => (
-                          <span key={tag} className="tag-pill">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="scenario-footer">
-                        <span>{scenario.transaction_count} transactions</span>
-                        <span>{currencyFormatter.format(scenario.total_volume)}</span>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="empty-state">
-                  No scenarios match that search. Try a tag like <code>cross-border</code>.
+          <section className="surface auth-shell">
+            <div className="section-header"><span>Operator Sign-In</span><span>Required</span></div>
+            <form className="auth-form" onSubmit={handleLogin}>
+              <label className="auth-field">
+                <span>Username</span>
+                <input autoComplete="username" name="username" onChange={(e) => setUsername(e.target.value)} type="text" value={username} />
+              </label>
+              <label className="auth-field">
+                <span>Password</span>
+                <input autoComplete="current-password" name="password" onChange={(e) => setPassword(e.target.value)} type="password" value={password} />
+              </label>
+              <button className="primary-button" disabled={isAuthenticating} type="submit">
+                {isAuthenticating ? "Signing in..." : "Sign in"}
+              </button>
+            </form>
+            {loginError ? <div className="error-banner">{loginError}</div> : null}
+            <div className="auth-help">
+              <strong>Default demo operators</strong>
+              <p>`analyst / AnalystPassword123!`</p>
+              <p>`admin / AdminPassword123!`</p>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          {/* Navigation bar */}
+          <nav className="nav-bar">
+            <div className="nav-left">
+              {(["overview", "investigate", "cases", "alerts", ...(operator.role === "admin" ? ["audit"] : [])] as ActiveView[]).map((view) => (
+                <button
+                  key={view}
+                  className={`nav-tab ${activeView === view ? "active" : ""}`}
+                  onClick={() => setActiveView(view)}
+                  type="button"
+                >
+                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Investigate" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
+                  {view === "alerts" && alerts.filter(a => a.status === "new").length > 0 && (
+                    <span className="nav-badge">{alerts.filter(a => a.status === "new").length}</span>
+                  )}
+                  {view === "cases" && cases.filter(c => c.status === "open" || c.status === "investigating").length > 0 && (
+                    <span className="nav-badge">{cases.filter(c => c.status === "open" || c.status === "investigating").length}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="nav-right">
+              <span className="operator-info">{operator.display_name} ({operator.role})</span>
+              <button className="secondary-button" onClick={handleLogout} type="button">Sign out</button>
+            </div>
+          </nav>
+
+          {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+
+          {/* ======= OVERVIEW ======= */}
+          {activeView === "overview" && (
+            <section className="dashboard-overview">
+              <div className="stats-grid">
+                <MetricCard label="Total Scenarios" value={String(dashboardStats?.total_scenarios ?? scenarios.length)} tone="neutral" />
+                <MetricCard label="Active Cases" value={String(dashboardStats?.open_cases ?? 0)} tone="warning" />
+                <MetricCard label="Critical Cases" value={String(dashboardStats?.critical_cases ?? 0)} tone="critical" />
+                <MetricCard label="Pending Alerts" value={String(dashboardStats?.unacknowledged_alerts ?? 0)} tone="critical" />
+                <MetricCard label="Total Cases" value={String(dashboardStats?.total_cases ?? 0)} tone="neutral" />
+                <MetricCard label="Avg Risk Score" value={`${dashboardStats?.avg_risk_score?.toFixed(0) ?? 0}/100`} tone="warning" />
+              </div>
+
+              {dashboardStats && Object.keys(dashboardStats.cases_by_status).length > 0 && (
+                <div className="insight-grid">
+                  <section className="content-card">
+                    <div className="mini-header"><span>Cases by Status</span><span>{dashboardStats.total_cases}</span></div>
+                    <div className="bar-chart">
+                      {Object.entries(dashboardStats.cases_by_status).map(([status, count]) => (
+                        <div key={status} className="bar-row">
+                          <span className="bar-label">{status}</span>
+                          <div className="bar-track">
+                            <div className={`bar-fill ${status === "open" || status === "investigating" ? "warning" : "good"}`} style={{ width: `${Math.max(8, (count / Math.max(1, dashboardStats.total_cases)) * 100)}%` }} />
+                          </div>
+                          <span className="bar-value">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="content-card">
+                    <div className="mini-header"><span>Alerts by Severity</span><span>{dashboardStats.total_alerts}</span></div>
+                    <div className="bar-chart">
+                      {Object.entries(dashboardStats.alerts_by_severity).map(([severity, count]) => (
+                        <div key={severity} className="bar-row">
+                          <span className="bar-label">{severity}</span>
+                          <div className="bar-track">
+                            <div className={`bar-fill ${severity}`} style={{ width: `${Math.max(8, (count / Math.max(1, dashboardStats.total_alerts)) * 100)}%` }} />
+                          </div>
+                          <span className="bar-value">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               )}
-            </div>
-          </aside>
 
-          <section className="surface investigation-panel">
-            {selectedScenario && activeInvestigation ? (
-              <>
-                <div className="section-header">
-                  <span>Active Investigation</span>
-                  <span>{isPending ? "Refreshing evidence" : "Analyst view"}</span>
-                </div>
-
-                <div className="headline-row">
-                  <div className="headline-copy">
-                    <p className="eyebrow">Scenario hypothesis</p>
-                    <h2>{selectedScenario.title}</h2>
-                    <p className="muted-copy">{selectedScenario.hypothesis}</p>
-                    <p className="summary-lead">{activeInvestigation.summary}</p>
+              {dashboardStats?.recent_activity && dashboardStats.recent_activity.length > 0 && (
+                <section className="content-card">
+                  <div className="mini-header"><span>Recent Activity</span><span>{dashboardStats.recent_activity.length}</span></div>
+                  <div className="stack">
+                    {dashboardStats.recent_activity.map((event, i) => (
+                      <article key={i} className="transaction-row">
+                        <div>
+                          <strong>{event.event_type}</strong>
+                          <p>{event.description}</p>
+                        </div>
+                        <div className="transaction-meta">
+                          <span>{dateFormatter.format(new Date(event.occurred_at))}</span>
+                        </div>
+                      </article>
+                    ))}
                   </div>
+                </section>
+              )}
 
-                  <div className="risk-meter-shell">
-                    <div className="risk-meter-label">
-                      <span>Priority score</span>
-                      <strong>{activeInvestigation.total_risk_score}/100</strong>
-                    </div>
-                    <div className="risk-meter-track">
-                      <div
-                        className={`risk-meter-fill ${activeInvestigation.risk_level}`}
-                        style={{
-                          width: `${riskMeterWidth[activeInvestigation.risk_level]}%`,
-                        }}
-                      />
-                    </div>
-                    <span className={`risk-chip ${activeInvestigation.risk_level}`}>
-                      {activeInvestigation.risk_level}
-                    </span>
+              {(!dashboardStats || dashboardStats.total_cases === 0) && (
+                <section className="content-card emphasis-card">
+                  <div className="mini-header"><span>Getting Started</span><span>Guide</span></div>
+                  <div className="action-stack">
+                    <article className="action-item"><span className="action-marker" /><p>Go to <strong>Investigate</strong> to run fraud analysis on a scenario.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>When a high-risk investigation completes, <strong>alerts are auto-generated</strong>.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Create a <strong>case</strong> from the investigation to track and resolve it.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Manage alert and case queues from the <strong>Cases</strong> and <strong>Alerts</strong> tabs.</p></article>
                   </div>
+                </section>
+              )}
+            </section>
+          )}
+
+          {/* ======= INVESTIGATE ======= */}
+          {activeView === "investigate" && (
+            <section className="workspace-grid">
+              <aside className="surface scenario-rail">
+                <div className="rail-toolbar">
+                  <div className="section-header"><span>Scenario Catalog</span><span>{visibleScenarios.length}</span></div>
+                  <label className="search-shell">
+                    <span className="sr-only">Search scenarios</span>
+                    <input aria-label="Search scenarios" className="search-input" onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search industry, tag, or narrative" type="search" value={searchQuery} />
+                  </label>
                 </div>
+                <div className="scenario-list" data-testid="scenario-list">
+                  {visibleScenarios.length > 0 ? visibleScenarios.map((scenario) => {
+                    const isSelected = scenario.scenario_id === selectedScenarioId;
+                    return (
+                      <button key={scenario.scenario_id} className={`scenario-card ${isSelected ? "selected" : ""}`} onClick={() => handleScenarioSelection(scenario.scenario_id)} type="button">
+                        <div className="scenario-card-top">
+                          <span className={`risk-chip ${scenario.baseline_risk}`}>{scenario.baseline_risk}</span>
+                          <span className="scenario-industry">{scenario.industry}</span>
+                        </div>
+                        <h2>{scenario.title}</h2>
+                        <p>{scenario.summary}</p>
+                        <div className="tag-row">
+                          {scenario.tags.slice(0, 3).map((tag) => (<span key={tag} className="tag-pill">{tag}</span>))}
+                        </div>
+                        <div className="scenario-footer">
+                          <span>{scenario.transaction_count} transactions</span>
+                          <span>{currencyFormatter.format(scenario.total_volume)}</span>
+                        </div>
+                      </button>
+                    );
+                  }) : (
+                    <div className="empty-state">No scenarios match that search.</div>
+                  )}
+                </div>
+              </aside>
 
-                {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+              <section className="surface investigation-panel">
+                {selectedScenario && activeInvestigation ? (
+                  <>
+                    <div className="section-header">
+                      <span>Active Investigation</span>
+                      <span>{isPending ? "Refreshing evidence..." : "Analyst view"}</span>
+                    </div>
 
-                <div className="metrics-grid">
-                  <MetricCard
-                    label="Suspicious volume"
-                    tone="critical"
-                    value={currencyFormatter.format(
-                      activeInvestigation.metrics.suspicious_transaction_volume,
+                    <div className="headline-row">
+                      <div className="headline-copy">
+                        <p className="eyebrow">Scenario hypothesis</p>
+                        <h2>{selectedScenario.title}</h2>
+                        <p className="muted-copy">{selectedScenario.hypothesis}</p>
+                        <p className="summary-lead">{activeInvestigation.summary}</p>
+                      </div>
+                      <div className="risk-meter-shell">
+                        <div className="risk-meter-label">
+                          <span>Priority score</span>
+                          <strong>{activeInvestigation.total_risk_score}/100</strong>
+                        </div>
+                        <div className="risk-meter-track">
+                          <div className={`risk-meter-fill ${activeInvestigation.risk_level}`} style={{ width: `${riskMeterWidth[activeInvestigation.risk_level]}%` }} />
+                        </div>
+                        <span className={`risk-chip ${activeInvestigation.risk_level}`}>{activeInvestigation.risk_level}</span>
+                      </div>
+                    </div>
+
+                    <div className="metrics-grid">
+                      <MetricCard label="Suspicious volume" tone="critical" value={currencyFormatter.format(activeInvestigation.metrics.suspicious_transaction_volume)} />
+                      <MetricCard label="Flagged transactions" tone="warning" value={String(activeInvestigation.metrics.suspicious_transaction_count)} />
+                      <MetricCard label="Shared devices" tone="neutral" value={String(activeInvestigation.metrics.shared_device_count)} />
+                      <MetricCard label="Linked customers" tone="good" value={String(activeInvestigation.metrics.linked_customer_count)} />
+                    </div>
+
+                    {/* Graph Analysis Card */}
+                    {activeInvestigation.graph_analysis && (
+                      <section className="content-card emphasis-card">
+                        <div className="mini-header"><span>Graph Analysis</span><span>Relationship network</span></div>
+                        <div className="metrics-grid" style={{ marginTop: 12 }}>
+                          <MetricCard label="Components" tone="neutral" value={String(activeInvestigation.graph_analysis.connected_components)} />
+                          <MetricCard label="Density" tone={activeInvestigation.graph_analysis.density > 0.3 ? "warning" : "neutral"} value={activeInvestigation.graph_analysis.density.toFixed(3)} />
+                          <MetricCard label="Communities" tone="neutral" value={String(activeInvestigation.graph_analysis.community_count)} />
+                          <MetricCard label="Risk amplifier" tone={activeInvestigation.graph_analysis.risk_amplification_factor > 1.3 ? "critical" : "good"} value={`${activeInvestigation.graph_analysis.risk_amplification_factor}x`} />
+                        </div>
+                        {activeInvestigation.graph_analysis.hub_entities.length > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <p className="eyebrow" style={{ marginBottom: 8 }}>Hub entities (highest connectivity)</p>
+                            <div className="tag-row">
+                              {activeInvestigation.graph_analysis.hub_entities.map((hub) => (
+                                <span key={hub.entity_id} className="tag-pill">{hub.entity_type}: {hub.display_name}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </section>
                     )}
-                  />
-                  <MetricCard
-                    label="Flagged transactions"
-                    tone="warning"
-                    value={String(activeInvestigation.metrics.suspicious_transaction_count)}
-                  />
-                  <MetricCard
-                    label="Shared devices"
-                    tone="neutral"
-                    value={String(activeInvestigation.metrics.shared_device_count)}
-                  />
-                  <MetricCard
-                    label="Linked customers"
-                    tone="good"
-                    value={String(activeInvestigation.metrics.linked_customer_count)}
-                  />
+
+                    {/* Action bar */}
+                    <div className="action-bar">
+                      <button className="primary-button" onClick={handleCreateCase} type="button">
+                        Create case from investigation
+                      </button>
+                    </div>
+
+                    <div className="insight-grid">
+                      <section className="content-card emphasis-card">
+                        <div className="mini-header"><span>Recommended Actions</span><span>Queue this now</span></div>
+                        <div className="action-stack">
+                          {activeInvestigation.recommended_actions.map((action) => (
+                            <article key={action} className="action-item"><span className="action-marker" /><p>{action}</p></article>
+                          ))}
+                        </div>
+                      </section>
+                      <section className="content-card">
+                        <div className="mini-header"><span>Runtime Posture</span><span>Platform</span></div>
+                        <div className="provider-grid">
+                          <span>Reasoning</span><strong>{activeInvestigation.provider_summary.active_reasoning_provider}</strong>
+                          <span>Text</span><strong>{activeInvestigation.provider_summary.active_text_provider}</strong>
+                          <span>Database</span><strong>{backendHealth?.database_status ?? "unavailable"}</strong>
+                          <span>Rate limit</span><strong>{backendHealth?.rate_limit_backend ?? "unavailable"}</strong>
+                        </div>
+                        <div className="stack">
+                          {activeInvestigation.provider_summary.notes.map((note) => (
+                            <p key={note} className="provider-note">{note}</p>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+
+                    <div className="content-grid">
+                      <section className="content-card">
+                        <div className="mini-header"><span>Top Rule Hits</span><span>{activeInvestigation.top_rule_hits.length}</span></div>
+                        <div className="stack">
+                          {activeInvestigation.top_rule_hits.map((hit) => (
+                            <article key={hit.rule_code} className="signal-card">
+                              <div className="signal-card-top"><strong>{hit.title}</strong><span className="weight-pill">{hit.weight}</span></div>
+                              <p>{hit.narrative}</p>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="content-card">
+                        <div className="mini-header"><span>Suspicious Transactions</span><span>{activeInvestigation.suspicious_transactions.length}</span></div>
+                        <div className="stack">
+                          {activeInvestigation.suspicious_transactions.map((txn) => (
+                            <article key={txn.transaction_id} className="transaction-row">
+                              <div><strong>{txn.transaction_id}</strong><p>{txn.merchant_id} via {txn.channel}</p></div>
+                              <div className="transaction-meta">
+                                <strong>{currencyFormatter.format(txn.amount)}</strong>
+                                <span>{dateFormatter.format(new Date(txn.occurred_at))}</span>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="content-card">
+                        <div className="mini-header"><span>Entity Graph</span><span>{activeInvestigation.graph_links.length}</span></div>
+                        <div className="stack">
+                          {activeInvestigation.graph_links.map((link, i) => (
+                            <article key={`${link.relation}-${i}`} className="graph-card">
+                              <div className="graph-card-nodes">
+                                <span>{link.source.display_name}</span>
+                                <span className="graph-relation">{link.relation}</span>
+                                <span>{link.target.display_name}</span>
+                              </div>
+                              <p>{link.explanation}</p>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="content-card">
+                        <div className="mini-header"><span>Text Signals</span><span>{deferredSignals.length}</span></div>
+                        <div className="stack">
+                          {deferredSignals.map((signal) => (
+                            <article key={signal.signal_id} className="signal-card">
+                              <div className="signal-card-top"><strong>{signal.label}</strong><span className="weight-pill">{(signal.confidence * 100).toFixed(0)}%</span></div>
+                              <p>{signal.rationale}</p>
+                              <span className="signal-meta">{signal.provider} via {signal.source_kind}</span>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty-state">Select a scenario to begin an investigation.</div>
+                )}
+              </section>
+            </section>
+          )}
+
+          {/* ======= CASES ======= */}
+          {activeView === "cases" && (
+            <section className="surface" style={{ padding: 24 }}>
+              <div className="section-header"><span>Fraud Cases</span><span>{cases.length} total</span></div>
+              {cases.length === 0 ? (
+                <div className="empty-state">No cases yet. Investigate a scenario and create one.</div>
+              ) : (
+                <div className="stack">
+                  {cases.map((c) => (
+                    <article key={c.case_id} className="case-card">
+                      <div className="case-card-header">
+                        <div>
+                          <span className={`risk-chip ${c.risk_level}`}>{c.priority}</span>
+                          <span className={`status-chip ${c.status}`}>{c.status}</span>
+                        </div>
+                        <span className="case-date">{dateFormatter.format(new Date(c.created_at))}</span>
+                      </div>
+                      <h3>{c.title}</h3>
+                      <p className="muted-copy">{c.summary}</p>
+                      <div className="case-card-footer">
+                        <span>Risk: {c.risk_score}/100</span>
+                        <span>{c.comment_count} comments</span>
+                        {c.sla_deadline && <span>SLA: {dateFormatter.format(new Date(c.sla_deadline))}</span>}
+                        {c.status !== "resolved" && c.status !== "closed" && (
+                          <button className="small-button" onClick={() => handleResolveCase(c.case_id)} type="button">Resolve</button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
                 </div>
+              )}
+            </section>
+          )}
 
-                <div className="insight-grid">
-                  <section className="content-card emphasis-card">
-                    <div className="mini-header">
-                      <span>Decision Summary</span>
-                      <span>Queue this now</span>
-                    </div>
-                    <div className="action-stack">
-                      {activeInvestigation.recommended_actions.map((action) => (
-                        <article key={action} className="action-item">
-                          <span className="action-marker" />
-                          <p>{action}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Runtime Posture</span>
-                      <span>Platform</span>
-                    </div>
-                    <div className="provider-grid">
-                      <span>Operator</span>
-                      <strong>{operator.display_name}</strong>
-                      <span>Role</span>
-                      <strong>{operator.role}</strong>
-                      <span>Database</span>
-                      <strong>{backendHealth?.database_status ?? "unavailable"}</strong>
-                      <span>Rate limit</span>
-                      <strong>{backendHealth?.rate_limit_status ?? "unavailable"}</strong>
-                      <span>Rate limit backend</span>
-                      <strong>{backendHealth?.rate_limit_backend ?? "unavailable"}</strong>
-                      <span>Reasoning</span>
-                      <strong>
-                        {activeInvestigation.provider_summary.active_reasoning_provider}
-                      </strong>
-                      <span>Text</span>
-                      <strong>{activeInvestigation.provider_summary.active_text_provider}</strong>
-                    </div>
-                    <div className="stack">
-                      {activeInvestigation.provider_summary.notes.map((note) => (
-                        <p key={note} className="provider-note">
-                          {note}
-                        </p>
-                      ))}
-                    </div>
-                  </section>
+          {/* ======= ALERTS ======= */}
+          {activeView === "alerts" && (
+            <section className="surface" style={{ padding: 24 }}>
+              <div className="section-header"><span>Fraud Alerts</span><span>{alerts.length} total</span></div>
+              {alerts.length === 0 ? (
+                <div className="empty-state">No alerts yet. They are auto-generated when investigations detect risk.</div>
+              ) : (
+                <div className="stack">
+                  {alerts.map((alert) => (
+                    <article key={alert.alert_id} className="alert-card">
+                      <div className="alert-card-header">
+                        <span className={`risk-chip ${alert.severity}`}>{alert.severity}</span>
+                        <span className={`status-chip ${alert.status}`}>{alert.status}</span>
+                        <span className="tag-pill">{alert.rule_code}</span>
+                      </div>
+                      <h3>{alert.title}</h3>
+                      <p className="muted-copy">{alert.narrative}</p>
+                      <div className="case-card-footer">
+                        <span>{dateFormatter.format(new Date(alert.created_at))}</span>
+                        {alert.status === "new" && (
+                          <button className="small-button" onClick={() => handleAcknowledgeAlert(alert.alert_id)} type="button">Acknowledge</button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
                 </div>
+              )}
+            </section>
+          )}
 
-                <div className="content-grid">
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Top Rule Hits</span>
-                      <span>{activeInvestigation.top_rule_hits.length}</span>
+          {/* ======= AUDIT ======= */}
+          {activeView === "audit" && operator.role === "admin" && (
+            <section className="surface" style={{ padding: 24 }}>
+              <div className="section-header"><span>Audit Trail</span><span>{auditEvents.length}</span></div>
+              <div className="stack">
+                {auditEvents.map((event) => (
+                  <article key={event.event_id} className="transaction-row">
+                    <div>
+                      <strong>{event.action}</strong>
+                      <p>{event.actor_username ?? "anonymous"} on {event.path}</p>
                     </div>
-                    <div className="stack">
-                      {activeInvestigation.top_rule_hits.map((hit) => (
-                        <article key={hit.rule_code} className="signal-card">
-                          <div className="signal-card-top">
-                            <strong>{hit.title}</strong>
-                            <span className="weight-pill">{hit.weight}</span>
-                          </div>
-                          <p>{hit.narrative}</p>
-                        </article>
-                      ))}
+                    <div className="transaction-meta">
+                      <strong>{event.status_code}</strong>
+                      <span>{dateFormatter.format(new Date(event.occurred_at))}</span>
                     </div>
-                  </section>
-
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Transaction Timeline</span>
-                      <span>{activeInvestigation.suspicious_transactions.length}</span>
-                    </div>
-                    <div className="stack">
-                      {activeInvestigation.suspicious_transactions.map((transaction) => (
-                        <article key={transaction.transaction_id} className="transaction-row">
-                          <div>
-                            <strong>{transaction.transaction_id}</strong>
-                            <p>
-                              {transaction.merchant_id} via {transaction.channel}
-                            </p>
-                          </div>
-                          <div className="transaction-meta">
-                            <strong>{currencyFormatter.format(transaction.amount)}</strong>
-                            <span>
-                              {dateFormatter.format(new Date(transaction.occurred_at))}
-                            </span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Entity Graph</span>
-                      <span>{activeInvestigation.graph_links.length}</span>
-                    </div>
-                    <div className="stack">
-                      {activeInvestigation.graph_links.map((link, index) => (
-                        <article key={`${link.relation}-${index}`} className="graph-card">
-                          <div className="graph-card-nodes">
-                            <span>{link.source.display_name}</span>
-                            <span className="graph-relation">{link.relation}</span>
-                            <span>{link.target.display_name}</span>
-                          </div>
-                          <p>{link.explanation}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Text Signals</span>
-                      <span>{deferredSignals.length}</span>
-                    </div>
-                    <div className="stack">
-                      {deferredSignals.map((signal) => (
-                        <article key={signal.signal_id} className="signal-card">
-                          <div className="signal-card-top">
-                            <strong>{signal.label}</strong>
-                            <span className="weight-pill">
-                              {(signal.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <p>{signal.rationale}</p>
-                          <span className="signal-meta">
-                            {signal.provider} via {signal.source_kind}
-                          </span>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-
-                {operator.role === "admin" ? (
-                  <section className="content-card">
-                    <div className="mini-header">
-                      <span>Audit Trail</span>
-                      <span>{auditEvents.length}</span>
-                    </div>
-                    <div className="stack">
-                      {auditEvents.map((event) => (
-                        <article key={event.event_id} className="transaction-row">
-                          <div>
-                            <strong>{event.action}</strong>
-                            <p>
-                              {event.actor_username ?? "anonymous"} on {event.path}
-                            </p>
-                          </div>
-                          <div className="transaction-meta">
-                            <strong>{event.status_code}</strong>
-                            <span>
-                              {dateFormatter.format(new Date(event.occurred_at))}
-                            </span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </>
-            ) : (
-              <div className="empty-state">
-                Sign in and select a scenario to populate the workspace.
+                  </article>
+                ))}
               </div>
-            )}
-          </section>
-        </section>
+            </section>
+          )}
+        </>
       )}
     </main>
   );

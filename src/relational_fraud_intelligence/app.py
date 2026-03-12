@@ -34,10 +34,24 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version="1.0.0",
+        description=(
+            "A production-grade fraud investigation platform with relational case management, "
+            "graph-based entity analysis, rule-based risk reasoning, alert management, "
+            "operator authentication, audit logging, and rate limiting."
+        ),
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,
+        openapi_tags=[
+            {"name": "System", "description": "Health and readiness endpoints."},
+            {"name": "Authentication", "description": "Operator login and session management."},
+            {"name": "Investigations", "description": "Scenario catalog and fraud investigation execution."},
+            {"name": "Cases", "description": "Fraud case lifecycle management — create, assign, comment, resolve."},
+            {"name": "Alerts", "description": "Fraud alert inbox — auto-generated from investigations."},
+            {"name": "Dashboard", "description": "Aggregate metrics and activity feed for the analyst overview."},
+            {"name": "Admin", "description": "Administrative endpoints for audit and operations."},
+        ],
     )
 
     app.add_middleware(

@@ -6,11 +6,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
 from relational_fraud_intelligence.application.ports.security import RateLimiter
 from relational_fraud_intelligence.application.ports.text_signals import TextSignalService
+from relational_fraud_intelligence.application.services.alert_service import AlertService
 from relational_fraud_intelligence.application.services.audit_service import AuditService
 from relational_fraud_intelligence.application.services.auth_service import AuthService
 from relational_fraud_intelligence.application.services.case_assembler import (
     InvestigationCaseAssembler,
 )
+from relational_fraud_intelligence.application.services.case_service import CaseService
+from relational_fraud_intelligence.application.services.dashboard_service import DashboardService
 from relational_fraud_intelligence.application.services.investigation_service import (
     InvestigationService,
 )
@@ -48,6 +51,10 @@ from relational_fraud_intelligence.infrastructure.reasoners.local_risk_reasoner 
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
     RelationalAIRiskReasoner,
 )
+from relational_fraud_intelligence.infrastructure.repositories.memory import (
+    InMemoryAlertRepository,
+    InMemoryCaseRepository,
+)
 from relational_fraud_intelligence.infrastructure.security.bootstrap import (
     OperatorBootstrapper,
     OperatorBootstrapResult,
@@ -83,6 +90,9 @@ class ApplicationContainer:
     active_rate_limit_backend: str
     scenario_catalog_service: ScenarioCatalogService
     investigation_service: InvestigationService
+    case_service: CaseService
+    alert_service: AlertService
+    dashboard_service: DashboardService
 
     def is_database_ready(self) -> bool:
         return ping_database(self.session_factory)
@@ -175,6 +185,16 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         case_assembler=InvestigationCaseAssembler(),
     )
 
+    case_repository = InMemoryCaseRepository()
+    alert_repository = InMemoryAlertRepository()
+    case_service = CaseService(case_repository)
+    alert_service = AlertService(alert_repository)
+    dashboard_service = DashboardService(
+        scenario_repository=scenario_repository,
+        case_repository=case_repository,
+        alert_repository=alert_repository,
+    )
+
     return ApplicationContainer(
         settings=app_settings,
         engine=engine,
@@ -188,4 +208,7 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         active_rate_limit_backend=active_rate_limit_backend,
         scenario_catalog_service=scenario_catalog_service,
         investigation_service=investigation_service,
+        case_service=case_service,
+        alert_service=alert_service,
+        dashboard_service=dashboard_service,
     )

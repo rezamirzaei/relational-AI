@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "relational-fraud-intelligence"
-version = "0.1.0"
-description = "Production-style fraud intelligence reference project built around RelationalAI, Hugging Face, FastAPI, and Next.js."
+version = "1.0.0"
+description = "Production-grade fraud investigation platform with case management, alert automation, graph analysis, and explainable risk reasoning."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
