@@ -3,6 +3,17 @@
 import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
+  AlertsSection,
+  AuditSection,
+  CasesSection,
+  DashboardHeader,
+  DashboardNav,
+  MetricCard,
+  OverviewSection,
+  SignedOutPanel,
+  type ActiveView,
+} from "@/components/dashboard-sections";
+import {
   analyzeDataset,
   createCase,
   fetchAlerts,
@@ -36,7 +47,6 @@ type DashboardProps = {
   bootstrapError: string | null;
 };
 
-type ActiveView = "overview" | "investigate" | "analyze" | "cases" | "alerts" | "audit";
 type RefreshOptions = {
   alerts?: boolean;
   audit?: boolean;
@@ -358,186 +368,39 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
 
   return (
     <main className="page-shell">
-      <header className="ops-header">
-        <div>
-          <div className="eyebrow">Dataset Fraud Triage Workspace</div>
-          <h1>Relational Fraud Intelligence</h1>
-        </div>
-        <div className="status-row">
-          <StatusPill label={backendHealth?.database_status ?? "offline"} tone={backendHealth?.database_status === "ready" ? "good" : "critical"} />
-          <StatusPill label={backendHealth?.rate_limit_status ?? "unavailable"} tone={backendHealth?.rate_limit_status === "ready" ? "good" : "warning"} />
-          <StatusPill label={operator?.role ?? "signed-out"} tone={operator ? "neutral" : "warning"} />
-        </div>
-      </header>
+      <DashboardHeader backendHealth={backendHealth} operator={operator} />
 
       {!operator || !authToken ? (
-        <>
-          <section className="hero-panel">
-            <div className="hero-copy-block">
-              <p className="hero-copy">
-                Upload transaction data, detect anomalies automatically, and move the suspicious findings
-                into persistent alerts and cases. Reference scenarios are still available, but the main
-                workflow now starts from your own data.
-              </p>
-              <div className="hero-ribbon">
-                <span>CSV data upload</span>
-                <span>Benford&apos;s Law</span>
-                <span>Persistent alerts</span>
-                <span>Case triage</span>
-              </div>
-            </div>
-            <div className="hero-stats">
-              <article className="hero-stat-card">
-                <span className="hero-label">Environment</span>
-                <strong>{backendHealth?.environment ?? "offline"}</strong>
-                <p>Runtime health exposed by the backend.</p>
-              </article>
-              <article className="hero-stat-card">
-                <span className="hero-label">Scenarios</span>
-                <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-                <p>Reference scenarios available for validation workflows.</p>
-              </article>
-              <article className="hero-stat-card">
-                <span className="hero-label">Operators</span>
-                <strong>{backendHealth?.seeded_operators ?? 0}</strong>
-                <p>Bootstrap operator accounts.</p>
-              </article>
-            </div>
-          </section>
-
-          <section className="surface auth-shell">
-            <div className="section-header"><span>Operator Sign-In</span><span>Required</span></div>
-            <form className="auth-form" onSubmit={handleLogin}>
-              <label className="auth-field">
-                <span>Username</span>
-                <input autoComplete="username" name="username" onChange={(e) => setUsername(e.target.value)} type="text" value={username} />
-              </label>
-              <label className="auth-field">
-                <span>Password</span>
-                <input autoComplete="current-password" name="password" onChange={(e) => setPassword(e.target.value)} type="password" value={password} />
-              </label>
-              <button className="primary-button" disabled={isAuthenticating} type="submit">
-                {isAuthenticating ? "Signing in..." : "Sign in"}
-              </button>
-            </form>
-            {loginError ? <div className="error-banner">{loginError}</div> : null}
-            {showBootstrapCredentials ? (
-              <div className="auth-help">
-                <strong>Local bootstrap operators</strong>
-                <p>`analyst / AnalystPassword123!`</p>
-                <p>`admin / AdminPassword123!`</p>
-              </div>
-            ) : null}
-          </section>
-        </>
+        <SignedOutPanel
+          backendHealth={backendHealth}
+          isAuthenticating={isAuthenticating}
+          loginError={loginError}
+          password={password}
+          showBootstrapCredentials={showBootstrapCredentials}
+          username={username}
+          onPasswordChange={setPassword}
+          onSubmit={handleLogin}
+          onUsernameChange={setUsername}
+        />
       ) : (
         <>
-          {/* Navigation bar */}
-          <nav className="nav-bar">
-            <div className="nav-left">
-              {(["overview", "investigate", "analyze", "cases", "alerts", ...(operator.role === "admin" ? ["audit"] : [])] as ActiveView[]).map((view) => (
-                <button
-                  key={view}
-                  className={`nav-tab ${activeView === view ? "active" : ""}`}
-                  onClick={() => setActiveView(view)}
-                  type="button"
-                >
-                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Reference Scenarios" : view === "analyze" ? "Analyze Data" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
-                  {view === "alerts" && alerts.filter(a => a.status === "new").length > 0 && (
-                    <span className="nav-badge">{alerts.filter(a => a.status === "new").length}</span>
-                  )}
-                  {view === "cases" && cases.filter(c => c.status === "open" || c.status === "investigating").length > 0 && (
-                    <span className="nav-badge">{cases.filter(c => c.status === "open" || c.status === "investigating").length}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="nav-right">
-              <span className="operator-info">{operator.display_name} ({operator.role})</span>
-              <button className="secondary-button" onClick={handleLogout} type="button">Sign out</button>
-            </div>
-          </nav>
+          <DashboardNav
+            activeView={activeView}
+            alerts={alerts}
+            cases={cases}
+            operator={operator}
+            onLogout={handleLogout}
+            onViewChange={setActiveView}
+          />
 
           {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
 
-          {/* ======= OVERVIEW ======= */}
           {activeView === "overview" && (
-            <section className="dashboard-overview">
-              <div className="stats-grid">
-                <MetricCard label="Total Scenarios" value={String(dashboardStats?.total_scenarios ?? scenarios.length)} tone="neutral" />
-                <MetricCard label="Datasets Uploaded" value={String(dashboardStats?.total_datasets ?? datasets.length)} tone="neutral" />
-                <MetricCard label="Transactions Analyzed" value={(dashboardStats?.total_transactions_analyzed ?? 0).toLocaleString()} tone="neutral" />
-                <MetricCard label="Anomalies Found" value={String(dashboardStats?.total_anomalies_found ?? 0)} tone={dashboardStats?.total_anomalies_found ? "critical" : "neutral"} />
-                <MetricCard label="Active Cases" value={String(dashboardStats?.open_cases ?? 0)} tone="warning" />
-                <MetricCard label="Pending Alerts" value={String(dashboardStats?.unacknowledged_alerts ?? 0)} tone="critical" />
-                <MetricCard label="Total Cases" value={String(dashboardStats?.total_cases ?? 0)} tone="neutral" />
-                <MetricCard label="Avg Risk Score" value={`${dashboardStats?.avg_risk_score?.toFixed(0) ?? 0}/100`} tone="warning" />
-              </div>
-
-              {dashboardStats && Object.keys(dashboardStats.cases_by_status).length > 0 && (
-                <div className="insight-grid">
-                  <section className="content-card">
-                    <div className="mini-header"><span>Cases by Status</span><span>{dashboardStats.total_cases}</span></div>
-                    <div className="bar-chart">
-                      {Object.entries(dashboardStats.cases_by_status).map(([status, count]) => (
-                        <div key={status} className="bar-row">
-                          <span className="bar-label">{status}</span>
-                          <div className="bar-track">
-                            <div className={`bar-fill ${status === "open" || status === "investigating" ? "warning" : "good"}`} style={{ width: `${Math.max(8, (count / Math.max(1, dashboardStats.total_cases)) * 100)}%` }} />
-                          </div>
-                          <span className="bar-value">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="content-card">
-                    <div className="mini-header"><span>Alerts by Severity</span><span>{dashboardStats.total_alerts}</span></div>
-                    <div className="bar-chart">
-                      {Object.entries(dashboardStats.alerts_by_severity).map(([severity, count]) => (
-                        <div key={severity} className="bar-row">
-                          <span className="bar-label">{severity}</span>
-                          <div className="bar-track">
-                            <div className={`bar-fill ${severity}`} style={{ width: `${Math.max(8, (count / Math.max(1, dashboardStats.total_alerts)) * 100)}%` }} />
-                          </div>
-                          <span className="bar-value">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              )}
-
-              {dashboardStats?.recent_activity && dashboardStats.recent_activity.length > 0 && (
-                <section className="content-card">
-                  <div className="mini-header"><span>Recent Activity</span><span>{dashboardStats.recent_activity.length}</span></div>
-                  <div className="stack">
-                    {dashboardStats.recent_activity.map((event, i) => (
-                      <article key={i} className="transaction-row">
-                        <div>
-                          <strong>{event.event_type}</strong>
-                          <p>{event.description}</p>
-                        </div>
-                        <div className="transaction-meta">
-                          <span>{dateFormatter.format(new Date(event.occurred_at))}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(!dashboardStats || dashboardStats.total_cases === 0) && (
-                <section className="content-card emphasis-card">
-                  <div className="mini-header"><span>Getting Started</span><span>Guide</span></div>
-                  <div className="action-stack">
-                    <article className="action-item"><span className="action-marker" /><p>Start in <strong>Analyze Data</strong> and upload a transaction dataset.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>High-risk analyses <strong>auto-generate alerts</strong> for triage.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>Create a <strong>case</strong> from the dataset analysis to track resolution.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>Use <strong>Reference Scenarios</strong> when you want to validate the rule engine or train analysts.</p></article>
-                  </div>
-                </section>
-              )}
-            </section>
+            <OverviewSection
+              dashboardStats={dashboardStats}
+              datasetsCount={datasets.length}
+              scenariosCount={scenarios.length}
+            />
           )}
 
           {/* ======= INVESTIGATE ======= */}
@@ -920,118 +783,27 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
             </section>
           )}
 
-          {/* ======= CASES ======= */}
           {activeView === "cases" && (
-            <section className="surface" style={{ padding: 24 }}>
-              <div className="section-header"><span>Fraud Cases</span><span>{cases.length} total</span></div>
-              {cases.length === 0 ? (
-                <div className="empty-state">No cases yet. Investigate a scenario and create one.</div>
-              ) : (
-                <div className="stack">
-                  {cases.map((c) => (
-                    <article key={c.case_id} className="case-card">
-                      <div className="case-card-header">
-                        <div>
-                          <span className={`risk-chip ${c.risk_level}`}>{c.priority}</span>
-                          <span className={`status-chip ${c.status}`}>{c.status}</span>
-                        </div>
-                        <span className="case-date">{dateFormatter.format(new Date(c.created_at))}</span>
-                      </div>
-                      <h3>{c.title}</h3>
-                      <p className="muted-copy">{c.summary}</p>
-                      <div className="case-card-footer">
-                        <span>{c.source_type === "dataset" ? `Dataset ${c.source_id}` : `Scenario ${c.source_id}`}</span>
-                        <span>Risk: {c.risk_score}/100</span>
-                        <span>{c.comment_count} comments</span>
-                        {c.sla_deadline && <span>SLA: {dateFormatter.format(new Date(c.sla_deadline))}</span>}
-                        {c.status !== "resolved" && c.status !== "closed" && (
-                          <button className="small-button" onClick={() => handleResolveCase(c.case_id)} type="button">Resolve</button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
+            <CasesSection
+              cases={cases}
+              dateFormatter={dateFormatter}
+              onResolveCase={handleResolveCase}
+            />
           )}
 
-          {/* ======= ALERTS ======= */}
           {activeView === "alerts" && (
-            <section className="surface" style={{ padding: 24 }}>
-              <div className="section-header"><span>Fraud Alerts</span><span>{alerts.length} total</span></div>
-              {alerts.length === 0 ? (
-                <div className="empty-state">No alerts yet. They are auto-generated when investigations detect risk.</div>
-              ) : (
-                <div className="stack">
-                  {alerts.map((alert) => (
-                    <article key={alert.alert_id} className="alert-card">
-                      <div className="alert-card-header">
-                        <span className={`risk-chip ${alert.severity}`}>{alert.severity}</span>
-                        <span className={`status-chip ${alert.status}`}>{alert.status}</span>
-                        <span className="tag-pill">{alert.rule_code}</span>
-                      </div>
-                      <h3>{alert.title}</h3>
-                      <p className="muted-copy">{alert.narrative}</p>
-                      <div className="case-card-footer">
-                        <span>{alert.source_type === "dataset" ? `Dataset ${alert.source_id}` : `Scenario ${alert.source_id}`}</span>
-                        <span>{dateFormatter.format(new Date(alert.created_at))}</span>
-                        {alert.status === "new" && (
-                          <button className="small-button" onClick={() => handleAcknowledgeAlert(alert.alert_id)} type="button">Acknowledge</button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
+            <AlertsSection
+              alerts={alerts}
+              dateFormatter={dateFormatter}
+              onAcknowledgeAlert={handleAcknowledgeAlert}
+            />
           )}
 
-          {/* ======= AUDIT ======= */}
           {activeView === "audit" && operator.role === "admin" && (
-            <section className="surface" style={{ padding: 24 }}>
-              <div className="section-header"><span>Audit Trail</span><span>{auditEvents.length}</span></div>
-              <div className="stack">
-                {auditEvents.map((event) => (
-                  <article key={event.event_id} className="transaction-row">
-                    <div>
-                      <strong>{event.action}</strong>
-                      <p>{event.actor_username ?? "anonymous"} on {event.path}</p>
-                    </div>
-                    <div className="transaction-meta">
-                      <strong>{event.status_code}</strong>
-                      <span>{dateFormatter.format(new Date(event.occurred_at))}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <AuditSection auditEvents={auditEvents} dateFormatter={dateFormatter} />
           )}
         </>
       )}
     </main>
   );
-}
-
-type MetricCardProps = {
-  label: string;
-  tone: "critical" | "good" | "neutral" | "warning";
-  value: string;
-};
-
-function MetricCard({ label, tone, value }: MetricCardProps) {
-  return (
-    <article className={`metric-card ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
-  );
-}
-
-type StatusPillProps = {
-  label: string;
-  tone: "critical" | "good" | "neutral" | "warning";
-};
-
-function StatusPill({ label, tone }: StatusPillProps) {
-  return <span className={`status-pill ${tone}`}>{label}</span>;
 }
