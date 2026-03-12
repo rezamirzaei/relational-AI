@@ -19,6 +19,6 @@ RUN groupadd --system rfi \
     && chown -R rfi:rfi /app
 
 USER rfi
-EXPOSE 8000
+EXPOSE 8001
 
 CMD ["sh", "-c", "rfi-manage migrate && rfi-api"]
