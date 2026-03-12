@@ -37,6 +37,13 @@ type DashboardProps = {
 };
 
 type ActiveView = "overview" | "investigate" | "analyze" | "cases" | "alerts" | "audit";
+type RefreshOptions = {
+  alerts?: boolean;
+  audit?: boolean;
+  cases?: boolean;
+  datasets?: boolean;
+  stats?: boolean;
+};
 
 const tokenStorageKey = "rfi.operator-token";
 const riskMeterWidth: Record<string, number> = {
@@ -181,6 +188,42 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setActiveAnalysis(null);
   }
 
+  async function refreshWorkspaceSlices(
+    token: string,
+    {
+      alerts = false,
+      audit = false,
+      cases = false,
+      datasets = false,
+      stats = false,
+    }: RefreshOptions,
+  ): Promise<void> {
+    const shouldRefreshAudit = audit && operator?.role === "admin";
+    const [alertsResult, auditResult, casesResult, datasetsResult, statsResult] = await Promise.allSettled([
+      alerts ? fetchAlerts(token) : Promise.resolve(null),
+      shouldRefreshAudit ? fetchAuditEvents(token) : Promise.resolve(null),
+      cases ? fetchCases(token) : Promise.resolve(null),
+      datasets ? fetchDatasets(token) : Promise.resolve(null),
+      stats ? fetchDashboardStats(token) : Promise.resolve(null),
+    ] as const);
+
+    if (alertsResult.status === "fulfilled" && alertsResult.value) {
+      setAlerts(alertsResult.value.alerts);
+    }
+    if (auditResult.status === "fulfilled" && auditResult.value) {
+      setAuditEvents(auditResult.value.events);
+    }
+    if (casesResult.status === "fulfilled" && casesResult.value) {
+      setCases(casesResult.value.cases);
+    }
+    if (datasetsResult.status === "fulfilled" && datasetsResult.value) {
+      setDatasets(datasetsResult.value.datasets);
+    }
+    if (statsResult.status === "fulfilled" && statsResult.value) {
+      setDashboardStats(statsResult.value.stats);
+    }
+  }
+
   async function handleScenarioSelection(scenarioId: string) {
     if (!authToken) return;
     setSelectedScenarioId(scenarioId);
@@ -194,15 +237,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     try {
       const nextInvestigation = await fetchInvestigationClient(token, scenarioId);
       setInvestigation(nextInvestigation);
-      // Refresh alerts and stats after investigation (alerts auto-generated)
-      try {
-        const [alertsRes, statsRes] = await Promise.all([fetchAlerts(token), fetchDashboardStats(token)]);
-        setAlerts(alertsRes.alerts);
-        setDashboardStats(statsRes.stats);
-      } catch { /* non-critical */ }
-      if (operator?.role === "admin") {
-        setAuditEvents((await fetchAuditEvents(token)).events);
-      }
+      await refreshWorkspaceSlices(token, { alerts: true, audit: true, stats: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not load investigation.");
     }
@@ -221,9 +256,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
         risk_score: activeInvestigation.total_risk_score,
         risk_level: activeInvestigation.risk_level,
       });
-      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
-      setCases(casesRes.cases);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
       setActiveView("cases");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
@@ -234,9 +267,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     if (!authToken) return;
     try {
       await updateAlertStatus(authToken, alertId, { status: "acknowledged" });
-      const [alertsRes, statsRes] = await Promise.all([fetchAlerts(authToken), fetchDashboardStats(authToken)]);
-      setAlerts(alertsRes.alerts);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, { alerts: true, audit: true, stats: true });
     } catch { /* silent */ }
   }
 
@@ -244,9 +275,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     if (!authToken) return;
     try {
       await updateCaseStatus(authToken, caseId, { status: "resolved", disposition: "confirmed-fraud" });
-      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
-      setCases(casesRes.cases);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
     } catch { /* silent */ }
   }
 
@@ -256,10 +285,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setErrorMessage(null);
     try {
       await uploadDataset(authToken, file);
-      const datasetsRes = await fetchDatasets(authToken);
-      setDatasets(datasetsRes.datasets);
-      const statsRes = await fetchDashboardStats(authToken);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, { audit: true, datasets: true, stats: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Upload failed.");
     } finally {
@@ -275,12 +301,12 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     try {
       const result = await analyzeDataset(authToken, datasetId);
       setActiveAnalysis(result.analysis);
-      const [datasetsRes, statsRes] = await Promise.all([
-        fetchDatasets(authToken),
-        fetchDashboardStats(authToken),
-      ]);
-      setDatasets(datasetsRes.datasets);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, {
+        alerts: true,
+        audit: true,
+        datasets: true,
+        stats: true,
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Analysis failed.");
     } finally {
@@ -301,9 +327,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
         risk_score: activeAnalysis.risk_score,
         risk_level: activeAnalysis.risk_level,
       });
-      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
-      setCases(casesRes.cases);
-      setDashboardStats(statsRes.stats);
+      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
       setActiveView("cases");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
