@@ -1,33 +1,29 @@
 # Relational Fraud Intelligence
 
-A production-grade fraud investigation platform with case lifecycle management, automated alert generation, graph-based entity analysis, rule-based risk reasoning, operator authentication, audit logging, and a multi-view Next.js command center.
+A fraud triage workspace for uploaded transaction datasets, with persistent alerts and cases, plus reference scenario investigations for demos and rule validation.
 
 ## What it does
 
-Relational Fraud Intelligence models a **real fraud operations workflow**:
+Relational Fraud Intelligence is centered on a **dataset-first fraud triage workflow**:
 
-1. **Investigate** — Analysts select fraud scenarios and the platform runs 10 deterministic fraud rules, text signal extraction, and graph relationship analysis to produce a scored investigation with evidence, rule hits, and recommended actions.
+1. **Upload** — Analysts upload transaction CSVs or ingest transactions via API.
+2. **Analyze** — The platform runs Benford's Law checks, statistical outlier detection, velocity spike analysis, and round-amount structuring detection to produce a scored analysis.
+3. **Alert** — When an analysis produces a risk score ≥ 35, alerts are auto-generated from the strongest anomaly findings and placed in the alert queue for triage.
+4. **Manage Cases** — Analysts create fraud cases from dataset analyses or reference investigations, track them through a full lifecycle, add comments, and record dispositions.
+5. **Validate** — Reference scenarios remain available as demo investigations for validating the relational rule engine and graph analysis.
 
-2. **Detect** — The rule engine identifies shared device clusters, rapid spend bursts, cross-border mismatches, velocity anomalies, round-amount structuring, dormant account activation, high-risk merchant concentration, and more.
+## Core capabilities
 
-3. **Alert** — When an investigation produces a risk score ≥ 35, alerts are auto-generated from the top rule hits and placed in the alert queue for analyst triage.
-
-4. **Manage Cases** — Analysts create fraud cases from investigations, track them through a full lifecycle (open → investigating → escalated → resolved → closed), add comments, and record dispositions.
-
-5. **Monitor** — A dashboard overview shows aggregate metrics: open cases, critical cases, pending alerts, risk distribution, and recent activity.
-
-## Production capabilities
-
-- **10 fraud detection rules** with weighted scoring, evidence linking, and narrative generation.
-- **Graph analysis engine** that computes entity network density, hub detection, community count, and risk amplification factors.
+- **Persistent workflow state** for datasets, alerts, and cases backed by SQLAlchemy.
+- **Statistical fraud analysis** with Benford's Law, outlier detection, velocity analysis, and round-amount detection.
+- **Reference investigation engine** with deterministic fraud rules, graph analysis, and evidence linking.
 - **Case lifecycle management** with status transitions, SLA deadlines, comments, and disposition tracking.
-- **Automated alert pipeline** that generates and queues alerts from investigation results.
-- **Dashboard statistics** with case/alert breakdowns, risk distribution, and activity feed.
-- Postgres-first persistence with SQLAlchemy 2 and Alembic migrations.
+- **Automated alert pipeline** that generates and queues alerts from dataset analyses and scenario investigations.
+- **Dashboard statistics** with case, alert, dataset, and recent-activity metrics.
 - Redis-backed rate limiting with automatic in-memory fallback.
 - JWT operator authentication, RBAC (analyst/admin), and structured request auditing.
 - Automatic audit retention pruning at startup plus a manual `prune-audit` management command.
-- 3 realistic seeded fraud scenarios covering synthetic identity, account takeover, and money mule flows.
+- 3 seeded reference scenarios covering synthetic identity, account takeover, and money mule flows.
 - Optional Hugging Face and RelationalAI enrichment with graceful degradation.
 - Pre-commit hooks, GitHub Actions CI/CD, Dependabot, Docker images, and compose orchestration.
 
@@ -39,7 +35,7 @@ Relational Fraud Intelligence models a **real fraud operations workflow**:
 - Delivery: Docker, Docker Compose, GitHub Actions, GHCR publishing
 - Quality: Ruff, mypy, pytest, coverage, pre-commit, frontend typecheck and tests
 
-## API surface (16 endpoints)
+## API surface (20 endpoints)
 
 | Category | Endpoints |
 |----------|-----------|
@@ -49,9 +45,10 @@ Relational Fraud Intelligence models a **real fraud operations workflow**:
 | Cases | `POST /cases`, `GET /cases`, `GET /cases/{id}`, `PATCH /cases/{id}/status`, `POST /cases/{id}/comments` |
 | Alerts | `GET /alerts`, `PATCH /alerts/{id}` |
 | Dashboard | `GET /dashboard/stats` |
+| Datasets | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets`, `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis` |
 | Admin | `GET /audit-events` |
 
-Interactive docs at `http://localhost:8000/docs` (Swagger) and `http://localhost:8000/redoc` (ReDoc).
+Interactive docs at `http://localhost:8001/docs` (Swagger) and `http://localhost:8001/redoc` (ReDoc).
 
 ## Quick start
 
@@ -70,7 +67,7 @@ npm --prefix frontend ci
 docker compose up -d postgres redis
 ```
 
-5. Apply schema changes and seed the scenario catalog:
+5. Apply schema changes and seed the reference scenarios:
 
 ```bash
 rfi-manage migrate

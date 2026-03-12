@@ -3,6 +3,7 @@
 Monitors transaction frequency and volume per entity across time windows,
 flags accounts or merchants whose activity suddenly exceeds baseline norms.
 """
+
 from __future__ import annotations
 
 import math
@@ -94,7 +95,9 @@ def detect_velocity_spikes(
                 )
                 spikes.append(spike)
 
-                severity = RiskLevel.CRITICAL if z >= 4 else RiskLevel.HIGH if z >= 3 else RiskLevel.MEDIUM
+                severity = (
+                    RiskLevel.CRITICAL if z >= 4 else RiskLevel.HIGH if z >= 3 else RiskLevel.MEDIUM
+                )
                 anomalies.append(
                     AnomalyFlag(
                         anomaly_id=f"velocity::{account_id}::{i}",
@@ -123,4 +126,3 @@ def detect_velocity_spikes(
             current = current + window
 
     return spikes, anomalies
-

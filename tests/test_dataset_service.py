@@ -1,4 +1,5 @@
 """Tests for the dataset service and statistical fraud analysis engines."""
+
 from __future__ import annotations
 
 import textwrap
@@ -120,8 +121,18 @@ class TestDatasetAnalysis:
 class TestTransactionIngestion:
     def test_ingest_via_api(self, service: DatasetService) -> None:
         transactions = [
-            {"transaction_id": "T1", "account_id": "A1", "amount": 100, "timestamp": "2026-03-01 10:00:00"},
-            {"transaction_id": "T2", "account_id": "A1", "amount": 200, "timestamp": "2026-03-01 11:00:00"},
+            {
+                "transaction_id": "T1",
+                "account_id": "A1",
+                "amount": 100,
+                "timestamp": "2026-03-01 10:00:00",
+            },
+            {
+                "transaction_id": "T2",
+                "account_id": "A1",
+                "amount": 200,
+                "timestamp": "2026-03-01 11:00:00",
+            },
         ]
         dataset = service.ingest_transactions("api-test", transactions)
         assert dataset.row_count == 2
@@ -137,7 +148,13 @@ class TestSampleDataset:
 
     def test_analyze_sample_csv(self, service: DatasetService) -> None:
         import pathlib
-        sample_path = pathlib.Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+
+        sample_path = (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "docs"
+            / "sample_data"
+            / "sample_transactions.csv"
+        )
         if not sample_path.exists():
             pytest.skip("Sample CSV not generated yet")
 
@@ -154,4 +171,3 @@ class TestSampleDataset:
         # Check that at least some anomaly types were detected
         anomaly_types = {a.anomaly_type for a in result.anomalies}
         assert len(anomaly_types) >= 1, f"Expected multiple anomaly types, got {anomaly_types}"
-

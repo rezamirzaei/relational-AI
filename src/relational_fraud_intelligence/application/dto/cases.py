@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from relational_fraud_intelligence.domain.models import (
     AppModel,
@@ -8,15 +8,34 @@ from relational_fraud_intelligence.domain.models import (
     CasePriority,
     CaseStatus,
     FraudCase,
+    RiskLevel,
+    WorkflowSourceType,
 )
 
 
 class CreateCaseCommand(AppModel):
-    scenario_id: str
+    source_type: WorkflowSourceType = WorkflowSourceType.SCENARIO
+    source_id: str | None = None
+    scenario_id: str | None = None
     title: str
     summary: str
-    priority: CasePriority = CasePriority.MEDIUM
+    priority: CasePriority | None = None
     assigned_analyst_id: str | None = None
+    risk_score: int | None = Field(default=None, ge=0, le=100)
+    risk_level: RiskLevel | None = None
+
+    @model_validator(mode="after")
+    def populate_source_fields(self) -> CreateCaseCommand:
+        if self.source_type == WorkflowSourceType.SCENARIO:
+            if self.source_id is None and self.scenario_id is not None:
+                self.source_id = self.scenario_id
+            if self.scenario_id is None and self.source_id is not None:
+                self.scenario_id = self.source_id
+
+        if self.source_id is None:
+            raise ValueError("CreateCaseCommand requires source_id or scenario_id.")
+
+        return self
 
 
 class CreateCaseResult(AppModel):
@@ -69,4 +88,3 @@ class GetCaseQuery(AppModel):
 
 class GetCaseResult(AppModel):
     case: FraudCase
-

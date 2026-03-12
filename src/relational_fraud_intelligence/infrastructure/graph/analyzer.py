@@ -3,6 +3,7 @@
 Builds a NetworkX graph from scenario data and computes structural metrics
 that amplify or contextualize rule-based risk scores.
 """
+
 from __future__ import annotations
 
 from relational_fraud_intelligence.domain.models import (
@@ -165,7 +166,7 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
 
     # Degree centrality
     degree_centrality = nx.degree_centrality(G)
-    highest_node = max(degree_centrality, key=degree_centrality.get)  # type: ignore[arg-type]
+    highest_node = max(degree_centrality, key=degree_centrality.get)
     highest_degree = G.degree(highest_node)
     parts = highest_node.split(":", 1)
 
@@ -207,4 +208,3 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
         hub_entities=hub_entities,
         risk_amplification_factor=amplification,
     )
-

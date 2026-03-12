@@ -1,4 +1,5 @@
 """Tests for the graph analysis engine."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -60,28 +61,44 @@ def test_graph_analysis_with_shared_device_scenario() -> None:
     scenario = _build_scenario(
         customers=[
             CustomerProfile(
-                customer_id="cust_1", full_name="Alice", country_code="US",
-                segment="consumer", declared_income_band="$50k-$70k",
-                linked_account_ids=["acct_1"], linked_device_ids=["dev_1"],
+                customer_id="cust_1",
+                full_name="Alice",
+                country_code="US",
+                segment="consumer",
+                declared_income_band="$50k-$70k",
+                linked_account_ids=["acct_1"],
+                linked_device_ids=["dev_1"],
             ),
             CustomerProfile(
-                customer_id="cust_2", full_name="Bob", country_code="US",
-                segment="consumer", declared_income_band="$40k-$60k",
-                linked_account_ids=[], linked_device_ids=["dev_1"],
+                customer_id="cust_2",
+                full_name="Bob",
+                country_code="US",
+                segment="consumer",
+                declared_income_band="$40k-$60k",
+                linked_account_ids=[],
+                linked_device_ids=["dev_1"],
             ),
         ],
         devices=[
             DeviceProfile(
-                device_id="dev_1", fingerprint="fp-1", ip_country_code="US",
-                linked_customer_ids=["cust_1", "cust_2"], trust_score=0.2,
+                device_id="dev_1",
+                fingerprint="fp-1",
+                ip_country_code="US",
+                linked_customer_ids=["cust_1", "cust_2"],
+                trust_score=0.2,
             ),
         ],
         transactions=[
             TransactionRecord(
-                transaction_id="txn_1", customer_id="cust_1", account_id="acct_1",
-                device_id="dev_1", merchant_id="merch_1",
-                occurred_at=datetime(2026, 3, 1, 10, 0), amount=1200.0,
-                currency="USD", channel=TransactionChannel.CARD_NOT_PRESENT,
+                transaction_id="txn_1",
+                customer_id="cust_1",
+                account_id="acct_1",
+                device_id="dev_1",
+                merchant_id="merch_1",
+                occurred_at=datetime(2026, 3, 1, 10, 0),
+                amount=1200.0,
+                currency="USD",
+                channel=TransactionChannel.CARD_NOT_PRESENT,
                 status=TransactionStatus.APPROVED,
             ),
         ],
@@ -103,4 +120,3 @@ def test_graph_analysis_with_empty_scenario() -> None:
     assert result.connected_components == 0
     assert result.density == 0.0
     assert result.risk_amplification_factor == 1.0
-

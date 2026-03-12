@@ -243,3 +243,65 @@ class AuditEventRecord(Base):
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     details: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+
+
+class FraudCaseRecord(Base):
+    __tablename__ = "fraud_cases"
+
+    case_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(32), index=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    scenario_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    priority: Mapped[str] = mapped_column(String(32), index=True)
+    assigned_analyst_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    assigned_analyst_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    risk_score: Mapped[int] = mapped_column(Integer)
+    risk_level: Mapped[str] = mapped_column(String(32))
+    summary: Mapped[str] = mapped_column(String(2000))
+    disposition: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    sla_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
+    alert_count: Mapped[int] = mapped_column(Integer, default=0)
+    comments: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+
+
+class FraudAlertRecord(Base):
+    __tablename__ = "fraud_alerts"
+
+    alert_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(32), index=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    scenario_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    rule_code: Mapped[str] = mapped_column(String(120), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    severity: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    narrative: Mapped[str] = mapped_column(String(2000))
+    assigned_analyst_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    assigned_analyst_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    linked_case_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+
+
+class DatasetRecord(Base):
+    __tablename__ = "datasets"
+
+    dataset_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    row_count: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    transactions: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    analysis: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)

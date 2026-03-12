@@ -3,6 +3,7 @@
 Identifies transactions with amounts significantly deviating from the norm
 for their account or merchant — a common fraud indicator.
 """
+
 from __future__ import annotations
 
 import math
@@ -66,6 +67,11 @@ def detect_outliers(
                 seen_txns.add(txn.transaction_id)
                 severity = _severity_from_z(z_score)
                 confidence = min(1.0, z_score / 6.0) if z_score > 0 else 0.5
+                reason = (
+                    "Z-score and IQR both flag this."
+                    if is_z_outlier and is_iqr_outlier
+                    else f"Flagged by {'Z-score' if is_z_outlier else 'IQR'} method."
+                )
 
                 anomalies.append(
                     AnomalyFlag(
@@ -77,7 +83,7 @@ def detect_outliers(
                             f"Transaction {txn.transaction_id} for account {account_id} "
                             f"has amount ${txn.amount:,.2f} which is {z_score:.1f}σ from "
                             f"the mean (${mean:,.2f}). "
-                            f"{'Z-score and IQR both flag this.' if is_z_outlier and is_iqr_outlier else 'Flagged by ' + ('Z-score' if is_z_outlier else 'IQR') + ' method.'}"
+                            f"{reason}"
                         ),
                         affected_entity_id=txn.transaction_id,
                         affected_entity_type="transaction",
@@ -88,7 +94,11 @@ def detect_outliers(
                             "z_score": round(z_score, 2),
                             "account_mean": round(mean, 2),
                             "account_std": round(std, 2),
-                            "method": "z-score+iqr" if is_z_outlier and is_iqr_outlier else "z-score" if is_z_outlier else "iqr",
+                            "method": "z-score+iqr"
+                            if is_z_outlier and is_iqr_outlier
+                            else "z-score"
+                            if is_z_outlier
+                            else "iqr",
                         },
                     )
                 )
@@ -125,4 +135,3 @@ def _severity_from_z(z: float) -> RiskLevel:
     if z >= 3.0:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
-

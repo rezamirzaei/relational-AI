@@ -379,9 +379,7 @@ class RoundAmountDetectionRule:
     ) -> RuleEvaluation | None:
         _ = text_signals
         round_txns = [
-            txn
-            for txn in index.transactions
-            if txn.amount >= 500 and txn.amount % 100 == 0
+            txn for txn in index.transactions if txn.amount >= 500 and txn.amount % 100 == 0
         ]
         if len(round_txns) < 2:
             return None
@@ -400,7 +398,9 @@ class RoundAmountDetectionRule:
                 weight=10,
                 narrative=(
                     f"{len(round_txns)} transactions with exact round amounts "
-                    f"represent {ratio:.0%} of total volume, suggesting structuring to avoid thresholds."
+                    "represent "
+                    f"{ratio:.0%} of total volume, suggesting structuring to "
+                    "avoid thresholds."
                 ),
                 evidence=[
                     EntityReference(
@@ -416,7 +416,7 @@ class RoundAmountDetectionRule:
 
 
 class DormantAccountActivationRule:
-    """Detects accounts that were dormant (low balance) then suddenly activated with high-value transactions."""
+    """Detect dormant accounts that suddenly show high-value transaction activity."""
 
     def evaluate(
         self,
@@ -429,9 +429,7 @@ class DormantAccountActivationRule:
         for account in index.accounts.values():
             if account.current_balance < 500 and account.average_monthly_inflow < 1000:
                 # Check if this account has high-value transactions
-                account_txns = [
-                    t for t in index.transactions if t.account_id == account.account_id
-                ]
+                account_txns = [t for t in index.transactions if t.account_id == account.account_id]
                 high_value = [t for t in account_txns if t.amount >= 800]
                 if len(high_value) >= 2:
                     flagged_accounts.append(account)

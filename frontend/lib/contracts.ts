@@ -1,5 +1,6 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type OperatorRole = "admin" | "analyst";
+export type WorkflowSourceType = "scenario" | "dataset";
 export type CaseStatus = "open" | "investigating" | "escalated" | "resolved" | "closed";
 export type CasePriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "new" | "acknowledged" | "investigating" | "resolved" | "false-positive";
@@ -172,7 +173,9 @@ export type HealthResponse = {
 
 export type FraudCase = {
   case_id: string;
-  scenario_id: string;
+  source_type: WorkflowSourceType;
+  source_id: string;
+  scenario_id: string | null;
   title: string;
   status: CaseStatus;
   priority: CasePriority;
@@ -221,7 +224,9 @@ export type CaseComment = {
 
 export type FraudAlert = {
   alert_id: string;
-  scenario_id: string;
+  source_type: WorkflowSourceType;
+  source_id: string;
+  scenario_id: string | null;
   rule_code: string;
   title: string;
   severity: RiskLevel;
@@ -347,4 +352,3 @@ export type AnalysisResultData = {
 export type AnalysisResponse = {
   analysis: AnalysisResultData;
 };
-

@@ -4,6 +4,7 @@ Benford's Law states that in naturally occurring datasets, leading digits
 are not uniformly distributed. Digit 1 appears ~30.1% of the time, digit 2
 ~17.6%, etc. Fraudulent or fabricated data often violates this pattern.
 """
+
 from __future__ import annotations
 
 import math
@@ -35,7 +36,9 @@ def _leading_digit(amount: float) -> int | None:
     return None
 
 
-def analyze_benford(transactions: list[UploadedTransaction]) -> tuple[list[BenfordDigitResult], float, float]:
+def analyze_benford(
+    transactions: list[UploadedTransaction],
+) -> tuple[list[BenfordDigitResult], float, float]:
     """Run Benford's Law analysis on transaction amounts.
 
     Returns:
@@ -123,12 +126,10 @@ def _normal_survival(z: float) -> float:
     t = 1.0 / (1.0 + 0.2316419 * abs(z))
     d = 0.3989422804014327  # 1/sqrt(2*pi)
     poly = t * (
-        0.319381530
-        + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))
+        0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))
     )
     cdf = 1.0 - d * math.exp(-0.5 * z * z) * poly
 
     if z >= 0:
         return 1.0 - cdf
     return cdf
-

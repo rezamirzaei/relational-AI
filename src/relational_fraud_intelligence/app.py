@@ -36,9 +36,9 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version="1.0.0",
         description=(
-            "A production-grade fraud investigation platform with relational case management, "
-            "graph-based entity analysis, rule-based risk reasoning, alert management, "
-            "operator authentication, audit logging, and rate limiting."
+            "A fraud triage workspace for uploaded transaction datasets, with "
+            "persistent alerts and cases, plus reference scenario investigations "
+            "for demos and rule validation."
         ),
         docs_url="/docs",
         redoc_url="/redoc",
@@ -46,11 +46,26 @@ def create_app() -> FastAPI:
         openapi_tags=[
             {"name": "System", "description": "Health and readiness endpoints."},
             {"name": "Authentication", "description": "Operator login and session management."},
-            {"name": "Investigations", "description": "Scenario catalog and fraud investigation execution."},
-            {"name": "Cases", "description": "Fraud case lifecycle management — create, assign, comment, resolve."},
-            {"name": "Alerts", "description": "Fraud alert inbox — auto-generated from investigations."},
-            {"name": "Dashboard", "description": "Aggregate metrics and activity feed for the analyst overview."},
-            {"name": "Datasets", "description": "Upload transaction data and run statistical fraud analysis."},
+            {
+                "name": "Investigations",
+                "description": "Reference scenario catalog and demo investigation execution.",
+            },
+            {
+                "name": "Cases",
+                "description": "Persistent fraud case workflow for scenarios and datasets.",
+            },
+            {
+                "name": "Alerts",
+                "description": "Persistent alert inbox generated from investigations and analyses.",
+            },
+            {
+                "name": "Dashboard",
+                "description": "Aggregate metrics and recent workflow activity.",
+            },
+            {
+                "name": "Datasets",
+                "description": "Upload transaction data and run statistical fraud analysis.",
+            },
             {"name": "Admin", "description": "Administrative endpoints for audit and operations."},
         ],
     )

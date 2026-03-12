@@ -18,8 +18,10 @@ class AppSettings(BaseSettings):
     app_env: str = "local"
     api_prefix: str = "/api/v1"
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
-    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    api_port: int = 8001
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:3001", "http://localhost:3000"]
+    )
     database_url: str = "sqlite+pysqlite:///./data/rfi.db"
     database_echo: bool = False
     database_auto_create_schema: bool = True

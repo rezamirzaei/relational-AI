@@ -1,4 +1,5 @@
 """Tests for the alert service and auto-generation pipeline."""
+
 from __future__ import annotations
 
 import pytest
@@ -10,7 +11,11 @@ from relational_fraud_intelligence.application.dto.alerts import (
     UpdateAlertStatusCommand,
 )
 from relational_fraud_intelligence.application.services.alert_service import AlertService
-from relational_fraud_intelligence.domain.models import AlertStatus, RiskLevel
+from relational_fraud_intelligence.domain.models import (
+    AlertStatus,
+    RiskLevel,
+    WorkflowSourceType,
+)
 from relational_fraud_intelligence.infrastructure.repositories.memory import InMemoryAlertRepository
 
 
@@ -33,6 +38,7 @@ def test_create_alert_returns_new_alert(alert_service: AlertService) -> None:
     assert result.alert.status == AlertStatus.NEW
     assert result.alert.severity == RiskLevel.HIGH
     assert result.alert.rule_code == "shared-device-cluster"
+    assert result.alert.source_type == WorkflowSourceType.SCENARIO
 
 
 def test_acknowledge_alert_sets_acknowledged_timestamp(alert_service: AlertService) -> None:
@@ -82,14 +88,20 @@ def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
 def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
     alert_service.create_alert(
         CreateAlertCommand(
-            scenario_id="s1", rule_code="r1", title="Low alert",
-            severity=RiskLevel.LOW, narrative="Low risk.",
+            scenario_id="s1",
+            rule_code="r1",
+            title="Low alert",
+            severity=RiskLevel.LOW,
+            narrative="Low risk.",
         )
     )
     alert_service.create_alert(
         CreateAlertCommand(
-            scenario_id="s2", rule_code="r2", title="Critical alert",
-            severity=RiskLevel.CRITICAL, narrative="Critical risk.",
+            scenario_id="s2",
+            rule_code="r2",
+            title="Critical alert",
+            severity=RiskLevel.CRITICAL,
+            narrative="Critical risk.",
         )
     )
 
@@ -100,7 +112,11 @@ def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
 
 def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertService) -> None:
     rule_hits = [
-        {"rule_code": "shared-device-cluster", "title": "Shared device cluster", "narrative": "Test"},
+        {
+            "rule_code": "shared-device-cluster",
+            "title": "Shared device cluster",
+            "narrative": "Test",
+        },
         {"rule_code": "rapid-spend-burst", "title": "Rapid spend burst", "narrative": "Test"},
     ]
 
@@ -125,7 +141,52 @@ def test_auto_generate_no_alerts_for_low_risk(alert_service: AlertService) -> No
     assert len(generated) == 0
 
 
+def test_auto_generate_alerts_is_idempotent_per_source(alert_service: AlertService) -> None:
+    rule_hits = [
+        {
+            "rule_code": "shared-device-cluster",
+            "title": "Shared device cluster",
+            "narrative": "Test",
+        },
+    ]
+
+    first = alert_service.generate_alerts_from_investigation(
+        scenario_id="test-scenario",
+        risk_score=85,
+        rule_hits=rule_hits,
+    )
+    second = alert_service.generate_alerts_from_investigation(
+        scenario_id="test-scenario",
+        risk_score=85,
+        rule_hits=rule_hits,
+    )
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert second[0].alert_id == first[0].alert_id
+
+
 def test_get_nonexistent_alert_raises_lookup_error(alert_service: AlertService) -> None:
     with pytest.raises(LookupError):
         alert_service.get_alert(GetAlertQuery(alert_id="does-not-exist"))
 
+
+def test_auto_generate_alerts_from_dataset_analysis(alert_service: AlertService) -> None:
+    findings = [
+        {
+            "rule_code": "velocity-spike",
+            "title": "Velocity spike detected",
+            "narrative": "Account activity spiked above the baseline window.",
+        }
+    ]
+
+    generated = alert_service.generate_alerts_from_analysis(
+        dataset_id="dataset-1",
+        risk_score=62,
+        findings=findings,
+    )
+
+    assert len(generated) == 1
+    assert generated[0].source_type == WorkflowSourceType.DATASET
+    assert generated[0].source_id == "dataset-1"
+    assert generated[0].scenario_id is None

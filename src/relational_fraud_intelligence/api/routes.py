@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 
 from relational_fraud_intelligence.api.dependencies import (
     enforce_login_rate_limit,
@@ -57,6 +57,7 @@ from relational_fraud_intelligence.domain.models import (
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
+    WorkflowSourceType,
 )
 
 router = APIRouter()
@@ -66,6 +67,13 @@ AnalystDep = Annotated[
     Depends(require_roles(OperatorRole.ANALYST, OperatorRole.ADMIN)),
 ]
 AdminDep = Annotated[OperatorPrincipal, Depends(require_roles(OperatorRole.ADMIN))]
+CaseStatusFilter = Annotated[CaseStatus | None, Query()]
+CasePriorityFilter = Annotated[CasePriority | None, Query()]
+AlertStatusFilter = Annotated[AlertStatus | None, Query()]
+RiskLevelFilter = Annotated[RiskLevel | None, Query()]
+PageParam = Annotated[int, Query(ge=1)]
+PageSizeParam = Annotated[int, Query(ge=1, le=100)]
+UploadFileParam = Annotated[UploadFile, File(...)]
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +97,10 @@ class HealthResponse(AppModel):
     response_model=HealthResponse,
     tags=["System"],
     summary="Check platform health",
-    description="Returns the overall health status of the platform including database, rate limiter, and seeded data counts.",
+    description=(
+        "Returns the overall health status of the platform including database, "
+        "rate limiter, and seeded data counts."
+    ),
 )
 def health(container: ContainerDep) -> HealthResponse:
     database_ready = container.is_database_ready()
@@ -127,7 +138,9 @@ def health(container: ContainerDep) -> HealthResponse:
     response_model=LoginResult,
     tags=["Authentication"],
     summary="Authenticate an operator",
-    description="Validates operator credentials and returns a JWT access token for subsequent API calls.",
+    description=(
+        "Validates operator credentials and returns a JWT access token for subsequent API calls."
+    ),
 )
 def login_operator(
     command: LoginCommand,
@@ -214,7 +227,10 @@ def list_scenarios(
     response_model=GetScenarioResult,
     tags=["Investigations"],
     summary="Get scenario details",
-    description="Returns full scenario data including customers, accounts, devices, merchants, and transactions.",
+    description=(
+        "Returns full scenario data including customers, accounts, devices, "
+        "merchants, and transactions."
+    ),
 )
 def get_scenario(
     scenario_id: str,
@@ -239,7 +255,11 @@ def get_scenario(
     response_model=InvestigateScenarioResult,
     tags=["Investigations"],
     summary="Run fraud investigation",
-    description="Executes a full fraud investigation on a scenario: text signal extraction, rule-based risk reasoning, graph analysis, and case assembly.",
+    description=(
+        "Executes a full fraud investigation on a reference scenario: text "
+        "signal extraction, rule-based risk reasoning, graph analysis, and "
+        "case assembly."
+    ),
 )
 def investigate_scenario(
     command: InvestigateScenarioCommand,
@@ -256,7 +276,7 @@ def investigate_scenario(
 
         # Auto-generate alerts from high-risk investigations
         if result.investigation.total_risk_score >= 35:
-            rule_hits = [
+            rule_hits: list[dict[str, object]] = [
                 {
                     "rule_code": hit.rule_code,
                     "title": hit.title,
@@ -285,7 +305,9 @@ def investigate_scenario(
     response_model=CreateCaseResult,
     tags=["Cases"],
     summary="Create a fraud case",
-    description="Creates a new fraud investigation case, optionally linked to a scenario and assigned to an analyst.",
+    description=(
+        "Creates a new fraud case linked to either a reference scenario or an uploaded dataset."
+    ),
 )
 def create_case(
     command: CreateCaseCommand,
@@ -297,6 +319,7 @@ def create_case(
     request.state.audit_action = "create-case"
     request.state.audit_resource_type = "fraud-case"
     try:
+        _validate_case_source(command, container)
         return container.case_service.create_case(command)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -307,16 +330,19 @@ def create_case(
     response_model=ListCasesResult,
     tags=["Cases"],
     summary="List fraud cases",
-    description="Returns a paginated list of fraud cases with optional status/priority/analyst filters.",
+    description=(
+        "Returns a paginated list of fraud cases with optional status, "
+        "priority, and analyst filters."
+    ),
 )
 def list_cases(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
-    status: CaseStatus | None = Query(default=None),
-    priority: CasePriority | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    status: CaseStatusFilter = None,
+    priority: CasePriorityFilter = None,
+    page: PageParam = 1,
+    page_size: PageSizeParam = 20,
 ) -> ListCasesResult:
     request.state.current_principal = principal
     request.state.audit_action = "list-cases"
@@ -353,7 +379,10 @@ def get_case(
     response_model=UpdateCaseStatusResult,
     tags=["Cases"],
     summary="Update case status",
-    description="Transitions a case through its lifecycle: open → investigating → escalated → resolved → closed.",
+    description=(
+        "Transitions a case through its lifecycle: open, investigating, "
+        "escalated, resolved, or closed."
+    ),
 )
 def update_case_status(
     case_id: str,
@@ -426,16 +455,18 @@ def add_case_comment(
     response_model=ListAlertsResult,
     tags=["Alerts"],
     summary="List fraud alerts",
-    description="Returns a paginated list of fraud alerts with optional status/severity filters.",
+    description=(
+        "Returns a paginated list of fraud alerts with optional status and severity filters."
+    ),
 )
 def list_alerts(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
-    status: AlertStatus | None = Query(default=None),
-    severity: RiskLevel | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    status: AlertStatusFilter = None,
+    severity: RiskLevelFilter = None,
+    page: PageParam = 1,
+    page_size: PageSizeParam = 20,
 ) -> ListAlertsResult:
     request.state.current_principal = principal
     request.state.audit_action = "list-alerts"
@@ -485,7 +516,10 @@ def update_alert_status(
     response_model=GetDashboardStatsResult,
     tags=["Dashboard"],
     summary="Get dashboard statistics",
-    description="Returns aggregate metrics for the analyst dashboard: case counts, alert counts, risk distribution, and recent activity.",
+    description=(
+        "Returns aggregate metrics for the analyst dashboard: case counts, "
+        "alert counts, risk distribution, and recent activity."
+    ),
 )
 def get_dashboard_stats(
     request: Request,
@@ -540,7 +574,7 @@ async def upload_dataset(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
-    file: UploadFile = File(...),
+    file: UploadFileParam,
 ) -> DatasetResponse:
     request.state.current_principal = principal
     request.state.audit_action = "upload-dataset"
@@ -647,6 +681,19 @@ def analyze_dataset(
     request.state.audit_resource_id = dataset_id
     try:
         result = container.dataset_service.analyze(dataset_id)
+        findings: list[dict[str, object]] = [
+            {
+                "rule_code": anomaly.anomaly_type,
+                "title": anomaly.title,
+                "narrative": anomaly.description,
+            }
+            for anomaly in result.anomalies
+        ]
+        container.alert_service.generate_alerts_from_analysis(
+            dataset_id=dataset_id,
+            risk_score=result.risk_score,
+            findings=findings,
+        )
         return {"analysis": result.model_dump(mode="json")}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -676,3 +723,13 @@ def get_analysis_results(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _validate_case_source(
+    command: CreateCaseCommand,
+    container: ApplicationContainer,
+) -> None:
+    if command.source_type == WorkflowSourceType.DATASET:
+        container.dataset_service.get_dataset(command.source_id or "")
+        return
+    container.scenario_catalog_service.get_scenario(
+        GetScenarioQuery(scenario_id=command.source_id or "")
+    )

@@ -1,4 +1,5 @@
 """Tests for the case lifecycle management service."""
+
 from __future__ import annotations
 
 import pytest
@@ -17,6 +18,7 @@ from relational_fraud_intelligence.domain.models import (
     CasePriority,
     CaseStatus,
     RiskLevel,
+    WorkflowSourceType,
 )
 from relational_fraud_intelligence.infrastructure.repositories.memory import InMemoryCaseRepository
 
@@ -41,6 +43,8 @@ def test_create_case_returns_open_case_with_sla(case_service: CaseService) -> No
     assert result.case.status == CaseStatus.OPEN
     assert result.case.risk_score == 82
     assert result.case.risk_level == RiskLevel.CRITICAL
+    assert result.case.source_type == WorkflowSourceType.SCENARIO
+    assert result.case.source_id == "test-scenario"
     assert result.case.sla_deadline is not None
     assert result.case.case_id
 
@@ -135,3 +139,21 @@ def test_get_nonexistent_case_raises_lookup_error(case_service: CaseService) -> 
     with pytest.raises(LookupError):
         case_service.get_case(GetCaseQuery(case_id="does-not-exist"))
 
+
+def test_create_case_can_use_dataset_source(case_service: CaseService) -> None:
+    result = case_service.create_case(
+        CreateCaseCommand(
+            source_type=WorkflowSourceType.DATASET,
+            source_id="dataset-123",
+            title="Dataset case",
+            summary="Velocity spikes detected in uploaded data.",
+            risk_score=74,
+            risk_level=RiskLevel.HIGH,
+        )
+    )
+
+    assert result.case.source_type == WorkflowSourceType.DATASET
+    assert result.case.source_id == "dataset-123"
+    assert result.case.scenario_id is None
+    assert result.case.risk_score == 74
+    assert result.case.priority == CasePriority.HIGH

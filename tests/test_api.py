@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from relational_fraud_intelligence.app import create_app
@@ -87,6 +89,80 @@ def test_analyst_cannot_list_audit_events() -> None:
         )
 
     assert response.status_code == 403
+
+
+def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+        analysis = analyze_response.json()["analysis"]
+        assert analysis["dataset_id"] == dataset_id
+        assert analysis["risk_score"] >= 35
+
+        alerts_response = client.get(
+            "/api/v1/alerts",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert alerts_response.status_code == 200
+        alerts = alerts_response.json()["alerts"]
+        assert any(
+            alert["source_type"] == "dataset" and alert["source_id"] == dataset_id
+            for alert in alerts
+        )
+
+        create_case_response = client.post(
+            "/api/v1/cases",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "source_type": "dataset",
+                "source_id": dataset_id,
+                "title": "Dataset case",
+                "summary": analysis["summary"],
+                "priority": analysis["risk_level"],
+                "risk_score": analysis["risk_score"],
+                "risk_level": analysis["risk_level"],
+            },
+        )
+        assert create_case_response.status_code == 200
+        created_case = create_case_response.json()["case"]
+        assert created_case["source_type"] == "dataset"
+        assert created_case["source_id"] == dataset_id
+        assert created_case["risk_score"] == analysis["risk_score"]
+
+        list_cases_response = client.get(
+            "/api/v1/cases",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert list_cases_response.status_code == 200
+        assert any(case["source_id"] == dataset_id for case in list_cases_response.json()["cases"])
+
+        dashboard_response = client.get(
+            "/api/v1/dashboard/stats",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert dashboard_response.status_code == 200
+        stats = dashboard_response.json()["stats"]
+        assert stats["total_datasets"] == 1
+        assert stats["total_alerts"] >= 1
+        assert stats["total_cases"] == 1
 
 
 def authenticate(client: TestClient, *, username: str, password: str) -> str:

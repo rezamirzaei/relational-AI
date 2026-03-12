@@ -4,8 +4,13 @@ from decimal import Decimal
 
 from relational_fraud_intelligence.domain.models import (
     AccountProfile,
+    AnalysisResult,
+    CaseComment,
     CustomerProfile,
+    Dataset,
     DeviceProfile,
+    FraudAlert,
+    FraudCase,
     FraudScenario,
     InvestigatorNote,
     MerchantProfile,
@@ -13,11 +18,15 @@ from relational_fraud_intelligence.domain.models import (
     TransactionChannel,
     TransactionRecord,
     TransactionStatus,
+    UploadedTransaction,
 )
 from relational_fraud_intelligence.infrastructure.persistence.models import (
     AccountRecord,
     CustomerRecord,
+    DatasetRecord,
     DeviceRecord,
+    FraudAlertRecord,
+    FraudCaseRecord,
     InvestigatorNoteRecord,
     MerchantRecord,
     ScenarioRecord,
@@ -242,3 +251,146 @@ def _to_float(value: Decimal | float) -> float:
     if isinstance(value, Decimal):
         return float(value)
     return value
+
+
+def to_case_record(case: FraudCase, comments: list[CaseComment]) -> FraudCaseRecord:
+    return FraudCaseRecord(
+        case_id=case.case_id,
+        source_type=case.source_type,
+        source_id=case.source_id,
+        scenario_id=case.scenario_id,
+        title=case.title,
+        status=case.status,
+        priority=case.priority,
+        assigned_analyst_id=case.assigned_analyst_id,
+        assigned_analyst_name=case.assigned_analyst_name,
+        risk_score=case.risk_score,
+        risk_level=case.risk_level,
+        summary=case.summary,
+        disposition=case.disposition,
+        resolution_notes=case.resolution_notes,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+        resolved_at=case.resolved_at,
+        sla_deadline=case.sla_deadline,
+        comment_count=case.comment_count,
+        alert_count=case.alert_count,
+        comments=[comment.model_dump(mode="json") for comment in comments],
+    )
+
+
+def to_domain_case(record: FraudCaseRecord) -> FraudCase:
+    return FraudCase.model_validate(
+        {
+            "case_id": record.case_id,
+            "source_type": record.source_type,
+            "source_id": record.source_id,
+            "scenario_id": record.scenario_id,
+            "title": record.title,
+            "status": record.status,
+            "priority": record.priority,
+            "assigned_analyst_id": record.assigned_analyst_id,
+            "assigned_analyst_name": record.assigned_analyst_name,
+            "risk_score": record.risk_score,
+            "risk_level": record.risk_level,
+            "summary": record.summary,
+            "disposition": record.disposition,
+            "resolution_notes": record.resolution_notes,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+            "resolved_at": record.resolved_at,
+            "sla_deadline": record.sla_deadline,
+            "comment_count": record.comment_count,
+            "alert_count": record.alert_count,
+        }
+    )
+
+
+def to_domain_comments(record: FraudCaseRecord) -> list[CaseComment]:
+    return [CaseComment.model_validate(comment) for comment in record.comments]
+
+
+def to_alert_record(alert: FraudAlert) -> FraudAlertRecord:
+    return FraudAlertRecord(
+        alert_id=alert.alert_id,
+        source_type=alert.source_type,
+        source_id=alert.source_id,
+        scenario_id=alert.scenario_id,
+        rule_code=alert.rule_code,
+        title=alert.title,
+        severity=alert.severity,
+        status=alert.status,
+        narrative=alert.narrative,
+        assigned_analyst_id=alert.assigned_analyst_id,
+        assigned_analyst_name=alert.assigned_analyst_name,
+        linked_case_id=alert.linked_case_id,
+        created_at=alert.created_at,
+        acknowledged_at=alert.acknowledged_at,
+        resolved_at=alert.resolved_at,
+    )
+
+
+def to_domain_alert(record: FraudAlertRecord) -> FraudAlert:
+    return FraudAlert.model_validate(
+        {
+            "alert_id": record.alert_id,
+            "source_type": record.source_type,
+            "source_id": record.source_id,
+            "scenario_id": record.scenario_id,
+            "rule_code": record.rule_code,
+            "title": record.title,
+            "severity": record.severity,
+            "status": record.status,
+            "narrative": record.narrative,
+            "assigned_analyst_id": record.assigned_analyst_id,
+            "assigned_analyst_name": record.assigned_analyst_name,
+            "linked_case_id": record.linked_case_id,
+            "created_at": record.created_at,
+            "acknowledged_at": record.acknowledged_at,
+            "resolved_at": record.resolved_at,
+        }
+    )
+
+
+def to_dataset_record(dataset: Dataset) -> DatasetRecord:
+    return DatasetRecord(
+        dataset_id=dataset.dataset_id,
+        name=dataset.name,
+        uploaded_at=dataset.uploaded_at,
+        row_count=dataset.row_count,
+        status=dataset.status,
+        error_message=dataset.error_message,
+        transactions=[],
+        analysis=None,
+    )
+
+
+def to_domain_dataset(record: DatasetRecord) -> Dataset:
+    return Dataset.model_validate(
+        {
+            "dataset_id": record.dataset_id,
+            "name": record.name,
+            "uploaded_at": record.uploaded_at,
+            "row_count": record.row_count,
+            "status": record.status,
+            "error_message": record.error_message,
+        }
+    )
+
+
+def to_json_transactions(transactions: list[UploadedTransaction]) -> list[dict[str, object]]:
+    return [transaction.model_dump(mode="json") for transaction in transactions]
+
+
+def to_domain_transactions(payload: list[dict[str, object]]) -> list[UploadedTransaction]:
+    return [UploadedTransaction.model_validate(transaction) for transaction in payload]
+
+
+def to_json_analysis(result: AnalysisResult) -> dict[str, object]:
+    return result.model_dump(mode="json")
+
+
+def to_domain_analysis(payload: dict[str, object] | None) -> AnalysisResult | None:
+    if payload is None:
+        return None
+    return AnalysisResult.model_validate(payload)

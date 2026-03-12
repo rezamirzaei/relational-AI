@@ -91,6 +91,8 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     scenarios[0] ??
     null;
   const activeInvestigation = investigation?.investigation ?? null;
+  const activeInvestigationMatchesSelection =
+    activeInvestigation?.scenario.scenario_id === selectedScenarioId;
   const visibleScenarios = scenarios.filter((scenario) => {
     const query = deferredQuery.trim().toLowerCase();
     if (!query) return true;
@@ -119,6 +121,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
       setCases([]);
       setAlerts([]);
       setDashboardStats(null);
+      setActiveAnalysis(null);
       setLoginError("Your session could not be restored.");
     }
   }
@@ -145,9 +148,6 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     const principal = knownPrincipal ?? (await fetchCurrentOperator(token)).principal;
     const scenarioCatalog = await fetchScenarioCatalog(token);
     const firstScenarioId = scenarioCatalog.scenarios[0]?.scenario_id ?? null;
-    const nextInvestigation = firstScenarioId
-      ? await fetchInvestigationClient(token, firstScenarioId)
-      : null;
     const nextAuditEvents = principal.role === "admin" ? (await fetchAuditEvents(token)).events : [];
 
     let nextStats: DashboardStats | null = null;
@@ -172,12 +172,13 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setOperator(principal);
     setScenarios(scenarioCatalog.scenarios);
     setSelectedScenarioId(firstScenarioId);
-    setInvestigation(nextInvestigation);
+    setInvestigation(null);
     setAuditEvents(nextAuditEvents);
     setDashboardStats(nextStats);
     setCases(nextCases);
     setAlerts(nextAlerts);
     setDatasets(nextDatasets);
+    setActiveAnalysis(null);
   }
 
   async function handleScenarioSelection(scenarioId: string) {
@@ -185,6 +186,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setSelectedScenarioId(scenarioId);
     setActiveView("investigate");
     setErrorMessage(null);
+    setInvestigation(null);
     startTransition(() => { void loadInvestigation(authToken, scenarioId); });
   }
 
@@ -210,10 +212,14 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     if (!authToken || !activeInvestigation) return;
     try {
       await createCase(authToken, {
+        source_type: "scenario",
+        source_id: activeInvestigation.scenario.scenario_id,
         scenario_id: activeInvestigation.scenario.scenario_id,
         title: activeInvestigation.scenario.title,
         summary: activeInvestigation.summary,
         priority: activeInvestigation.risk_level,
+        risk_score: activeInvestigation.total_risk_score,
+        risk_level: activeInvestigation.risk_level,
       });
       const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
       setCases(casesRes.cases);
@@ -282,6 +288,28 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     }
   }
 
+  async function handleCreateCaseFromAnalysis() {
+    if (!authToken || !activeAnalysis) return;
+    const dataset = datasets.find((item) => item.dataset_id === activeAnalysis.dataset_id);
+    try {
+      await createCase(authToken, {
+        source_type: "dataset",
+        source_id: activeAnalysis.dataset_id,
+        title: dataset ? `Dataset review: ${dataset.name}` : "Dataset review",
+        summary: activeAnalysis.summary,
+        priority: activeAnalysis.risk_level,
+        risk_score: activeAnalysis.risk_score,
+        risk_level: activeAnalysis.risk_level,
+      });
+      const [casesRes, statsRes] = await Promise.all([fetchCases(authToken), fetchDashboardStats(authToken)]);
+      setCases(casesRes.cases);
+      setDashboardStats(statsRes.stats);
+      setActiveView("cases");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
+    }
+  }
+
   function handleLogout() {
     window.localStorage.removeItem(tokenStorageKey);
     setAuthToken(null);
@@ -293,6 +321,8 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setCases([]);
     setAlerts([]);
     setDashboardStats(null);
+    setDatasets([]);
+    setActiveAnalysis(null);
     setLoginError(null);
     setErrorMessage(null);
     setPassword("");
@@ -318,15 +348,15 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
           <section className="hero-panel">
             <div className="hero-copy-block">
               <p className="hero-copy">
-                Upload your own transaction data and detect fraud automatically using Benford&apos;s Law,
-                statistical outlier detection, velocity spike analysis, and round-amount structuring detection.
-                Investigate pre-built scenarios, manage cases, and track alerts — all in one platform.
+                Upload transaction data, detect anomalies automatically, and move the suspicious findings
+                into persistent alerts and cases. Reference scenarios are still available, but the main
+                workflow now starts from your own data.
               </p>
               <div className="hero-ribbon">
                 <span>CSV data upload</span>
                 <span>Benford&apos;s Law</span>
-                <span>Anomaly detection</span>
-                <span>Case management</span>
+                <span>Persistent alerts</span>
+                <span>Case triage</span>
               </div>
             </div>
             <div className="hero-stats">
@@ -338,7 +368,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
               <article className="hero-stat-card">
                 <span className="hero-label">Scenarios</span>
                 <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-                <p>Relational fraud investigations available.</p>
+                <p>Reference scenarios available for demo investigations.</p>
               </article>
               <article className="hero-stat-card">
                 <span className="hero-label">Operators</span>
@@ -383,7 +413,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                   onClick={() => setActiveView(view)}
                   type="button"
                 >
-                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Investigate" : view === "analyze" ? "Analyze Data" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
+                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Reference Scenarios" : view === "analyze" ? "Analyze Data" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
                   {view === "alerts" && alerts.filter(a => a.status === "new").length > 0 && (
                     <span className="nav-badge">{alerts.filter(a => a.status === "new").length}</span>
                   )}
@@ -471,10 +501,10 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                 <section className="content-card emphasis-card">
                   <div className="mini-header"><span>Getting Started</span><span>Guide</span></div>
                   <div className="action-stack">
-                    <article className="action-item"><span className="action-marker" /><p>Go to <strong>Investigate</strong> to run fraud analysis on a scenario.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>When a high-risk investigation completes, <strong>alerts are auto-generated</strong>.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>Create a <strong>case</strong> from the investigation to track and resolve it.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>Manage alert and case queues from the <strong>Cases</strong> and <strong>Alerts</strong> tabs.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Start in <strong>Analyze Data</strong> and upload a transaction dataset.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>High-risk analyses <strong>auto-generate alerts</strong> for triage.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Create a <strong>case</strong> from the dataset analysis to track resolution.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Use <strong>Reference Scenarios</strong> when you want to demo or validate the rule engine.</p></article>
                   </div>
                 </section>
               )}
@@ -486,7 +516,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
             <section className="workspace-grid">
               <aside className="surface scenario-rail">
                 <div className="rail-toolbar">
-                  <div className="section-header"><span>Scenario Catalog</span><span>{visibleScenarios.length}</span></div>
+                  <div className="section-header"><span>Reference Scenarios</span><span>{visibleScenarios.length}</span></div>
                   <label className="search-shell">
                     <span className="sr-only">Search scenarios</span>
                     <input aria-label="Search scenarios" className="search-input" onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search industry, tag, or narrative" type="search" value={searchQuery} />
@@ -519,7 +549,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
               </aside>
 
               <section className="surface investigation-panel">
-                {selectedScenario && activeInvestigation ? (
+                {selectedScenario && activeInvestigation && activeInvestigationMatchesSelection ? (
                   <>
                     <div className="section-header">
                       <span>Active Investigation</span>
@@ -665,8 +695,25 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                       </section>
                     </div>
                   </>
+                ) : selectedScenario ? (
+                  <div className="empty-state">
+                    <p style={{ marginBottom: 12 }}>
+                      <strong>{selectedScenario.title}</strong>
+                    </p>
+                    <p className="muted-copy" style={{ marginBottom: 16 }}>
+                      {selectedScenario.summary}
+                    </p>
+                    <button
+                      className="primary-button"
+                      disabled={isPending}
+                      onClick={() => handleScenarioSelection(selectedScenario.scenario_id)}
+                      type="button"
+                    >
+                      {isPending ? "Running reference investigation..." : "Run reference investigation"}
+                    </button>
+                  </div>
                 ) : (
-                  <div className="empty-state">Select a scenario to begin an investigation.</div>
+                  <div className="empty-state">Select a reference scenario to run a demo investigation.</div>
                 )}
               </section>
             </section>
@@ -696,7 +743,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                 />
                 {isUploading && <p className="muted-copy">Uploading...</p>}
                 <p className="muted-copy" style={{ marginTop: 8 }}>
-                  Try our <a href="https://github.com" target="_blank" rel="noopener">sample_transactions.csv</a> from <code>docs/sample_data/</code>
+                  Use the repo sample at <code>docs/sample_data/sample_transactions.csv</code> if you want a quick test dataset.
                 </p>
               </div>
 
@@ -745,6 +792,12 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                   </div>
 
                   <p style={{ margin: "12px 0", lineHeight: 1.6 }}>{activeAnalysis.summary}</p>
+
+                  <div className="action-bar">
+                    <button className="primary-button" onClick={handleCreateCaseFromAnalysis} type="button">
+                      Create case from dataset analysis
+                    </button>
+                  </div>
 
                   {/* Summary metrics */}
                   <div className="stats-grid">
@@ -858,6 +911,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                       <h3>{c.title}</h3>
                       <p className="muted-copy">{c.summary}</p>
                       <div className="case-card-footer">
+                        <span>{c.source_type === "dataset" ? `Dataset ${c.source_id}` : `Scenario ${c.source_id}`}</span>
                         <span>Risk: {c.risk_score}/100</span>
                         <span>{c.comment_count} comments</span>
                         {c.sla_deadline && <span>SLA: {dateFormatter.format(new Date(c.sla_deadline))}</span>}
@@ -890,6 +944,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                       <h3>{alert.title}</h3>
                       <p className="muted-copy">{alert.narrative}</p>
                       <div className="case-card-footer">
+                        <span>{alert.source_type === "dataset" ? `Dataset ${alert.source_id}` : `Scenario ${alert.source_id}`}</span>
                         <span>{dateFormatter.format(new Date(alert.created_at))}</span>
                         {alert.status === "new" && (
                           <button className="small-button" onClick={() => handleAcknowledgeAlert(alert.alert_id)} type="button">Acknowledge</button>

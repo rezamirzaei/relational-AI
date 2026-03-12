@@ -3,6 +3,7 @@
 Identifies suspicious patterns where a high proportion of transactions
 use exact round amounts — a common structuring indicator.
 """
+
 from __future__ import annotations
 
 from relational_fraud_intelligence.domain.models import (
@@ -67,4 +68,3 @@ def detect_round_amounts(
             )
 
     return anomalies
-

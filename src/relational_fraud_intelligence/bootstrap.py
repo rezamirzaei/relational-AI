@@ -14,7 +14,7 @@ from relational_fraud_intelligence.application.services.case_assembler import (
 )
 from relational_fraud_intelligence.application.services.case_service import CaseService
 from relational_fraud_intelligence.application.services.dashboard_service import DashboardService
-from relational_fraud_intelligence.application.services.dataset_service import DatasetService, DatasetStore
+from relational_fraud_intelligence.application.services.dataset_service import DatasetService
 from relational_fraud_intelligence.application.services.investigation_service import (
     InvestigationService,
 )
@@ -37,6 +37,11 @@ from relational_fraud_intelligence.infrastructure.persistence.session import (
     build_session_factory,
     ping_database,
 )
+from relational_fraud_intelligence.infrastructure.persistence.workflow_repository import (
+    SqlAlchemyAlertRepository,
+    SqlAlchemyCaseRepository,
+    SqlAlchemyDatasetStore,
+)
 from relational_fraud_intelligence.infrastructure.rate_limit.memory import (
     MemoryRateLimiter,
 )
@@ -51,10 +56,6 @@ from relational_fraud_intelligence.infrastructure.reasoners.local_risk_reasoner 
 )
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
     RelationalAIRiskReasoner,
-)
-from relational_fraud_intelligence.infrastructure.repositories.memory import (
-    InMemoryAlertRepository,
-    InMemoryCaseRepository,
 )
 from relational_fraud_intelligence.infrastructure.security.bootstrap import (
     OperatorBootstrapper,
@@ -187,11 +188,11 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         case_assembler=InvestigationCaseAssembler(),
     )
 
-    case_repository = InMemoryCaseRepository()
-    alert_repository = InMemoryAlertRepository()
+    case_repository = SqlAlchemyCaseRepository(session_factory)
+    alert_repository = SqlAlchemyAlertRepository(session_factory)
     case_service = CaseService(case_repository)
     alert_service = AlertService(alert_repository)
-    dataset_store = DatasetStore()
+    dataset_store = SqlAlchemyDatasetStore(session_factory)
     dataset_service = DatasetService(dataset_store)
     dashboard_service = DashboardService(
         scenario_repository=scenario_repository,

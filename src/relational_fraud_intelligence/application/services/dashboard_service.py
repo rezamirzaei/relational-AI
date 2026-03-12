@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from relational_fraud_intelligence.application.dto.dashboard import (
     GetDashboardStatsQuery,
@@ -10,9 +10,12 @@ from relational_fraud_intelligence.application.dto.investigation import ListScen
 from relational_fraud_intelligence.application.ports.repositories import ScenarioRepository
 from relational_fraud_intelligence.application.services.alert_service import AlertRepository
 from relational_fraud_intelligence.application.services.case_service import CaseRepository
+from relational_fraud_intelligence.application.services.dataset_service import DatasetStore
 from relational_fraud_intelligence.domain.models import (
     ActivityEvent,
+    AnalysisResult,
     DashboardStats,
+    Dataset,
 )
 
 
@@ -22,7 +25,7 @@ class DashboardService:
         scenario_repository: ScenarioRepository,
         case_repository: CaseRepository,
         alert_repository: AlertRepository,
-        dataset_store: object | None = None,
+        dataset_store: DatasetStore | None = None,
     ) -> None:
         self._scenario_repo = scenario_repository
         self._case_repo = case_repository
@@ -41,56 +44,80 @@ class DashboardService:
         open_cases = cases_by_status.get("open", 0) + cases_by_status.get("investigating", 0)
         total_alerts = sum(alerts_by_severity.values())
 
-        # Compute risk distribution from scenarios
-        risk_distribution: dict[str, int] = {}
-        for scenario in scenarios.scenarios:
-            level = scenario.baseline_risk
-            risk_distribution[level] = risk_distribution.get(level, 0) + 1
-
-        avg_risk = 0.0
-        if scenarios.scenarios:
-            risk_map = {"low": 15, "medium": 45, "high": 70, "critical": 90}
-            avg_risk = sum(
-                risk_map.get(s.baseline_risk, 50) for s in scenarios.scenarios
-            ) / len(scenarios.scenarios)
-
-        # Build recent activity from cases and alerts
-        activity: list[ActivityEvent] = []
-        if total_cases > 0:
-            activity.append(
-                ActivityEvent(
-                    event_type="case-update",
-                    description=f"{total_cases} cases tracked, {open_cases} currently active",
-                    occurred_at=datetime.now(timezone.utc),
-                )
-            )
-        if total_alerts > 0:
-            activity.append(
-                ActivityEvent(
-                    event_type="alert-generated",
-                    description=f"{total_alerts} alerts generated, {unacknowledged} awaiting review",
-                    occurred_at=datetime.now(timezone.utc),
-                )
-            )
-
         # Dataset stats
         total_datasets = 0
         total_txns_analyzed = 0
         total_anomalies_found = 0
+        results: list[AnalysisResult] = []
+        datasets: list[Dataset] = []
         if self._dataset_store is not None:
-            store = self._dataset_store
-            total_datasets = len(getattr(store, "list_datasets", lambda: [])())
-            total_txns_analyzed = getattr(store, "total_transactions", lambda: 0)()
-            total_anomalies_found = getattr(store, "total_anomalies", lambda: 0)()
+            datasets = self._dataset_store.list_datasets()
+            results = self._dataset_store.list_results()
+            total_datasets = len(datasets)
+            total_txns_analyzed = self._dataset_store.total_transactions()
+            total_anomalies_found = self._dataset_store.total_anomalies()
 
-        if total_datasets > 0:
+        recent_cases, _ = self._case_repo.list_cases(page=1, page_size=25)
+        recent_alerts, _ = self._alert_repo.list_alerts(page=1, page_size=25)
+
+        risk_distribution: dict[str, int] = {}
+        risk_values: list[int] = []
+        for case in recent_cases:
+            risk_distribution[case.risk_level] = risk_distribution.get(case.risk_level, 0) + 1
+            risk_values.append(case.risk_score)
+        for result in results:
+            risk_distribution[result.risk_level] = risk_distribution.get(result.risk_level, 0) + 1
+            risk_values.append(result.risk_score)
+
+        avg_risk = round(sum(risk_values) / len(risk_values), 1) if risk_values else 0.0
+
+        activity: list[ActivityEvent] = []
+        for case in recent_cases[:5]:
+            activity.append(
+                ActivityEvent(
+                    event_type="case-opened",
+                    description=f"{case.title} is {case.status}.",
+                    actor=case.assigned_analyst_name,
+                    occurred_at=_as_utc(case.updated_at),
+                    resource_id=case.case_id,
+                )
+            )
+        for alert in recent_alerts[:5]:
+            activity.append(
+                ActivityEvent(
+                    event_type="alert-generated",
+                    description=(
+                        f"{alert.title} is {alert.status} for {alert.source_type} "
+                        f"{alert.source_id}."
+                    ),
+                    actor=alert.assigned_analyst_name,
+                    occurred_at=_as_utc(alert.created_at),
+                    resource_id=alert.alert_id,
+                )
+            )
+        for dataset in datasets[:5]:
+            activity.append(
+                ActivityEvent(
+                    event_type="dataset-uploaded",
+                    description=(f"{dataset.name} uploaded with {dataset.row_count} transactions."),
+                    occurred_at=_as_utc(dataset.uploaded_at),
+                    resource_id=dataset.dataset_id,
+                )
+            )
+        for result in results[:5]:
             activity.append(
                 ActivityEvent(
                     event_type="dataset-analyzed",
-                    description=f"{total_datasets} dataset(s) uploaded, {total_txns_analyzed} transactions analyzed, {total_anomalies_found} anomalies detected",
-                    occurred_at=datetime.now(timezone.utc),
+                    description=(
+                        f"Analysis completed with {result.total_anomalies} anomalies "
+                        f"and risk score {result.risk_score}/100."
+                    ),
+                    occurred_at=_as_utc(result.completed_at),
+                    resource_id=result.dataset_id,
                 )
             )
+
+        activity.sort(key=lambda event: event.occurred_at, reverse=True)
 
         return GetDashboardStatsResult(
             stats=DashboardStats(
@@ -103,7 +130,7 @@ class DashboardService:
                 avg_risk_score=round(avg_risk, 1),
                 cases_by_status=cases_by_status,
                 alerts_by_severity=alerts_by_severity,
-                recent_activity=activity,
+                recent_activity=activity[:10],
                 risk_distribution=risk_distribution,
                 total_datasets=total_datasets,
                 total_transactions_analyzed=total_txns_analyzed,
@@ -112,4 +139,7 @@ class DashboardService:
         )
 
 
-
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

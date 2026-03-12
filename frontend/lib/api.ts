@@ -16,7 +16,7 @@ import type {
 } from "@/lib/contracts";
 
 const browserApiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8001/api/v1";
 const serverApiBaseUrl = process.env.API_BASE_URL ?? browserApiBaseUrl;
 
 async function fetchJson<T>(
@@ -108,7 +108,16 @@ export async function fetchInvestigationClient(
 
 export async function createCase(
   token: string,
-  params: { scenario_id: string; title: string; summary: string; priority?: string },
+  params: {
+    source_type?: "scenario" | "dataset";
+    source_id?: string;
+    scenario_id?: string;
+    title: string;
+    summary: string;
+    priority?: string;
+    risk_score?: number;
+    risk_level?: string;
+  },
 ): Promise<CreateCaseResponse> {
   return fetchJson<CreateCaseResponse>(
     `${browserApiBaseUrl}/cases`,
@@ -257,4 +266,3 @@ export async function fetchAnalysisResults(token: string, datasetId: string): Pr
     token,
   );
 }
-

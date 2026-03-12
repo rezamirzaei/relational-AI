@@ -1,21 +1,37 @@
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
     AppModel,
     FraudAlert,
     RiskLevel,
+    WorkflowSourceType,
 )
 
 
 class CreateAlertCommand(AppModel):
-    scenario_id: str
+    source_type: WorkflowSourceType = WorkflowSourceType.SCENARIO
+    source_id: str | None = None
+    scenario_id: str | None = None
     rule_code: str
     title: str
     severity: RiskLevel
     narrative: str
+
+    @model_validator(mode="after")
+    def populate_source_fields(self) -> CreateAlertCommand:
+        if self.source_type == WorkflowSourceType.SCENARIO:
+            if self.source_id is None and self.scenario_id is not None:
+                self.source_id = self.scenario_id
+            if self.scenario_id is None and self.source_id is not None:
+                self.scenario_id = self.source_id
+
+        if self.source_id is None:
+            raise ValueError("CreateAlertCommand requires source_id or scenario_id.")
+
+        return self
 
 
 class CreateAlertResult(AppModel):

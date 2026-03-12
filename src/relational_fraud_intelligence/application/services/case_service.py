@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import uuid4
 
@@ -23,6 +23,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseStatus,
     FraudCase,
     RiskLevel,
+    WorkflowSourceType,
 )
 
 
@@ -65,20 +66,29 @@ class CaseService:
         risk_score: int = 50,
         risk_level: RiskLevel = RiskLevel.MEDIUM,
     ) -> CreateCaseResult:
-        now = datetime.now(timezone.utc)
+        effective_risk_score = command.risk_score if command.risk_score is not None else risk_score
+        effective_risk_level = command.risk_level if command.risk_level is not None else risk_level
+        now = datetime.now(UTC)
         case = FraudCase(
             case_id=str(uuid4()),
-            scenario_id=command.scenario_id,
+            source_type=command.source_type,
+            source_id=command.source_id or "",
+            scenario_id=(
+                command.scenario_id if command.source_type == WorkflowSourceType.SCENARIO else None
+            ),
             title=command.title,
             status=CaseStatus.OPEN,
-            priority=command.priority or _priority_from_risk(risk_level),
+            priority=command.priority or _priority_from_risk(effective_risk_level),
             assigned_analyst_id=command.assigned_analyst_id,
-            risk_score=risk_score,
-            risk_level=risk_level,
+            risk_score=effective_risk_score,
+            risk_level=effective_risk_level,
             summary=command.summary,
             created_at=now,
             updated_at=now,
-            sla_deadline=now + timedelta(hours=24 if risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} else 72),
+            sla_deadline=now
+            + timedelta(
+                hours=24 if effective_risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} else 72
+            ),
         )
         self._repo.create_case(case)
         return CreateCaseResult(case=case)
@@ -88,7 +98,7 @@ class CaseService:
         if case is None:
             raise LookupError(f"Case '{command.case_id}' not found.")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         case.status = command.status
         case.updated_at = now
         if command.disposition is not None:
@@ -112,7 +122,7 @@ class CaseService:
 
         case.assigned_analyst_id = command.analyst_id
         case.assigned_analyst_name = analyst_name
-        case.updated_at = datetime.now(timezone.utc)
+        case.updated_at = datetime.now(UTC)
         if case.status == CaseStatus.OPEN:
             case.status = CaseStatus.INVESTIGATING
 
@@ -136,12 +146,12 @@ class CaseService:
             author_id=author_id,
             author_name=author_name,
             body=command.body,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         self._repo.add_comment(comment)
 
         case.comment_count += 1
-        case.updated_at = datetime.now(timezone.utc)
+        case.updated_at = datetime.now(UTC)
         self._repo.update_case(case)
 
         return comment
@@ -166,4 +176,3 @@ class CaseService:
             page=query.page,
             page_size=query.page_size,
         )
-

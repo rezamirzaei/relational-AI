@@ -4,11 +4,12 @@ Handles CSV upload, transaction parsing, and coordinates all analysis
 engines (Benford, outliers, velocity, round-amounts) to produce a
 unified AnalysisResult with actionable anomaly flags.
 """
+
 from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from relational_fraud_intelligence.domain.models import (
@@ -55,6 +56,9 @@ class DatasetStore:
     def get_result(self, dataset_id: str) -> AnalysisResult | None:
         return self._results.get(dataset_id)
 
+    def list_results(self) -> list[AnalysisResult]:
+        return sorted(self._results.values(), key=lambda result: result.completed_at, reverse=True)
+
     def total_transactions(self) -> int:
         return sum(len(txns) for txns in self._transactions.values())
 
@@ -64,7 +68,14 @@ class DatasetStore:
 
 # Required and optional CSV column names
 REQUIRED_COLUMNS = {"transaction_id", "account_id", "amount", "timestamp"}
-OPTIONAL_COLUMNS = {"merchant", "category", "device_fingerprint", "ip_country", "channel", "is_fraud"}
+OPTIONAL_COLUMNS = {
+    "merchant",
+    "category",
+    "device_fingerprint",
+    "ip_country",
+    "channel",
+    "is_fraud",
+}
 
 
 def _parse_timestamp(value: str) -> datetime:
@@ -78,7 +89,7 @@ def _parse_timestamp(value: str) -> datetime:
         "%m/%d/%Y",
     ):
         try:
-            return datetime.strptime(value.strip(), fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(value.strip(), fmt).replace(tzinfo=UTC)
         except ValueError:
             continue
     raise ValueError(f"Cannot parse timestamp: '{value}'")
@@ -147,7 +158,7 @@ class DatasetService:
         dataset = Dataset(
             dataset_id=str(uuid4()),
             name=filename,
-            uploaded_at=datetime.now(timezone.utc),
+            uploaded_at=datetime.now(UTC),
             row_count=len(transactions),
             status=DatasetStatus.UPLOADED,
         )
@@ -166,7 +177,7 @@ class DatasetService:
             try:
                 ts = _parse_timestamp(ts_raw)
             except ValueError:
-                ts = datetime.now(timezone.utc)
+                ts = datetime.now(UTC)
 
             is_fraud: bool | None = None
             if "is_fraud" in raw:
@@ -194,7 +205,7 @@ class DatasetService:
         dataset = Dataset(
             dataset_id=str(uuid4()),
             name=name,
-            uploaded_at=datetime.now(timezone.utc),
+            uploaded_at=datetime.now(UTC),
             row_count=len(parsed),
             status=DatasetStatus.UPLOADED,
         )
@@ -275,7 +286,7 @@ class DatasetService:
             result = AnalysisResult(
                 analysis_id=str(uuid4()),
                 dataset_id=dataset_id,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 total_transactions=len(transactions),
                 total_anomalies=len(all_anomalies),
                 risk_score=risk_score,
@@ -285,7 +296,9 @@ class DatasetService:
                 benford_is_suspicious=benford_suspicious,
                 benford_digits=benford_digits,
                 outlier_count=len(outlier_flags),
-                outlier_pct=round(len(outlier_flags) / len(transactions) * 100, 2) if transactions else 0,
+                outlier_pct=(
+                    round(len(outlier_flags) / len(transactions) * 100, 2) if transactions else 0
+                ),
                 velocity_spikes=velocity_spikes,
                 anomalies=all_anomalies,
                 summary=" ".join(summary_parts),
@@ -358,4 +371,3 @@ def _risk_level_from_score(score: int) -> RiskLevel:
     if score >= 25:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
-

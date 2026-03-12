@@ -107,6 +107,11 @@ class OperatorRole(StrEnum):
     ADMIN = "admin"
 
 
+class WorkflowSourceType(StrEnum):
+    SCENARIO = "scenario"
+    DATASET = "dataset"
+
+
 class EntityReference(AppModel):
     entity_type: EntityType
     entity_id: str
@@ -271,7 +276,9 @@ class FraudCase(AppModel):
     """A persistent fraud investigation case with lifecycle management."""
 
     case_id: str
-    scenario_id: str
+    source_type: WorkflowSourceType = WorkflowSourceType.SCENARIO
+    source_id: str
+    scenario_id: str | None = None
     title: str
     status: CaseStatus = CaseStatus.OPEN
     priority: CasePriority = CasePriority.MEDIUM
@@ -305,7 +312,9 @@ class FraudAlert(AppModel):
     """An auto-generated or manually created alert that may lead to a case."""
 
     alert_id: str
-    scenario_id: str
+    source_type: WorkflowSourceType = WorkflowSourceType.SCENARIO
+    source_id: str
+    scenario_id: str | None = None
     rule_code: str
     title: str
     severity: RiskLevel

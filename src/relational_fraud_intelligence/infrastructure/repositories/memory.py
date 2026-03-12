@@ -4,6 +4,7 @@ These implementations store data in process memory, which is appropriate for
 local development and testing. In production, these would be backed by
 SQLAlchemy repositories with Postgres persistence.
 """
+
 from __future__ import annotations
 
 from relational_fraud_intelligence.domain.models import (
@@ -14,6 +15,7 @@ from relational_fraud_intelligence.domain.models import (
     FraudAlert,
     FraudCase,
     RiskLevel,
+    WorkflowSourceType,
 )
 
 
@@ -118,3 +120,14 @@ class InMemoryAlertRepository:
             counts[alert.severity] = counts.get(alert.severity, 0) + 1
         return counts
 
+    def list_alerts_for_source(
+        self,
+        *,
+        source_type: WorkflowSourceType,
+        source_id: str,
+    ) -> list[FraudAlert]:
+        return [
+            alert
+            for alert in self._alerts.values()
+            if alert.source_type == source_type and alert.source_id == source_id
+        ]

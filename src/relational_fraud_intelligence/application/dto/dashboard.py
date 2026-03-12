@@ -7,4 +7,3 @@ class GetDashboardStatsQuery(AppModel):
 
 class GetDashboardStatsResult(AppModel):
     stats: DashboardStats
-

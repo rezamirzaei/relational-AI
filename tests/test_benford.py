@@ -1,7 +1,8 @@
 """Tests for Benford's Law analysis engine."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from relational_fraud_intelligence.domain.models import UploadedTransaction
 from relational_fraud_intelligence.infrastructure.analysis.benford import analyze_benford
@@ -13,7 +14,7 @@ def _make_txn(row: int, amount: float) -> UploadedTransaction:
         transaction_id=f"txn-{row}",
         account_id="A1",
         amount=amount,
-        timestamp=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 1, tzinfo=UTC),
     )
 
 
@@ -39,11 +40,9 @@ class TestBenford:
     def test_natural_distribution_not_suspicious(self) -> None:
         """Log-normal amounts should roughly follow Benford's Law."""
         import random
+
         random.seed(12345)
-        transactions = [
-            _make_txn(i, round(random.lognormvariate(4, 1.5), 2))
-            for i in range(500)
-        ]
+        transactions = [_make_txn(i, round(random.lognormvariate(4, 1.5), 2)) for i in range(500)]
         digits, chi_sq, p_value = analyze_benford(transactions)
         # Should NOT be flagged — natural data
         assert p_value > 0.01, f"Expected non-suspicious p-value, got {p_value}"
@@ -51,13 +50,10 @@ class TestBenford:
     def test_uniform_distribution_is_suspicious(self) -> None:
         """Uniformly distributed amounts should violate Benford's Law."""
         import random
+
         random.seed(99999)
-        transactions = [
-            _make_txn(i, round(random.uniform(100, 999), 2))
-            for i in range(500)
-        ]
+        transactions = [_make_txn(i, round(random.uniform(100, 999), 2)) for i in range(500)]
         digits, chi_sq, p_value = analyze_benford(transactions)
         # Uniform distribution should be flagged
         assert p_value < 0.05, f"Expected suspicious p-value, got {p_value}"
         assert chi_sq > 10
-

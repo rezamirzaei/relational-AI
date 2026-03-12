@@ -18,6 +18,11 @@ from relational_fraud_intelligence.infrastructure.persistence.session import (
     build_engine,
     build_session_factory,
 )
+from relational_fraud_intelligence.infrastructure.persistence.workflow_repository import (
+    SqlAlchemyAlertRepository,
+    SqlAlchemyCaseRepository,
+    SqlAlchemyDatasetStore,
+)
 from relational_fraud_intelligence.infrastructure.seed.scenarios import build_seed_scenarios
 
 
@@ -74,3 +79,24 @@ def audit_repository(
     session_factory: sessionmaker[Session],
 ) -> SqlAlchemyAuditLogRepository:
     return SqlAlchemyAuditLogRepository(session_factory)
+
+
+@pytest.fixture()
+def case_repository(
+    session_factory: sessionmaker[Session],
+) -> SqlAlchemyCaseRepository:
+    return SqlAlchemyCaseRepository(session_factory)
+
+
+@pytest.fixture()
+def alert_repository(
+    session_factory: sessionmaker[Session],
+) -> SqlAlchemyAlertRepository:
+    return SqlAlchemyAlertRepository(session_factory)
+
+
+@pytest.fixture()
+def dataset_store(
+    session_factory: sessionmaker[Session],
+) -> SqlAlchemyDatasetStore:
+    return SqlAlchemyDatasetStore(session_factory)

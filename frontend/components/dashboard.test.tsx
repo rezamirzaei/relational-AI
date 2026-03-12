@@ -246,6 +246,9 @@ describe("Dashboard", () => {
         alerts_by_severity: {},
         recent_activity: [],
         risk_distribution: {},
+        total_datasets: 0,
+        total_transactions_analyzed: 0,
+        total_anomalies_found: 0,
       },
     });
     mockedFetchCases.mockResolvedValue({ cases: [], total_count: 0, page: 1, page_size: 20 });
@@ -260,7 +263,7 @@ describe("Dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByText("Case management")).toBeInTheDocument();
+    expect(screen.getByText("Persistent alerts")).toBeInTheDocument();
   });
 
   it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
@@ -277,16 +280,16 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(mockedLoginOperator).toHaveBeenCalledWith("analyst", "AnalystPassword123!");
       expect(mockedFetchScenarioCatalog).toHaveBeenCalledWith("analyst-token");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Reference Scenarios/i }));
+    fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
+
+    await waitFor(() => {
       expect(mockedFetchInvestigationClient).toHaveBeenCalledWith(
         "analyst-token",
         "synthetic-identity-ring",
       );
-    });
-
-    // Navigate to Investigate tab
-    fireEvent.click(screen.getByRole("button", { name: /Investigate/i }));
-
-    await waitFor(() => {
       expect(
         screen.getByText("Synthetic Identity Gift Card Ring requires immediate review."),
       ).toBeInTheDocument();
@@ -322,9 +325,6 @@ describe("Dashboard", () => {
   it("loads the audit trail for an admin session", async () => {
     mockedLoginOperator.mockResolvedValue(buildLoginResponse(adminPrincipal));
     mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
-    mockedFetchInvestigationClient.mockResolvedValue(
-      buildInvestigationResponse(scenarios[0]),
-    );
     mockedFetchAuditEvents.mockResolvedValue({ events: auditEvents });
 
     render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
