@@ -1,83 +1,81 @@
 # Relational Fraud Intelligence
 
-Relational Fraud Intelligence is a production-leaning fraud investigation platform built around relational case data, typed FastAPI contracts, a polished Next.js command center, and a deterministic rule engine with optional Hugging Face and RelationalAI enrichment.
+Relational Fraud Intelligence is a production-style fraud investigation platform built around relational case storage, operator authentication, audit logging, rate limiting, typed FastAPI contracts, and a polished Next.js command center.
 
-## What is in this upgrade
+## Production baseline
 
-- SQLAlchemy-backed persistence with Alembic migrations.
-- Realistic seeded fraud scenarios loaded from a relational database.
-- Lifecycle-managed FastAPI startup with runtime health reporting.
-- A rule-object risk engine instead of one monolithic heuristic function.
-- Pre-commit hooks, GitHub Actions CI/CD, and Dependabot automation.
-- Frontend component tests, TypeScript checks, and production Next.js builds.
-- Dockerized backend and standalone Next.js frontend images.
-
-## Fraud situations modeled
-
-- Synthetic identity gift card liquidation rings.
-- Premium-account takeover with cross-border rapid spend.
-- Payroll-style money mule funneling through transfer and crypto rails.
-
-RelationalAI fits this domain because entities, devices, accounts, merchants, notes, and transactions all need explainable graph-style reasoning rather than isolated row scoring.
+- Postgres-first persistence with SQLAlchemy 2 and Alembic migrations.
+- Redis-backed rate limiting with automatic in-memory fallback if Redis is unavailable.
+- JWT operator authentication, RBAC for analyst and admin roles, and structured request auditing.
+- Automatic audit retention pruning at startup plus a manual `prune-audit` management command.
+- Realistic seeded fraud scenarios covering synthetic identity, account takeover, and money mule flows.
+- Deterministic rule-based risk reasoning with optional Hugging Face and RelationalAI enrichment.
+- Pre-commit hooks, GitHub Actions CI/CD, Dependabot automation, Docker images, and compose orchestration.
 
 ## Stack
 
-- Backend: Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, RelationalAI SDK, Hugging Face Hub
+- Backend: Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Postgres, Redis
 - Frontend: Next.js 16, React 19, TypeScript 5, Vitest, Testing Library
+- AI integrations: RelationalAI SDK, Hugging Face Hub
 - Delivery: Docker, Docker Compose, GitHub Actions, GHCR publishing workflow
 - Quality: Ruff, mypy, pytest, coverage, pre-commit, frontend typecheck and tests
 
 ## Quick start
 
 1. Copy `.env.example` to `.env`.
-2. Install backend dependencies:
+2. Rotate `RFI_JWT_SECRET` and the bootstrap operator passwords if the system will be reachable outside localhost.
+3. Install dependencies:
 
 ```bash
 python3 -m pip install -e ".[dev]"
-```
-
-3. Install frontend dependencies:
-
-```bash
 npm --prefix frontend ci
 ```
 
-4. Apply migrations and seed the local database:
+4. Start the infrastructure services:
+
+```bash
+docker compose up -d postgres redis
+```
+
+5. Apply schema changes and seed the scenario catalog:
 
 ```bash
 rfi-manage migrate
 rfi-manage seed
 ```
 
-5. Start the backend:
+6. Start the backend and frontend:
 
 ```bash
 rfi-api
-```
-
-6. Start the frontend:
-
-```bash
 npm --prefix frontend run dev
 ```
 
-7. Open `http://localhost:3001` when using the example environment file.
+7. Open `http://localhost:3001`.
 
-## Docker
+Local demo operators from `.env.example`:
+
+- `analyst / AnalystPassword123!`
+- `admin / AdminPassword123!`
+
+## Full compose stack
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The compose stack persists SQLite data in the `rfi_data` volume, migrates the backend schema on startup, waits for backend health, and then serves the frontend.
+The compose baseline starts Postgres, Redis, the FastAPI backend, and the Next.js frontend. The backend applies Alembic migrations at container start, bootstraps the configured operator accounts, seeds scenarios when enabled, and enforces request audit retention on startup.
 
-## Database workflow
+## Security and operations
 
-- `rfi-manage migrate` applies Alembic migrations to `RFI_DATABASE_URL`.
-- `rfi-manage seed` inserts realistic scenarios if the database is empty.
-- Local development defaults to `sqlite+pysqlite:///./data/rfi.db`.
-- CI uses the same migration path before running tests.
+- `RFI_JWT_SECRET` must be at least 32 characters and must be overridden outside `local` and `test`.
+- Bootstrap operator passwords must be at least 12 characters.
+- Login and API traffic are rate-limited independently.
+- Every request receives an `X-Request-ID` and is written to the audit trail with actor, action, path, and status code.
+- Audit retention is controlled by `RFI_AUDIT_LOG_RETENTION_DAYS`.
+- `rfi-manage create-operator` creates named operators for managed environments.
+- `rfi-manage prune-audit` deletes expired audit events on demand.
 
 ## Runtime modes
 
@@ -86,7 +84,7 @@ The compose stack persists SQLite data in the `rfi_data` volume, migrates the ba
 - `RFI_TEXT_SIGNAL_PROVIDER=keyword`
 - `RFI_REASONING_PROVIDER=local-rule-engine`
 
-This is the deterministic, test-friendly mode used by default.
+This is the deterministic, test-friendly default.
 
 ### Hugging Face mode
 
@@ -95,7 +93,7 @@ Set:
 - `RFI_TEXT_SIGNAL_PROVIDER=huggingface`
 - `RFI_HUGGINGFACE_API_TOKEN=...`
 
-The backend will try zero-shot classification first and fall back to keyword heuristics if the provider fails.
+The backend tries zero-shot classification first and falls back to keyword heuristics if the provider fails.
 
 ### RelationalAI mode
 
@@ -103,7 +101,7 @@ Set:
 
 - `RFI_REASONING_PROVIDER=relationalai`
 
-By default the adapter uses a DuckDB-backed local semantic projection through the RelationalAI SDK. If you want to wire a real external RelationalAI config, set:
+By default the adapter uses a DuckDB-backed local semantic projection through the RelationalAI SDK. For external configuration, set:
 
 - `RFI_RELATIONALAI_USE_EXTERNAL_CONFIG=true`
 
@@ -134,42 +132,45 @@ make frontend-test
 make frontend-build
 make db-upgrade
 make db-seed
+make audit-prune
+make docker-up
 ```
+
+## CI/CD
+
+GitHub Actions enforces:
+
+- pre-commit on the full repository
+- backend lint, type checks, tests, and coverage
+- frontend type checks, component tests, and production build
+- Postgres + Redis smoke validation for migrations, auth, and runtime health
+- Docker image builds on CI
+- GHCR image publishing on `main` and version tags
 
 ## Project structure
 
 ```text
 alembic/                               Database migrations
 src/relational_fraud_intelligence/
-  api/                                 FastAPI routes and dependencies
+  api/                                 FastAPI routes, middleware, and dependencies
   application/                         DTOs, ports, and services
   domain/                              Pydantic domain models
-  infrastructure/persistence/          SQLAlchemy models, mapping, repository, seeding
+  infrastructure/logging.py            Structured JSON logging
+  infrastructure/persistence/          SQLAlchemy models, repositories, and seeding
+  infrastructure/rate_limit/           Memory and Redis rate limit adapters
   infrastructure/reasoners/            Rule-based and RelationalAI-ready risk reasoning
-  infrastructure/seed/                 Realistic fraud scenario fixtures
+  infrastructure/security/             Password hashing, JWTs, operator bootstrap
   infrastructure/text/                 Keyword, Hugging Face, and fallback text services
 frontend/
   app/                                 Next.js app router and global styles
-  components/                          Product UI and tests
+  components/                          Authenticated investigation workspace and tests
   lib/                                 API client and typed frontend contracts
-tests/                                 Backend API, repository, and service tests
+tests/                                 Backend API, security, audit, and rate-limit tests
 .github/workflows/                     CI and CD automation
 ```
-
-## Quality gates
-
-The repository is set up so local hooks and CI enforce the same standards:
-
-- Ruff formatting and linting
-- mypy strict type checking
-- pytest with coverage threshold
-- frontend TypeScript checks
-- frontend Vitest component tests
-- production Next.js build
-- Docker image builds in CI
 
 ## Notes
 
 - The default fraud logic is deterministic and explainable.
-- Provider failures remain visible in the UI through fallback notes instead of taking the system down.
-- The RelationalAI adapter stays isolated so deeper semantic modeling can replace or extend the local rules without changing API contracts.
+- Provider failures are surfaced to the UI through runtime notes instead of failing the whole investigation flow.
+- The RelationalAI adapter remains isolated so deeper semantic modeling can replace or extend the local rules without changing API contracts.

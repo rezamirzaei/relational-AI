@@ -15,6 +15,8 @@ dependencies = [
     "huggingface_hub==1.6.0",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
+    "psycopg[binary]==3.2.10",
+    "redis==5.2.1",
     "relationalai==1.0.3",
     "sqlalchemy==2.0.43",
     "uvicorn[standard]==0.41.0",

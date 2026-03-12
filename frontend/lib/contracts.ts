@@ -1,4 +1,5 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type OperatorRole = "admin" | "analyst";
 
 export type ScenarioTag =
   | "fraud"
@@ -96,10 +97,54 @@ export type ScenarioCatalogResponse = {
   scenarios: ScenarioOverview[];
 };
 
+export type OperatorPrincipal = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: OperatorRole;
+  is_active: boolean;
+};
+
+export type LoginResponse = {
+  access_token: string;
+  token_type: "bearer";
+  expires_in_seconds: number;
+  principal: OperatorPrincipal;
+};
+
+export type CurrentOperatorResponse = {
+  principal: OperatorPrincipal;
+};
+
+export type AuditEvent = {
+  event_id: number;
+  occurred_at: string;
+  request_id: string;
+  actor_user_id: string | null;
+  actor_username: string | null;
+  actor_role: OperatorRole | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  http_method: string;
+  path: string;
+  status_code: number;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: Record<string, string>;
+};
+
+export type AuditEventsResponse = {
+  events: AuditEvent[];
+};
+
 export type HealthResponse = {
   status: "ok" | "degraded";
   app_name: string;
   environment: string;
   database_status: "ready" | "unavailable";
+  rate_limit_status: "ready" | "degraded" | "unavailable";
+  rate_limit_backend: string;
   seeded_scenarios: number;
+  seeded_operators: number;
 };

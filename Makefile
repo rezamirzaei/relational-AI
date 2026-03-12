@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed precommit-install precommit-run docker-up
+.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up
 
 install: backend-install frontend-install
 
@@ -39,6 +39,9 @@ db-upgrade:
 
 db-seed:
 	$(PYTHON) -m relational_fraud_intelligence.manage seed
+
+audit-prune:
+	$(PYTHON) -m relational_fraud_intelligence.manage prune-audit
 
 precommit-install:
 	pre-commit install --install-hooks

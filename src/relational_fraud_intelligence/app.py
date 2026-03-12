@@ -4,14 +4,23 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from relational_fraud_intelligence.api.middleware.audit import AuditMiddleware
+from relational_fraud_intelligence.api.middleware.request_context import (
+    RequestContextMiddleware,
+)
+from relational_fraud_intelligence.api.middleware.security_headers import (
+    SecurityHeadersMiddleware,
+)
 from relational_fraud_intelligence.api.routes import router
 from relational_fraud_intelligence.bootstrap import build_container
+from relational_fraud_intelligence.infrastructure.logging import configure_logging
 from relational_fraud_intelligence.settings import AppSettings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = AppSettings()
+    configure_logging()
     container = build_container(settings)
     app.state.container = container
     try:
@@ -38,5 +47,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestContextMiddleware, request_id_header=settings.request_id_header)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(AuditMiddleware)
     app.include_router(router, prefix=settings.api_prefix)
     return app

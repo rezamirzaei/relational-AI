@@ -1,6 +1,9 @@
 import type {
+  AuditEventsResponse,
+  CurrentOperatorResponse,
   HealthResponse,
   InvestigationResponse,
+  LoginResponse,
   ScenarioCatalogResponse,
 } from "@/lib/contracts";
 
@@ -8,12 +11,17 @@ const browserApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 const serverApiBaseUrl = process.env.API_BASE_URL ?? browserApiBaseUrl;
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  init?: RequestInit,
+  token?: string,
+): Promise<T> {
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -38,24 +46,46 @@ export async function fetchHealthServer(): Promise<HealthResponse> {
   return fetchJson<HealthResponse>(`${serverApiBaseUrl}/health`);
 }
 
-export async function fetchScenarioCatalog(): Promise<ScenarioCatalogResponse> {
-  return fetchJson<ScenarioCatalogResponse>(`${serverApiBaseUrl}/scenarios`);
+export async function loginOperator(
+  username: string,
+  password: string,
+): Promise<LoginResponse> {
+  return fetchJson<LoginResponse>(`${browserApiBaseUrl}/auth/token`, {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
 }
 
-export async function fetchInvestigationServer(
-  scenarioId: string,
-): Promise<InvestigationResponse> {
-  return fetchJson<InvestigationResponse>(`${serverApiBaseUrl}/investigations`, {
-    method: "POST",
-    body: JSON.stringify({ scenario_id: scenarioId }),
-  });
+export async function fetchCurrentOperator(
+  token: string,
+): Promise<CurrentOperatorResponse> {
+  return fetchJson<CurrentOperatorResponse>(`${browserApiBaseUrl}/auth/me`, undefined, token);
+}
+
+export async function fetchScenarioCatalog(
+  token: string,
+): Promise<ScenarioCatalogResponse> {
+  return fetchJson<ScenarioCatalogResponse>(`${browserApiBaseUrl}/scenarios`, undefined, token);
 }
 
 export async function fetchInvestigationClient(
+  token: string,
   scenarioId: string,
 ): Promise<InvestigationResponse> {
-  return fetchJson<InvestigationResponse>(`${browserApiBaseUrl}/investigations`, {
-    method: "POST",
-    body: JSON.stringify({ scenario_id: scenarioId }),
-  });
+  return fetchJson<InvestigationResponse>(
+    `${browserApiBaseUrl}/investigations`,
+    {
+      method: "POST",
+      body: JSON.stringify({ scenario_id: scenarioId }),
+    },
+    token,
+  );
+}
+
+export async function fetchAuditEvents(token: string): Promise<AuditEventsResponse> {
+  return fetchJson<AuditEventsResponse>(
+    `${browserApiBaseUrl}/audit-events?limit=20`,
+    undefined,
+    token,
+  );
 }

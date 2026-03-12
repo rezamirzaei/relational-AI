@@ -51,6 +51,11 @@ class TextSignalKind(StrEnum):
     MERCHANT_DESCRIPTION = "merchant-description"
 
 
+class OperatorRole(StrEnum):
+    ANALYST = "analyst"
+    ADMIN = "admin"
+
+
 class EntityReference(AppModel):
     entity_type: EntityType
     entity_id: str
@@ -195,3 +200,29 @@ class InvestigationCase(AppModel):
     text_signals: list[TextSignal]
     suspicious_transactions: list[TransactionRecord]
     recommended_actions: list[str]
+
+
+class OperatorPrincipal(AppModel):
+    user_id: str
+    username: str
+    display_name: str
+    role: OperatorRole
+    is_active: bool
+
+
+class AuditEvent(AppModel):
+    event_id: int
+    occurred_at: datetime
+    request_id: str
+    actor_user_id: str | None = None
+    actor_username: str | None = None
+    actor_role: OperatorRole | None = None
+    action: str
+    resource_type: str
+    resource_id: str | None = None
+    http_method: str
+    path: str
+    status_code: int
+    ip_address: str | None = None
+    user_agent: str | None = None
+    details: dict[str, str] = Field(default_factory=dict)

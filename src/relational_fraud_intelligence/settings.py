@@ -1,7 +1,9 @@
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_LOCAL_JWT_SECRET = "local-development-only-jwt-secret-key-0001"
 
 
 class AppSettings(BaseSettings):
@@ -22,6 +24,25 @@ class AppSettings(BaseSettings):
     database_echo: bool = False
     database_auto_create_schema: bool = True
     seed_scenarios_on_startup: bool = True
+    request_id_header: str = "X-Request-ID"
+    jwt_access_token_ttl_minutes: int = 60
+    jwt_algorithm: str = "HS256"
+    jwt_secret: str = DEFAULT_LOCAL_JWT_SECRET
+    jwt_issuer: str = "relational-fraud-intelligence"
+    jwt_audience: str = "rfi-operators"
+    bootstrap_admin_username: str | None = None
+    bootstrap_admin_password: str | None = None
+    bootstrap_admin_display_name: str = "Platform Admin"
+    bootstrap_analyst_username: str | None = None
+    bootstrap_analyst_password: str | None = None
+    bootstrap_analyst_display_name: str = "Fraud Analyst"
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
+    rate_limit_redis_url: str = "redis://localhost:6379/0"
+    rate_limit_auth_requests: int = 10
+    rate_limit_auth_window_seconds: int = 60
+    rate_limit_api_requests: int = 120
+    rate_limit_api_window_seconds: int = 60
+    audit_log_retention_days: int = 90
 
     text_signal_provider: Literal["keyword", "huggingface"] = "keyword"
     reasoning_provider: Literal["local-rule-engine", "relationalai"] = "local-rule-engine"
@@ -32,3 +53,22 @@ class AppSettings(BaseSettings):
 
     relationalai_use_external_config: bool = False
     relationalai_duckdb_path: str = ":memory:"
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> Self:
+        if len(self.jwt_secret) < 32:
+            raise ValueError("RFI_JWT_SECRET must be at least 32 characters long.")
+
+        if self.app_env not in {"local", "test"} and self.jwt_secret == DEFAULT_LOCAL_JWT_SECRET:
+            raise ValueError(
+                "RFI_JWT_SECRET must be overridden outside local and test environments."
+            )
+
+        for name, password in {
+            "RFI_BOOTSTRAP_ADMIN_PASSWORD": self.bootstrap_admin_password,
+            "RFI_BOOTSTRAP_ANALYST_PASSWORD": self.bootstrap_analyst_password,
+        }.items():
+            if password is not None and len(password) < 12:
+                raise ValueError(f"{name} must be at least 12 characters long.")
+
+        return self

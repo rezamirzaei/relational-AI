@@ -1,15 +1,45 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rfi
+      POSTGRES_USER: rfi
+      POSTGRES_PASSWORD: rfi-dev-password
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rfi -d rfi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     env_file:
       - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     ports:
       - "${RFI_API_HOST_PORT:-8000}:8000"
-    volumes:
-      - rfi_data:/app/data
     healthcheck:
       test:
         [
@@ -50,4 +80,5 @@ services:
       retries: 5
 
 volumes:
-  rfi_data:
+  postgres_data:
+  redis_data:

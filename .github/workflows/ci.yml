@@ -31,6 +31,75 @@ jobs:
       - name: Run backend tests
         run: python -m pytest -q
 
+  platform-smoke:
+    runs-on: ubuntu-latest
+    needs: backend-quality
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rfi
+          POSTGRES_USER: rfi
+          POSTGRES_PASSWORD: rfi-dev-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rfi -d rfi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Smoke-test production wiring
+        env:
+          RFI_APP_ENV: ci
+          RFI_DATABASE_URL: postgresql+psycopg://rfi:rfi-dev-password@127.0.0.1:5432/rfi
+          RFI_DATABASE_AUTO_CREATE_SCHEMA: "false"
+          RFI_SEED_SCENARIOS_ON_STARTUP: "true"
+          RFI_JWT_SECRET: ci-jwt-secret-key-for-production-smoke-0001
+          RFI_BOOTSTRAP_ADMIN_USERNAME: admin
+          RFI_BOOTSTRAP_ADMIN_PASSWORD: AdminPassword123!
+          RFI_BOOTSTRAP_ANALYST_USERNAME: analyst
+          RFI_BOOTSTRAP_ANALYST_PASSWORD: AnalystPassword123!
+          RFI_RATE_LIMIT_BACKEND: redis
+          RFI_RATE_LIMIT_REDIS_URL: redis://127.0.0.1:6379/0
+        run: |
+          rfi-manage migrate
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from relational_fraud_intelligence.app import create_app
+
+          with TestClient(create_app()) as client:
+              health = client.get("/api/v1/health")
+              assert health.status_code == 200, health.text
+              payload = health.json()
+              assert payload["database_status"] == "ready", payload
+              assert payload["rate_limit_status"] == "ready", payload
+              auth = client.post(
+                  "/api/v1/auth/token",
+                  json={"username": "admin", "password": "AdminPassword123!"},
+              )
+              assert auth.status_code == 200, auth.text
+          PY
+
   frontend-quality:
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +128,7 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
-    needs: [backend-quality, frontend-quality]
+    needs: [backend-quality, platform-smoke, frontend-quality]
     steps:
       - uses: actions/checkout@v4
 

@@ -206,3 +206,36 @@ class InvestigatorNoteRecord(Base):
 
     scenario: Mapped[ScenarioRecord] = relationship(back_populates="investigator_notes")
     subject_customer: Mapped[CustomerRecord] = relationship(back_populates="investigator_notes")
+
+
+class OperatorUserRecord(Base):
+    __tablename__ = "operator_users"
+
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    role: Mapped[str] = mapped_column(String(32))
+    password_hash: Mapped[str] = mapped_column(String(512))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+
+
+class AuditEventRecord(Base):
+    __tablename__ = "audit_events"
+
+    event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    request_id: Mapped[str] = mapped_column(String(64), index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    actor_username: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    action: Mapped[str] = mapped_column(String(80))
+    resource_type: Mapped[str] = mapped_column(String(80))
+    resource_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    http_method: Mapped[str] = mapped_column(String(16))
+    path: Mapped[str] = mapped_column(String(255))
+    status_code: Mapped[int] = mapped_column(Integer)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    details: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)

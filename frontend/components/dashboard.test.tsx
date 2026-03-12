@@ -8,25 +8,45 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Dashboard } from "@/components/dashboard";
-import { fetchInvestigationClient } from "@/lib/api";
+import {
+  fetchAuditEvents,
+  fetchCurrentOperator,
+  fetchInvestigationClient,
+  fetchScenarioCatalog,
+  loginOperator,
+} from "@/lib/api";
 import type {
+  AuditEvent,
   HealthResponse,
   InvestigationResponse,
+  LoginResponse,
+  OperatorPrincipal,
   ScenarioOverview,
 } from "@/lib/contracts";
 
 vi.mock("@/lib/api", () => ({
+  fetchAuditEvents: vi.fn(),
+  fetchCurrentOperator: vi.fn(),
   fetchInvestigationClient: vi.fn(),
+  fetchScenarioCatalog: vi.fn(),
+  loginOperator: vi.fn(),
 }));
 
+const mockedFetchAuditEvents = vi.mocked(fetchAuditEvents);
+const mockedFetchCurrentOperator = vi.mocked(fetchCurrentOperator);
 const mockedFetchInvestigationClient = vi.mocked(fetchInvestigationClient);
+const mockedFetchScenarioCatalog = vi.mocked(fetchScenarioCatalog);
+const mockedLoginOperator = vi.mocked(loginOperator);
 
 const backendHealth: HealthResponse = {
   status: "ok",
   app_name: "Relational Fraud Intelligence",
   environment: "test",
   database_status: "ready",
+  rate_limit_status: "ready",
+  rate_limit_backend: "memory",
   seeded_scenarios: 3,
+  seeded_operators: 2,
 };
 
 const scenarios: ScenarioOverview[] = [
@@ -51,6 +71,42 @@ const scenarios: ScenarioOverview[] = [
     transaction_count: 3,
     total_volume: 6980,
     baseline_risk: "high",
+  },
+];
+
+const analystPrincipal: OperatorPrincipal = {
+  user_id: "operator-analyst",
+  username: "analyst",
+  display_name: "Fraud Analyst",
+  role: "analyst",
+  is_active: true,
+};
+
+const adminPrincipal: OperatorPrincipal = {
+  user_id: "operator-admin",
+  username: "admin",
+  display_name: "Platform Admin",
+  role: "admin",
+  is_active: true,
+};
+
+const auditEvents: AuditEvent[] = [
+  {
+    event_id: 101,
+    occurred_at: "2026-03-12T14:12:00",
+    request_id: "req-101",
+    actor_user_id: "operator-analyst",
+    actor_username: "analyst",
+    actor_role: "analyst",
+    action: "investigate-scenario",
+    resource_type: "fraud-scenario",
+    resource_id: "synthetic-identity-ring",
+    http_method: "POST",
+    path: "/api/v1/investigations",
+    status_code: 200,
+    ip_address: "127.0.0.1",
+    user_agent: "vitest",
+    details: {},
   },
 ];
 
@@ -133,39 +189,59 @@ function buildInvestigationResponse(
   };
 }
 
+function buildLoginResponse(principal: OperatorPrincipal): LoginResponse {
+  return {
+    access_token: `${principal.username}-token`,
+    token_type: "bearer",
+    expires_in_seconds: 3600,
+    principal,
+  };
+}
+
 describe("Dashboard", () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    mockedFetchAuditEvents.mockReset();
+    mockedFetchCurrentOperator.mockReset();
     mockedFetchInvestigationClient.mockReset();
+    mockedFetchScenarioCatalog.mockReset();
+    mockedLoginOperator.mockReset();
   });
 
-  it("renders runtime posture and initial investigation details", () => {
-    render(
-      <Dashboard
-        backendHealth={backendHealth}
-        bootstrapError={null}
-        initialInvestigation={buildInvestigationResponse(scenarios[0])}
-        initialScenarios={scenarios}
-      />,
-    );
+  it("renders runtime posture and requires operator sign-in", () => {
+    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Relational Fraud Intelligence" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByText("JWT operator auth")).toBeInTheDocument();
+  });
+
+  it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchInvestigationClient
+      .mockResolvedValueOnce(buildInvestigationResponse(scenarios[0]))
+      .mockResolvedValueOnce(buildInvestigationResponse(scenarios[1]));
+
+    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(mockedLoginOperator).toHaveBeenCalledWith("analyst", "AnalystPassword123!");
+      expect(mockedFetchScenarioCatalog).toHaveBeenCalledWith("analyst-token");
+      expect(mockedFetchInvestigationClient).toHaveBeenCalledWith(
+        "analyst-token",
+        "synthetic-identity-ring",
+      );
+    });
+
     expect(
       screen.getByText("Synthetic Identity Gift Card Ring requires immediate review."),
     ).toBeInTheDocument();
-  });
-
-  it("filters scenarios from the search box", () => {
-    render(
-      <Dashboard
-        backendHealth={backendHealth}
-        bootstrapError={null}
-        initialInvestigation={buildInvestigationResponse(scenarios[0])}
-        initialScenarios={scenarios}
-      />,
-    );
 
     fireEvent.change(screen.getByLabelText("Search scenarios"), {
       target: { value: "travel" },
@@ -178,31 +254,44 @@ describe("Dashboard", () => {
     expect(
       scenarioList.getByText("Travel Account Takeover Escalation"),
     ).toBeInTheDocument();
-  });
-
-  it("loads a scenario when the operator selects it", async () => {
-    mockedFetchInvestigationClient.mockResolvedValue(
-      buildInvestigationResponse(scenarios[1]),
-    );
-
-    render(
-      <Dashboard
-        backendHealth={backendHealth}
-        bootstrapError={null}
-        initialInvestigation={buildInvestigationResponse(scenarios[0])}
-        initialScenarios={scenarios}
-      />,
-    );
 
     fireEvent.click(screen.getByRole("button", { name: /travel account takeover/i }));
 
     await waitFor(() => {
       expect(mockedFetchInvestigationClient).toHaveBeenCalledWith(
+        "analyst-token",
         "travel-ato-escalation",
       );
       expect(
         screen.getByText("Travel Account Takeover Escalation requires immediate review."),
       ).toBeInTheDocument();
+    });
+
+    expect(window.localStorage.getItem("rfi.operator-token")).toBe("analyst-token");
+  });
+
+  it("loads the audit trail for an admin session", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(adminPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchInvestigationClient.mockResolvedValue(
+      buildInvestigationResponse(scenarios[0]),
+    );
+    mockedFetchAuditEvents.mockResolvedValue({ events: auditEvents });
+
+    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "admin" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AdminPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(mockedFetchAuditEvents).toHaveBeenCalledWith("admin-token");
+      expect(screen.getByText("Audit Trail")).toBeInTheDocument();
+      expect(screen.getByText("investigate-scenario")).toBeInTheDocument();
     });
   });
 });
