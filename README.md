@@ -1,6 +1,6 @@
 # Relational Fraud Intelligence
 
-A fraud triage workspace for uploaded transaction datasets, with persistent alerts and cases, plus reference scenario investigations for demos and rule validation.
+A fraud triage workspace for uploaded transaction datasets, with persistent alerts and cases, plus reference scenario investigations for validation and rule calibration.
 
 ## What it does
 
@@ -10,7 +10,7 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 2. **Analyze** — The platform runs Benford's Law checks, statistical outlier detection, velocity spike analysis, and round-amount structuring detection to produce a scored analysis.
 3. **Alert** — When an analysis produces a risk score ≥ 35, alerts are auto-generated from the strongest anomaly findings and placed in the alert queue for triage.
 4. **Manage Cases** — Analysts create fraud cases from dataset analyses or reference investigations, track them through a full lifecycle, add comments, and record dispositions.
-5. **Validate** — Reference scenarios remain available as demo investigations for validating the relational rule engine and graph analysis.
+5. **Validate** — Reference scenarios remain available for validating the relational rule engine, graph analysis, and analyst workflows.
 
 ## Core capabilities
 
@@ -83,7 +83,7 @@ npm --prefix frontend run dev
 
 7. Open `http://localhost:3001`.
 
-Local demo operators from `.env.example`:
+Local bootstrap operators from `.env.example`:
 
 - `analyst / AnalystPassword123!`
 - `admin / AdminPassword123!`

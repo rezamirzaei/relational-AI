@@ -81,8 +81,8 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("overview");
-  const [username, setUsername] = useState("analyst");
-  const [password, setPassword] = useState("AnalystPassword123!");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(bootstrapError);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -93,6 +93,8 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
   const deferredSignals = useDeferredValue(
     investigation?.investigation.text_signals ?? [],
   );
+  const showBootstrapCredentials =
+    backendHealth?.environment === "local" || backendHealth?.environment === "test";
   const selectedScenario =
     scenarios.find((scenario) => scenario.scenario_id === selectedScenarioId) ??
     scenarios[0] ??
@@ -349,6 +351,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setActiveAnalysis(null);
     setLoginError(null);
     setErrorMessage(null);
+    setUsername("");
     setPassword("");
     setActiveView("overview");
   }
@@ -357,7 +360,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     <main className="page-shell">
       <header className="ops-header">
         <div>
-          <div className="eyebrow">Fraud Operations Command Center</div>
+          <div className="eyebrow">Dataset Fraud Triage Workspace</div>
           <h1>Relational Fraud Intelligence</h1>
         </div>
         <div className="status-row">
@@ -392,7 +395,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
               <article className="hero-stat-card">
                 <span className="hero-label">Scenarios</span>
                 <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-                <p>Reference scenarios available for demo investigations.</p>
+                <p>Reference scenarios available for validation workflows.</p>
               </article>
               <article className="hero-stat-card">
                 <span className="hero-label">Operators</span>
@@ -418,11 +421,13 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
               </button>
             </form>
             {loginError ? <div className="error-banner">{loginError}</div> : null}
-            <div className="auth-help">
-              <strong>Default demo operators</strong>
-              <p>`analyst / AnalystPassword123!`</p>
-              <p>`admin / AdminPassword123!`</p>
-            </div>
+            {showBootstrapCredentials ? (
+              <div className="auth-help">
+                <strong>Local bootstrap operators</strong>
+                <p>`analyst / AnalystPassword123!`</p>
+                <p>`admin / AdminPassword123!`</p>
+              </div>
+            ) : null}
           </section>
         </>
       ) : (
@@ -528,7 +533,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                     <article className="action-item"><span className="action-marker" /><p>Start in <strong>Analyze Data</strong> and upload a transaction dataset.</p></article>
                     <article className="action-item"><span className="action-marker" /><p>High-risk analyses <strong>auto-generate alerts</strong> for triage.</p></article>
                     <article className="action-item"><span className="action-marker" /><p>Create a <strong>case</strong> from the dataset analysis to track resolution.</p></article>
-                    <article className="action-item"><span className="action-marker" /><p>Use <strong>Reference Scenarios</strong> when you want to demo or validate the rule engine.</p></article>
+                    <article className="action-item"><span className="action-marker" /><p>Use <strong>Reference Scenarios</strong> when you want to validate the rule engine or train analysts.</p></article>
                   </div>
                 </section>
               )}
@@ -737,7 +742,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                     </button>
                   </div>
                 ) : (
-                  <div className="empty-state">Select a reference scenario to run a demo investigation.</div>
+                  <div className="empty-state">Select a reference scenario to run a reference investigation.</div>
                 )}
               </section>
             </section>

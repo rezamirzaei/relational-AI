@@ -5,7 +5,7 @@
 Relational Fraud Intelligence is a dataset-first fraud triage workspace.
 Analysts authenticate, upload transaction data, run statistical analysis,
 triage auto-generated alerts, manage persistent cases, and use reference
-scenario investigations for demos and rule validation.
+scenario investigations for validation and rule calibration.
 
 ```mermaid
 graph TB
@@ -64,7 +64,7 @@ graph TB
 
 - The real product flow starts from uploaded transaction data.
 - Alerts, cases, and datasets are persisted through SQLAlchemy repositories.
-- Reference scenarios exist for demos, tests, and rule validation, not as the primary user workflow.
+- Reference scenarios exist for validation, tests, and rule calibration, not as the primary user workflow.
 - Provider failures are surfaced as runtime notes instead of collapsing the whole flow.
 - Authentication, rate limiting, and audit logging are part of the application boundary, not bolt-ons.
 

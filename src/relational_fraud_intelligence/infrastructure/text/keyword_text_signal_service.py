@@ -87,6 +87,6 @@ class KeywordTextSignalService:
         return ScoreTextSignalsResult(
             requested_provider="keyword",
             active_provider="keyword",
-            notes=["Keyword heuristics are active for deterministic demo mode."],
+            notes=["Keyword heuristics are active for deterministic local analysis."],
             signals=signals,
         )

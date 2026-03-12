@@ -402,6 +402,9 @@ describe("Dashboard", () => {
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByText("Persistent alerts")).toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toHaveValue("");
+    expect(screen.getByLabelText("Password")).toHaveValue("");
+    expect(screen.getByText("Local bootstrap operators")).toBeInTheDocument();
   });
 
   it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
@@ -413,6 +416,12 @@ describe("Dashboard", () => {
 
     render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
 
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
     fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
 
     await waitFor(() => {

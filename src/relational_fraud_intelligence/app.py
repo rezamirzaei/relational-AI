@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
         description=(
             "A fraud triage workspace for uploaded transaction datasets, with "
             "persistent alerts and cases, plus reference scenario investigations "
-            "for demos and rule validation."
+            "for validation and rule calibration."
         ),
         docs_url="/docs",
         redoc_url="/redoc",
@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
             {"name": "Authentication", "description": "Operator login and session management."},
             {
                 "name": "Investigations",
-                "description": "Reference scenario catalog and demo investigation execution.",
+                "description": "Reference scenario catalog and investigation execution.",
             },
             {
                 "name": "Cases",
