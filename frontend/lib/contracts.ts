@@ -266,9 +266,85 @@ export type DashboardStats = {
   alerts_by_severity: Record<string, number>;
   recent_activity: ActivityEvent[];
   risk_distribution: Record<string, number>;
+  total_datasets: number;
+  total_transactions_analyzed: number;
+  total_anomalies_found: number;
 };
 
 export type DashboardStatsResponse = {
   stats: DashboardStats;
+};
+
+// ---------------------------------------------------------------------------
+// Dataset & Analysis types
+// ---------------------------------------------------------------------------
+
+export type DatasetStatus = "uploaded" | "analyzing" | "completed" | "failed";
+
+export type DatasetInfo = {
+  dataset_id: string;
+  name: string;
+  uploaded_at: string;
+  row_count: number;
+  status: DatasetStatus;
+  error_message: string | null;
+};
+
+export type DatasetListResponse = {
+  datasets: DatasetInfo[];
+};
+
+export type BenfordDigit = {
+  digit: number;
+  expected_pct: number;
+  actual_pct: number;
+  deviation: number;
+};
+
+export type VelocitySpike = {
+  entity_id: string;
+  entity_type: string;
+  window_start: string;
+  window_end: string;
+  transaction_count: number;
+  total_amount: number;
+  baseline_avg_count: number;
+  z_score: number;
+};
+
+export type AnomalyFlag = {
+  anomaly_id: string;
+  anomaly_type: string;
+  severity: RiskLevel;
+  title: string;
+  description: string;
+  affected_entity_id: string;
+  affected_entity_type: string;
+  score: number;
+  evidence: Record<string, unknown>;
+};
+
+export type AnalysisResultData = {
+  analysis_id: string;
+  dataset_id: string;
+  completed_at: string;
+  total_transactions: number;
+  total_anomalies: number;
+  risk_score: number;
+  risk_level: RiskLevel;
+  benford_chi_squared: number;
+  benford_p_value: number;
+  benford_is_suspicious: boolean;
+  benford_digits: BenfordDigit[];
+  outlier_count: number;
+  outlier_pct: number;
+  velocity_spikes: VelocitySpike[];
+  graph_analysis: GraphAnalysisResult | null;
+  anomalies: AnomalyFlag[];
+  summary: string;
+};
+
+export type AnalysisResponse = {
+  analysis: AnalysisResultData;
 };
 

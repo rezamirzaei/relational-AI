@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 
 from relational_fraud_intelligence.api.dependencies import (
     enforce_login_rate_limit,
@@ -496,4 +496,183 @@ def get_dashboard_stats(
     request.state.audit_action = "get-dashboard-stats"
     request.state.audit_resource_type = "dashboard"
     return container.dashboard_service.get_stats(GetDashboardStatsQuery())
+
+
+# ---------------------------------------------------------------------------
+# Datasets & Analysis
+# ---------------------------------------------------------------------------
+
+
+class DatasetResponse(AppModel):
+    dataset_id: str
+    name: str
+    uploaded_at: str
+    row_count: int
+    status: str
+    error_message: str | None = None
+
+
+class DatasetListResponse(AppModel):
+    datasets: list[DatasetResponse]
+
+
+class AnalysisResultResponse(AppModel):
+    analysis: dict[str, object]
+
+
+class TransactionIngestBody(AppModel):
+    name: str = "api-ingestion"
+    transactions: list[dict[str, object]]
+
+
+@router.post(
+    "/datasets/upload",
+    response_model=DatasetResponse,
+    tags=["Datasets"],
+    summary="Upload a transaction CSV",
+    description=(
+        "Upload a CSV file with transaction data for fraud analysis. "
+        "Required columns: transaction_id, account_id, amount, timestamp. "
+        "Optional: merchant, category, device_fingerprint, ip_country, channel, is_fraud."
+    ),
+)
+async def upload_dataset(
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+    file: UploadFile = File(...),
+) -> DatasetResponse:
+    request.state.current_principal = principal
+    request.state.audit_action = "upload-dataset"
+    request.state.audit_resource_type = "dataset"
+    try:
+        content = await file.read()
+        dataset = container.dataset_service.upload_csv(
+            filename=file.filename or "upload.csv",
+            content=content,
+        )
+        request.state.audit_resource_id = dataset.dataset_id
+        return DatasetResponse(
+            dataset_id=dataset.dataset_id,
+            name=dataset.name,
+            uploaded_at=dataset.uploaded_at.isoformat(),
+            row_count=dataset.row_count,
+            status=dataset.status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/datasets/ingest",
+    response_model=DatasetResponse,
+    tags=["Datasets"],
+    summary="Ingest transactions via API",
+    description="Accepts a JSON array of transaction records for programmatic ingestion.",
+)
+def ingest_transactions(
+    body: TransactionIngestBody,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> DatasetResponse:
+    request.state.current_principal = principal
+    request.state.audit_action = "ingest-transactions"
+    request.state.audit_resource_type = "dataset"
+    try:
+        dataset = container.dataset_service.ingest_transactions(
+            name=body.name,
+            transactions=body.transactions,
+        )
+        request.state.audit_resource_id = dataset.dataset_id
+        return DatasetResponse(
+            dataset_id=dataset.dataset_id,
+            name=dataset.name,
+            uploaded_at=dataset.uploaded_at.isoformat(),
+            row_count=dataset.row_count,
+            status=dataset.status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/datasets",
+    response_model=DatasetListResponse,
+    tags=["Datasets"],
+    summary="List uploaded datasets",
+)
+def list_datasets(
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> DatasetListResponse:
+    request.state.current_principal = principal
+    request.state.audit_action = "list-datasets"
+    request.state.audit_resource_type = "dataset"
+    datasets = container.dataset_service.list_datasets()
+    return DatasetListResponse(
+        datasets=[
+            DatasetResponse(
+                dataset_id=d.dataset_id,
+                name=d.name,
+                uploaded_at=d.uploaded_at.isoformat(),
+                row_count=d.row_count,
+                status=d.status,
+                error_message=d.error_message,
+            )
+            for d in datasets
+        ]
+    )
+
+
+@router.post(
+    "/datasets/{dataset_id}/analyze",
+    tags=["Datasets"],
+    summary="Run fraud analysis on a dataset",
+    description=(
+        "Executes Benford's Law analysis, statistical outlier detection, "
+        "velocity spike detection, and round-amount structuring detection."
+    ),
+)
+def analyze_dataset(
+    dataset_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> dict[str, object]:
+    request.state.current_principal = principal
+    request.state.audit_action = "analyze-dataset"
+    request.state.audit_resource_type = "dataset"
+    request.state.audit_resource_id = dataset_id
+    try:
+        result = container.dataset_service.analyze(dataset_id)
+        return {"analysis": result.model_dump(mode="json")}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/datasets/{dataset_id}/analysis",
+    tags=["Datasets"],
+    summary="Get analysis results for a dataset",
+)
+def get_analysis_results(
+    dataset_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> dict[str, object]:
+    request.state.current_principal = principal
+    request.state.audit_action = "get-analysis-results"
+    request.state.audit_resource_type = "dataset"
+    request.state.audit_resource_id = dataset_id
+    try:
+        result = container.dataset_service.get_result(dataset_id)
+        return {"analysis": result.model_dump(mode="json")}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 

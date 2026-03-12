@@ -14,6 +14,7 @@ from relational_fraud_intelligence.application.services.case_assembler import (
 )
 from relational_fraud_intelligence.application.services.case_service import CaseService
 from relational_fraud_intelligence.application.services.dashboard_service import DashboardService
+from relational_fraud_intelligence.application.services.dataset_service import DatasetService, DatasetStore
 from relational_fraud_intelligence.application.services.investigation_service import (
     InvestigationService,
 )
@@ -93,6 +94,7 @@ class ApplicationContainer:
     case_service: CaseService
     alert_service: AlertService
     dashboard_service: DashboardService
+    dataset_service: DatasetService
 
     def is_database_ready(self) -> bool:
         return ping_database(self.session_factory)
@@ -189,10 +191,13 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
     alert_repository = InMemoryAlertRepository()
     case_service = CaseService(case_repository)
     alert_service = AlertService(alert_repository)
+    dataset_store = DatasetStore()
+    dataset_service = DatasetService(dataset_store)
     dashboard_service = DashboardService(
         scenario_repository=scenario_repository,
         case_repository=case_repository,
         alert_repository=alert_repository,
+        dataset_store=dataset_store,
     )
 
     return ApplicationContainer(
@@ -211,4 +216,5 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         case_service=case_service,
         alert_service=alert_service,
         dashboard_service=dashboard_service,
+        dataset_service=dataset_service,
     )

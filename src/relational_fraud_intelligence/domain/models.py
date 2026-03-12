@@ -87,6 +87,21 @@ class TextSignalKind(StrEnum):
     MERCHANT_DESCRIPTION = "merchant-description"
 
 
+class DatasetStatus(StrEnum):
+    UPLOADED = "uploaded"
+    ANALYZING = "analyzing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class AnomalyType(StrEnum):
+    BENFORD_VIOLATION = "benford-violation"
+    STATISTICAL_OUTLIER = "statistical-outlier"
+    VELOCITY_SPIKE = "velocity-spike"
+    GRAPH_CLUSTER = "graph-cluster"
+    ROUND_AMOUNT = "round-amount"
+
+
 class OperatorRole(StrEnum):
     ANALYST = "analyst"
     ADMIN = "admin"
@@ -328,6 +343,111 @@ class DashboardStats(AppModel):
     alerts_by_severity: dict[str, int] = Field(default_factory=dict)
     recent_activity: list[ActivityEvent] = Field(default_factory=list)
     risk_distribution: dict[str, int] = Field(default_factory=dict)
+    total_datasets: int = Field(ge=0, default=0)
+    total_transactions_analyzed: int = Field(ge=0, default=0)
+    total_anomalies_found: int = Field(ge=0, default=0)
+
+
+# ---------------------------------------------------------------------------
+# Dataset & Analysis models — these power real data ingestion and detection
+# ---------------------------------------------------------------------------
+
+
+class UploadedTransaction(AppModel):
+    """A single transaction row from a user-uploaded CSV or API ingestion."""
+
+    row_index: int = Field(ge=0)
+    transaction_id: str
+    account_id: str
+    amount: float = Field(gt=0.0)
+    timestamp: datetime
+    merchant: str = ""
+    category: str = ""
+    device_fingerprint: str = ""
+    ip_country: str = ""
+    channel: str = ""
+    is_fraud_label: bool | None = None  # ground-truth label if available
+
+
+class Dataset(AppModel):
+    """A batch of uploaded transactions that can be analyzed."""
+
+    dataset_id: str
+    name: str
+    uploaded_at: datetime
+    row_count: int = Field(ge=0)
+    status: DatasetStatus = DatasetStatus.UPLOADED
+    error_message: str | None = None
+
+
+class BenfordDigitResult(AppModel):
+    """Benford's Law analysis for a single leading digit."""
+
+    digit: int = Field(ge=1, le=9)
+    expected_pct: float
+    actual_pct: float
+    deviation: float
+
+
+class VelocitySpike(AppModel):
+    """A detected spike in transaction velocity for an entity."""
+
+    entity_id: str
+    entity_type: str  # "account" or "merchant"
+    window_start: datetime
+    window_end: datetime
+    transaction_count: int
+    total_amount: float
+    baseline_avg_count: float
+    z_score: float
+
+
+class AnomalyFlag(AppModel):
+    """A single anomaly detected during analysis."""
+
+    anomaly_id: str
+    anomaly_type: AnomalyType
+    severity: RiskLevel
+    title: str
+    description: str
+    affected_entity_id: str
+    affected_entity_type: str  # "account", "merchant", "transaction"
+    score: float = Field(ge=0.0, le=1.0)
+    evidence: dict[str, object] = Field(default_factory=dict)
+
+
+class AnalysisResult(AppModel):
+    """Complete analysis output for an uploaded dataset."""
+
+    analysis_id: str
+    dataset_id: str
+    completed_at: datetime
+    total_transactions: int = Field(ge=0)
+    total_anomalies: int = Field(ge=0)
+    risk_score: int = Field(ge=0, le=100)
+    risk_level: RiskLevel
+
+    # Benford's Law
+    benford_chi_squared: float = Field(ge=0.0)
+    benford_p_value: float = Field(ge=0.0, le=1.0)
+    benford_is_suspicious: bool = False
+    benford_digits: list[BenfordDigitResult] = Field(default_factory=list)
+
+    # Statistical outliers
+    outlier_count: int = Field(ge=0, default=0)
+    outlier_pct: float = Field(ge=0.0, le=100.0, default=0.0)
+
+    # Velocity spikes
+    velocity_spikes: list[VelocitySpike] = Field(default_factory=list)
+
+    # Graph analysis
+    graph_analysis: GraphAnalysisResult | None = None
+
+    # All anomaly flags
+    anomalies: list[AnomalyFlag] = Field(default_factory=list)
+
+    # Summary
+    summary: str = ""
 
 
 class OperatorPrincipal(AppModel):

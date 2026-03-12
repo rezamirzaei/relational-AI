@@ -3,21 +3,26 @@
 import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
+  analyzeDataset,
   createCase,
   fetchAlerts,
   fetchAuditEvents,
   fetchCases,
   fetchCurrentOperator,
   fetchDashboardStats,
+  fetchDatasets,
   fetchInvestigationClient,
   fetchScenarioCatalog,
   loginOperator,
   updateAlertStatus,
   updateCaseStatus,
+  uploadDataset,
 } from "@/lib/api";
 import type {
+  AnalysisResultData,
   AuditEvent,
   DashboardStats,
+  DatasetInfo,
   FraudAlert,
   FraudCase,
   HealthResponse,
@@ -31,7 +36,7 @@ type DashboardProps = {
   bootstrapError: string | null;
 };
 
-type ActiveView = "overview" | "investigate" | "cases" | "alerts" | "audit";
+type ActiveView = "overview" | "investigate" | "analyze" | "cases" | "alerts" | "audit";
 
 const tokenStorageKey = "rfi.operator-token";
 const riskMeterWidth: Record<string, number> = {
@@ -64,6 +69,10 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
   const [cases, setCases] = useState<FraudCase[]>([]);
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
+  const [activeAnalysis, setActiveAnalysis] = useState<AnalysisResultData | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("overview");
   const [username, setUsername] = useState("analyst");
   const [password, setPassword] = useState("AnalystPassword123!");
@@ -144,15 +153,18 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     let nextStats: DashboardStats | null = null;
     let nextCases: FraudCase[] = [];
     let nextAlerts: FraudAlert[] = [];
+    let nextDatasets: DatasetInfo[] = [];
     try {
-      const [statsRes, casesRes, alertsRes] = await Promise.all([
+      const [statsRes, casesRes, alertsRes, datasetsRes] = await Promise.all([
         fetchDashboardStats(token),
         fetchCases(token),
         fetchAlerts(token),
+        fetchDatasets(token),
       ]);
       nextStats = statsRes.stats;
       nextCases = casesRes.cases;
       nextAlerts = alertsRes.alerts;
+      nextDatasets = datasetsRes.datasets;
     } catch {
       // Non-critical — dashboard still works
     }
@@ -165,6 +177,7 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     setDashboardStats(nextStats);
     setCases(nextCases);
     setAlerts(nextAlerts);
+    setDatasets(nextDatasets);
   }
 
   async function handleScenarioSelection(scenarioId: string) {
@@ -231,6 +244,44 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
     } catch { /* silent */ }
   }
 
+  async function handleUploadDataset(file: File) {
+    if (!authToken) return;
+    setIsUploading(true);
+    setErrorMessage(null);
+    try {
+      await uploadDataset(authToken, file);
+      const datasetsRes = await fetchDatasets(authToken);
+      setDatasets(datasetsRes.datasets);
+      const statsRes = await fetchDashboardStats(authToken);
+      setDashboardStats(statsRes.stats);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function handleAnalyzeDataset(datasetId: string) {
+    if (!authToken) return;
+    setIsAnalyzing(true);
+    setActiveAnalysis(null);
+    setErrorMessage(null);
+    try {
+      const result = await analyzeDataset(authToken, datasetId);
+      setActiveAnalysis(result.analysis);
+      const [datasetsRes, statsRes] = await Promise.all([
+        fetchDatasets(authToken),
+        fetchDashboardStats(authToken),
+      ]);
+      setDatasets(datasetsRes.datasets);
+      setDashboardStats(statsRes.stats);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Analysis failed.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
   function handleLogout() {
     window.localStorage.removeItem(tokenStorageKey);
     setAuthToken(null);
@@ -267,15 +318,15 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
           <section className="hero-panel">
             <div className="hero-copy-block">
               <p className="hero-copy">
-                A production-grade fraud investigation platform with case lifecycle management,
-                graph-based entity analysis, automated alert generation, operator authentication,
-                and real-time risk reasoning across relational entity networks.
+                Upload your own transaction data and detect fraud automatically using Benford&apos;s Law,
+                statistical outlier detection, velocity spike analysis, and round-amount structuring detection.
+                Investigate pre-built scenarios, manage cases, and track alerts — all in one platform.
               </p>
               <div className="hero-ribbon">
+                <span>CSV data upload</span>
+                <span>Benford&apos;s Law</span>
+                <span>Anomaly detection</span>
                 <span>Case management</span>
-                <span>Alert queue</span>
-                <span>Graph analysis</span>
-                <span>10 fraud rules</span>
               </div>
             </div>
             <div className="hero-stats">
@@ -325,14 +376,14 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
           {/* Navigation bar */}
           <nav className="nav-bar">
             <div className="nav-left">
-              {(["overview", "investigate", "cases", "alerts", ...(operator.role === "admin" ? ["audit"] : [])] as ActiveView[]).map((view) => (
+              {(["overview", "investigate", "analyze", "cases", "alerts", ...(operator.role === "admin" ? ["audit"] : [])] as ActiveView[]).map((view) => (
                 <button
                   key={view}
                   className={`nav-tab ${activeView === view ? "active" : ""}`}
                   onClick={() => setActiveView(view)}
                   type="button"
                 >
-                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Investigate" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
+                  {view === "overview" ? "Dashboard" : view === "investigate" ? "Investigate" : view === "analyze" ? "Analyze Data" : view === "audit" ? "Audit Trail" : view.charAt(0).toUpperCase() + view.slice(1)}
                   {view === "alerts" && alerts.filter(a => a.status === "new").length > 0 && (
                     <span className="nav-badge">{alerts.filter(a => a.status === "new").length}</span>
                   )}
@@ -355,8 +406,10 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
             <section className="dashboard-overview">
               <div className="stats-grid">
                 <MetricCard label="Total Scenarios" value={String(dashboardStats?.total_scenarios ?? scenarios.length)} tone="neutral" />
+                <MetricCard label="Datasets Uploaded" value={String(dashboardStats?.total_datasets ?? datasets.length)} tone="neutral" />
+                <MetricCard label="Transactions Analyzed" value={(dashboardStats?.total_transactions_analyzed ?? 0).toLocaleString()} tone="neutral" />
+                <MetricCard label="Anomalies Found" value={String(dashboardStats?.total_anomalies_found ?? 0)} tone={dashboardStats?.total_anomalies_found ? "critical" : "neutral"} />
                 <MetricCard label="Active Cases" value={String(dashboardStats?.open_cases ?? 0)} tone="warning" />
-                <MetricCard label="Critical Cases" value={String(dashboardStats?.critical_cases ?? 0)} tone="critical" />
                 <MetricCard label="Pending Alerts" value={String(dashboardStats?.unacknowledged_alerts ?? 0)} tone="critical" />
                 <MetricCard label="Total Cases" value={String(dashboardStats?.total_cases ?? 0)} tone="neutral" />
                 <MetricCard label="Avg Risk Score" value={`${dashboardStats?.avg_risk_score?.toFixed(0) ?? 0}/100`} tone="warning" />
@@ -616,6 +669,172 @@ export function Dashboard({ backendHealth, bootstrapError }: DashboardProps) {
                   <div className="empty-state">Select a scenario to begin an investigation.</div>
                 )}
               </section>
+            </section>
+          )}
+
+          {/* ======= ANALYZE DATA ======= */}
+          {activeView === "analyze" && (
+            <section className="surface" style={{ padding: 24 }}>
+              <div className="section-header"><span>Transaction Data Analysis</span><span>{datasets.length} datasets</span></div>
+
+              {/* Upload area */}
+              <div className="upload-zone">
+                <p><strong>Upload a transaction CSV</strong></p>
+                <p className="muted-copy">
+                  Required columns: <code>transaction_id</code>, <code>account_id</code>, <code>amount</code>, <code>timestamp</code><br />
+                  Optional: <code>merchant</code>, <code>category</code>, <code>device_fingerprint</code>, <code>ip_country</code>, <code>channel</code>, <code>is_fraud</code>
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  disabled={isUploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleUploadDataset(f);
+                    e.target.value = "";
+                  }}
+                />
+                {isUploading && <p className="muted-copy">Uploading...</p>}
+                <p className="muted-copy" style={{ marginTop: 8 }}>
+                  Try our <a href="https://github.com" target="_blank" rel="noopener">sample_transactions.csv</a> from <code>docs/sample_data/</code>
+                </p>
+              </div>
+
+              {/* Dataset list */}
+              {datasets.length > 0 && (
+                <div className="stack" style={{ marginTop: 20 }}>
+                  <h3>Uploaded Datasets</h3>
+                  {datasets.map((ds) => (
+                    <article key={ds.dataset_id} className="case-card">
+                      <div className="case-card-header">
+                        <div>
+                          <span className={`status-chip ${ds.status === "completed" ? "resolved" : ds.status === "failed" ? "escalated" : "open"}`}>
+                            {ds.status}
+                          </span>
+                          <strong>{ds.name}</strong>
+                        </div>
+                        <span className="case-date">{dateFormatter.format(new Date(ds.uploaded_at))}</span>
+                      </div>
+                      <p className="muted-copy">{ds.row_count.toLocaleString()} transactions</p>
+                      {ds.error_message && <div className="error-banner">{ds.error_message}</div>}
+                      <div className="case-card-footer">
+                        {ds.status === "uploaded" && (
+                          <button className="primary-button" disabled={isAnalyzing} onClick={() => handleAnalyzeDataset(ds.dataset_id)} type="button">
+                            {isAnalyzing ? "Analyzing..." : "🔍 Run Fraud Analysis"}
+                          </button>
+                        )}
+                        {ds.status === "completed" && (
+                          <button className="secondary-button" onClick={() => handleAnalyzeDataset(ds.dataset_id)} type="button">
+                            Re-analyze
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {/* Analysis results */}
+              {activeAnalysis && (
+                <div className="analysis-results" style={{ marginTop: 24 }}>
+                  <div className="section-header">
+                    <span>Analysis Results</span>
+                    <span className={`risk-chip ${activeAnalysis.risk_level}`}>
+                      Risk: {activeAnalysis.risk_score}/100 ({activeAnalysis.risk_level})
+                    </span>
+                  </div>
+
+                  <p style={{ margin: "12px 0", lineHeight: 1.6 }}>{activeAnalysis.summary}</p>
+
+                  {/* Summary metrics */}
+                  <div className="stats-grid">
+                    <MetricCard label="Transactions Analyzed" value={activeAnalysis.total_transactions.toLocaleString()} tone="neutral" />
+                    <MetricCard label="Anomalies Detected" value={String(activeAnalysis.total_anomalies)} tone={activeAnalysis.total_anomalies > 0 ? "critical" : "neutral"} />
+                    <MetricCard label="Statistical Outliers" value={`${activeAnalysis.outlier_count} (${activeAnalysis.outlier_pct}%)`} tone={activeAnalysis.outlier_count > 0 ? "warning" : "neutral"} />
+                    <MetricCard label="Velocity Spikes" value={String(activeAnalysis.velocity_spikes.length)} tone={activeAnalysis.velocity_spikes.length > 0 ? "warning" : "neutral"} />
+                    <MetricCard label="Benford p-value" value={activeAnalysis.benford_p_value.toFixed(4)} tone={activeAnalysis.benford_is_suspicious ? "critical" : "neutral"} />
+                    <MetricCard label="Risk Score" value={`${activeAnalysis.risk_score}/100`} tone={activeAnalysis.risk_score >= 50 ? "critical" : activeAnalysis.risk_score >= 25 ? "warning" : "neutral"} />
+                  </div>
+
+                  {/* Benford's Law chart */}
+                  <section className="content-card" style={{ marginTop: 20 }}>
+                    <div className="mini-header">
+                      <span>Benford&apos;s Law Analysis</span>
+                      <span className={activeAnalysis.benford_is_suspicious ? "risk-chip critical" : "risk-chip low"}>
+                        {activeAnalysis.benford_is_suspicious ? "⚠️ Suspicious" : "✓ Normal"}
+                      </span>
+                    </div>
+                    <p className="muted-copy" style={{ margin: "8px 0" }}>
+                      Leading digit distribution compared to Benford&apos;s expected frequencies. χ²={activeAnalysis.benford_chi_squared.toFixed(2)}, p={activeAnalysis.benford_p_value.toFixed(4)}
+                    </p>
+                    <div className="benford-chart">
+                      {activeAnalysis.benford_digits.map((d) => (
+                        <div key={d.digit} className="benford-bar-group">
+                          <div className="benford-bars">
+                            <div className="benford-bar expected" style={{ height: `${Math.max(d.expected_pct * 3, 2)}px` }} title={`Expected: ${d.expected_pct}%`} />
+                            <div
+                              className={`benford-bar actual ${Math.abs(d.deviation) > 5 ? "deviant" : ""}`}
+                              style={{ height: `${Math.max(d.actual_pct * 3, 2)}px` }}
+                              title={`Actual: ${d.actual_pct}%`}
+                            />
+                          </div>
+                          <span className="benford-label">{d.digit}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="benford-legend">
+                      <span><span className="legend-swatch expected" /> Expected</span>
+                      <span><span className="legend-swatch actual" /> Actual</span>
+                    </div>
+                  </section>
+
+                  {/* Velocity spikes */}
+                  {activeAnalysis.velocity_spikes.length > 0 && (
+                    <section className="content-card" style={{ marginTop: 16 }}>
+                      <div className="mini-header"><span>Velocity Spikes</span><span>{activeAnalysis.velocity_spikes.length}</span></div>
+                      <div className="stack">
+                        {activeAnalysis.velocity_spikes.map((spike, i) => (
+                          <article key={`spike-${i}`} className="alert-card">
+                            <div className="alert-card-header">
+                              <span className="risk-chip high">z={spike.z_score}</span>
+                              <strong>{spike.entity_id}</strong>
+                            </div>
+                            <p className="muted-copy">
+                              {spike.transaction_count} transactions totaling {currencyFormatter.format(spike.total_amount)} in one window
+                              (baseline: {spike.baseline_avg_count} txns/window)
+                            </p>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* All anomalies */}
+                  {activeAnalysis.anomalies.length > 0 && (
+                    <section className="content-card" style={{ marginTop: 16 }}>
+                      <div className="mini-header"><span>All Anomaly Flags</span><span>{activeAnalysis.anomalies.length}</span></div>
+                      <div className="stack">
+                        {activeAnalysis.anomalies.slice(0, 30).map((anomaly) => (
+                          <article key={anomaly.anomaly_id} className="alert-card">
+                            <div className="alert-card-header">
+                              <div>
+                                <span className={`risk-chip ${anomaly.severity}`}>{anomaly.severity}</span>
+                                <span className="status-chip open">{anomaly.anomaly_type}</span>
+                              </div>
+                              <span className="weight-pill">{(anomaly.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <h4>{anomaly.title}</h4>
+                            <p className="muted-copy">{anomaly.description}</p>
+                          </article>
+                        ))}
+                        {activeAnalysis.anomalies.length > 30 && (
+                          <p className="muted-copy">...and {activeAnalysis.anomalies.length - 30} more anomalies</p>
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
             </section>
           )}
 

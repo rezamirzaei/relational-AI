@@ -22,10 +22,12 @@ class DashboardService:
         scenario_repository: ScenarioRepository,
         case_repository: CaseRepository,
         alert_repository: AlertRepository,
+        dataset_store: object | None = None,
     ) -> None:
         self._scenario_repo = scenario_repository
         self._case_repo = case_repository
         self._alert_repo = alert_repository
+        self._dataset_store = dataset_store
 
     def get_stats(self, query: GetDashboardStatsQuery) -> GetDashboardStatsResult:
         _ = query
@@ -71,6 +73,25 @@ class DashboardService:
                 )
             )
 
+        # Dataset stats
+        total_datasets = 0
+        total_txns_analyzed = 0
+        total_anomalies_found = 0
+        if self._dataset_store is not None:
+            store = self._dataset_store
+            total_datasets = len(getattr(store, "list_datasets", lambda: [])())
+            total_txns_analyzed = getattr(store, "total_transactions", lambda: 0)()
+            total_anomalies_found = getattr(store, "total_anomalies", lambda: 0)()
+
+        if total_datasets > 0:
+            activity.append(
+                ActivityEvent(
+                    event_type="dataset-analyzed",
+                    description=f"{total_datasets} dataset(s) uploaded, {total_txns_analyzed} transactions analyzed, {total_anomalies_found} anomalies detected",
+                    occurred_at=datetime.now(timezone.utc),
+                )
+            )
+
         return GetDashboardStatsResult(
             stats=DashboardStats(
                 total_scenarios=len(scenarios.scenarios),
@@ -84,6 +105,11 @@ class DashboardService:
                 alerts_by_severity=alerts_by_severity,
                 recent_activity=activity,
                 risk_distribution=risk_distribution,
+                total_datasets=total_datasets,
+                total_transactions_analyzed=total_txns_analyzed,
+                total_anomalies_found=total_anomalies_found,
             )
         )
+
+
 

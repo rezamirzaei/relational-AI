@@ -50,6 +50,7 @@ def create_app() -> FastAPI:
             {"name": "Cases", "description": "Fraud case lifecycle management — create, assign, comment, resolve."},
             {"name": "Alerts", "description": "Fraud alert inbox — auto-generated from investigations."},
             {"name": "Dashboard", "description": "Aggregate metrics and activity feed for the analyst overview."},
+            {"name": "Datasets", "description": "Upload transaction data and run statistical fraud analysis."},
             {"name": "Admin", "description": "Administrative endpoints for audit and operations."},
         ],
     )

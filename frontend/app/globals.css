@@ -893,3 +893,115 @@ code {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Upload Zone
+--------------------------------------------------------------------------- */
+
+.upload-zone {
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  background: var(--paper-deep);
+  margin-top: 16px;
+}
+
+.upload-zone input[type="file"] {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.upload-zone code {
+  background: rgba(16, 37, 45, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Benford's Law Chart
+--------------------------------------------------------------------------- */
+
+.benford-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 0;
+  min-height: 140px;
+}
+
+.benford-bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.benford-bars {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+}
+
+.benford-bar {
+  width: 18px;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+  min-height: 2px;
+}
+
+.benford-bar.expected {
+  background: var(--neutral);
+  opacity: 0.4;
+}
+
+.benford-bar.actual {
+  background: var(--good);
+}
+
+.benford-bar.actual.deviant {
+  background: var(--critical);
+}
+
+.benford-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.benford-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.legend-swatch.expected {
+  background: var(--neutral);
+  opacity: 0.4;
+}
+
+.legend-swatch.actual {
+  background: var(--good);
+}
+
+/* ---------------------------------------------------------------------------
+   Analysis Results
+--------------------------------------------------------------------------- */
+
+.analysis-results .stats-grid {
+  margin-top: 16px;
+}
+

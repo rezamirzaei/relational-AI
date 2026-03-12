@@ -1,8 +1,11 @@
 import type {
+  AnalysisResponse,
   AuditEventsResponse,
   CreateCaseResponse,
   CurrentOperatorResponse,
   DashboardStatsResponse,
+  DatasetInfo,
+  DatasetListResponse,
   GetCaseResponse,
   HealthResponse,
   InvestigationResponse,
@@ -211,3 +214,47 @@ export async function fetchAuditEvents(token: string): Promise<AuditEventsRespon
     token,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Datasets & Analysis
+// ---------------------------------------------------------------------------
+
+export async function uploadDataset(token: string, file: File): Promise<DatasetInfo> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${browserApiBaseUrl}/datasets/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchDatasets(token: string): Promise<DatasetListResponse> {
+  return fetchJson<DatasetListResponse>(
+    `${browserApiBaseUrl}/datasets`,
+    undefined,
+    token,
+  );
+}
+
+export async function analyzeDataset(token: string, datasetId: string): Promise<AnalysisResponse> {
+  return fetchJson<AnalysisResponse>(
+    `${browserApiBaseUrl}/datasets/${datasetId}/analyze`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export async function fetchAnalysisResults(token: string, datasetId: string): Promise<AnalysisResponse> {
+  return fetchJson<AnalysisResponse>(
+    `${browserApiBaseUrl}/datasets/${datasetId}/analysis`,
+    undefined,
+    token,
+  );
+}
+
