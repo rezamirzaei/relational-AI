@@ -32,6 +32,10 @@ services:
       dockerfile: backend/Dockerfile
     env_file:
       - .env
+    environment:
+      RFI_DATABASE_URL: ${RFI_DATABASE_URL:-postgresql+psycopg://rfi:rfi-dev-password@postgres:5432/rfi}
+      RFI_RATE_LIMIT_BACKEND: ${RFI_RATE_LIMIT_BACKEND:-redis}
+      RFI_RATE_LIMIT_REDIS_URL: ${RFI_RATE_LIMIT_REDIS_URL:-redis://redis:6379/0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +44,8 @@ services:
     restart: unless-stopped
     ports:
       - "${RFI_API_HOST_PORT:-8000}:8000"
+    volumes:
+      - rfi_data:/app/data
     healthcheck:
       test:
         [
@@ -82,3 +88,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  rfi_data:

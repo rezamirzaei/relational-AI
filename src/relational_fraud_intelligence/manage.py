@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -116,8 +117,42 @@ def _build_parser() -> ArgumentParser:
 
 
 def _build_alembic_config(settings: AppSettings) -> Config:
-    root = Path(__file__).resolve().parents[2]
+    root = _discover_project_root()
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     config.set_main_option("sqlalchemy.url", settings.database_url)
     return config
+
+
+def _discover_project_root() -> Path:
+    configured_root = os.getenv("RFI_PROJECT_ROOT")
+    if configured_root:
+        root = Path(configured_root).expanduser().resolve()
+        _validate_project_root(root)
+        return root
+
+    candidates = [Path.cwd(), *Path(__file__).resolve().parents]
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved_candidate = candidate.resolve()
+        if resolved_candidate in seen:
+            continue
+        seen.add(resolved_candidate)
+        if _is_project_root(resolved_candidate):
+            return resolved_candidate
+
+    raise FileNotFoundError(
+        "Could not locate Alembic project files. Set RFI_PROJECT_ROOT to a directory "
+        "containing both 'alembic.ini' and 'alembic/'."
+    )
+
+
+def _is_project_root(path: Path) -> bool:
+    return (path / "alembic.ini").is_file() and (path / "alembic").is_dir()
+
+
+def _validate_project_root(root: Path) -> None:
+    if not _is_project_root(root):
+        raise FileNotFoundError(
+            f"RFI_PROJECT_ROOT={root} does not contain both 'alembic.ini' and 'alembic/'."
+        )
