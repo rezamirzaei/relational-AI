@@ -18,6 +18,10 @@ class AppSettings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    database_url: str = "sqlite+pysqlite:///./data/rfi.db"
+    database_echo: bool = False
+    database_auto_create_schema: bool = True
+    seed_scenarios_on_startup: bool = True
 
     text_signal_provider: Literal["keyword", "huggingface"] = "keyword"
     reasoning_provider: Literal["local-rule-engine", "relationalai"] = "local-rule-engine"

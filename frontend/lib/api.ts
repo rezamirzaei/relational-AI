@@ -1,4 +1,8 @@
-import type { InvestigationResponse, ScenarioCatalogResponse } from "@/lib/contracts";
+import type {
+  HealthResponse,
+  InvestigationResponse,
+  ScenarioCatalogResponse,
+} from "@/lib/contracts";
 
 const browserApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
@@ -15,10 +19,23 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const payload = (await response.json()) as { detail?: string };
+      if (payload.detail) {
+        message = payload.detail;
+      }
+    } catch {
+      // Keep the default message when the backend returns no JSON error body.
+    }
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
+}
+
+export async function fetchHealthServer(): Promise<HealthResponse> {
+  return fetchJson<HealthResponse>(`${serverApiBaseUrl}/health`);
 }
 
 export async function fetchScenarioCatalog(): Promise<ScenarioCatalogResponse> {

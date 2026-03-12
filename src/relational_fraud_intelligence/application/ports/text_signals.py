@@ -7,5 +7,4 @@ from relational_fraud_intelligence.application.dto.investigation import (
 
 
 class TextSignalService(Protocol):
-    def score(self, command: ScoreTextSignalsCommand) -> ScoreTextSignalsResult:
-        ...
+    def score(self, command: ScoreTextSignalsCommand) -> ScoreTextSignalsResult: ...

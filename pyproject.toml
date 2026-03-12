@@ -9,18 +9,21 @@ description = "Production-style fraud intelligence reference project built aroun
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic==1.16.5",
     "fastapi==0.135.1",
     "httpx==0.28.1",
     "huggingface_hub==1.6.0",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
     "relationalai==1.0.3",
+    "sqlalchemy==2.0.43",
     "uvicorn[standard]==0.41.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "mypy==1.19.1",
+    "pre-commit==4.3.0",
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
     "ruff==0.15.5",
@@ -28,6 +31,7 @@ dev = [
 
 [project.scripts]
 rfi-api = "relational_fraud_intelligence.__main__:main"
+rfi-manage = "relational_fraud_intelligence.manage:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/relational_fraud_intelligence"]
@@ -35,6 +39,7 @@ packages = ["src/relational_fraud_intelligence"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--strict-markers --cov=relational_fraud_intelligence --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100
@@ -48,6 +53,13 @@ select = [
     "UP",
     "B",
 ]
+
+[tool.coverage.run]
+source = ["src/relational_fraud_intelligence"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
 
 [tool.mypy]
 python_version = "3.11"

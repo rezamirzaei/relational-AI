@@ -13,3 +13,6 @@ frontend/.next/
 *.pyc
 .env
 .DS_Store
+data/
+htmlcov/
+frontend/coverage/

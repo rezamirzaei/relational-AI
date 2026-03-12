@@ -1,0 +1,45 @@
+exclude: "^\\.idea/"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: python3 -m mypy src tests
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: pytest
+        name: pytest
+        entry: python3 -m pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: frontend-typecheck
+        name: frontend-typecheck
+        entry: npm --prefix frontend run typecheck
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: frontend-test
+        name: frontend-test
+        entry: npm --prefix frontend run test:run
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

@@ -1,31 +1,31 @@
 # Relational Fraud Intelligence
 
-Relational Fraud Intelligence is a production-style reference project for a real-world RelationalAI use case: fraud and risk investigation. The stack combines a FastAPI backend, strict Pydantic contracts, a Next.js dashboard, Docker delivery, optional Hugging Face enrichment, and a RelationalAI-ready reasoning adapter.
+Relational Fraud Intelligence is a production-leaning fraud investigation platform built around relational case data, typed FastAPI contracts, a polished Next.js command center, and a deterministic rule engine with optional Hugging Face and RelationalAI enrichment.
 
-## What this project optimizes for
+## What is in this upgrade
 
-- Clean architecture with explicit ports and adapters.
-- Object input and object output across the application layer.
-- Pydantic-first validation at API and service boundaries.
-- A deterministic demo mode that runs without cloud credentials.
-- An optional RelationalAI path and optional Hugging Face path behind the same interfaces.
-- Testability, documentation, and operational hygiene.
+- SQLAlchemy-backed persistence with Alembic migrations.
+- Realistic seeded fraud scenarios loaded from a relational database.
+- Lifecycle-managed FastAPI startup with runtime health reporting.
+- A rule-object risk engine instead of one monolithic heuristic function.
+- Pre-commit hooks, GitHub Actions CI/CD, and Dependabot automation.
+- Frontend component tests, TypeScript checks, and production Next.js builds.
+- Dockerized backend and standalone Next.js frontend images.
 
-## Current use case
+## Fraud situations modeled
 
-The reference domain is fraud detection. Seeded scenarios model:
+- Synthetic identity gift card liquidation rings.
+- Premium-account takeover with cross-border rapid spend.
+- Payroll-style money mule funneling through transfer and crypto rails.
 
-- Synthetic identity and gift card liquidation rings.
-- Account takeover with cross-border rapid spend.
-
-RelationalAI is a strong fit here because the core problem is relational: customers, accounts, devices, merchants, notes, and transactions need graph-style reasoning and explainable rule hits rather than isolated row scoring.
+RelationalAI fits this domain because entities, devices, accounts, merchants, notes, and transactions all need explainable graph-style reasoning rather than isolated row scoring.
 
 ## Stack
 
-- Backend: Python 3.11, FastAPI, Pydantic v2, RelationalAI SDK `1.0.3`, Hugging Face Hub `1.6.0`
-- Frontend: Next.js `16.1.6`, React `19.2.4`, TypeScript `5.9.3`
-- Delivery: Docker, Docker Compose
-- Tests: Pytest
+- Backend: Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, RelationalAI SDK, Hugging Face Hub
+- Frontend: Next.js 16, React 19, TypeScript 5, Vitest, Testing Library
+- Delivery: Docker, Docker Compose, GitHub Actions, GHCR publishing workflow
+- Quality: Ruff, mypy, pytest, coverage, pre-commit, frontend typecheck and tests
 
 ## Quick start
 
@@ -39,22 +39,29 @@ python3 -m pip install -e ".[dev]"
 3. Install frontend dependencies:
 
 ```bash
-npm --prefix frontend install
+npm --prefix frontend ci
 ```
 
-4. Run backend:
+4. Apply migrations and seed the local database:
+
+```bash
+rfi-manage migrate
+rfi-manage seed
+```
+
+5. Start the backend:
 
 ```bash
 rfi-api
 ```
 
-5. Run frontend:
+6. Start the frontend:
 
 ```bash
 npm --prefix frontend run dev
 ```
 
-6. Open `http://localhost:3000`.
+7. Open `http://localhost:3001` when using the example environment file.
 
 ## Docker
 
@@ -63,7 +70,14 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The backend is exposed at `http://localhost:8000`, and the UI is exposed at `http://localhost:3000`.
+The compose stack persists SQLite data in the `rfi_data` volume, migrates the backend schema on startup, waits for backend health, and then serves the frontend.
+
+## Database workflow
+
+- `rfi-manage migrate` applies Alembic migrations to `RFI_DATABASE_URL`.
+- `rfi-manage seed` inserts realistic scenarios if the database is empty.
+- Local development defaults to `sqlite+pysqlite:///./data/rfi.db`.
+- CI uses the same migration path before running tests.
 
 ## Runtime modes
 
@@ -72,7 +86,7 @@ The backend is exposed at `http://localhost:8000`, and the UI is exposed at `htt
 - `RFI_TEXT_SIGNAL_PROVIDER=keyword`
 - `RFI_REASONING_PROVIDER=local-rule-engine`
 
-This is the deterministic, test-friendly mode used by the project out of the box.
+This is the deterministic, test-friendly mode used by default.
 
 ### Hugging Face mode
 
@@ -81,7 +95,7 @@ Set:
 - `RFI_TEXT_SIGNAL_PROVIDER=huggingface`
 - `RFI_HUGGINGFACE_API_TOKEN=...`
 
-The backend will try Hugging Face zero-shot classification first and fall back to keyword heuristics if the provider fails.
+The backend will try zero-shot classification first and fall back to keyword heuristics if the provider fails.
 
 ### RelationalAI mode
 
@@ -89,37 +103,73 @@ Set:
 
 - `RFI_REASONING_PROVIDER=relationalai`
 
-By default the adapter uses a DuckDB-backed local semantic projection through the current RelationalAI SDK for an offline-compatible reference flow. If you want to wire a real external RelationalAI config, set:
+By default the adapter uses a DuckDB-backed local semantic projection through the RelationalAI SDK. If you want to wire a real external RelationalAI config, set:
 
 - `RFI_RELATIONALAI_USE_EXTERNAL_CONFIG=true`
 
-and provide a current `raiconfig.yaml` supported by the RelationalAI SDK.
+and provide a supported `raiconfig.yaml`.
+
+## Developer workflow
+
+Install git hooks:
+
+```bash
+make precommit-install
+```
+
+Run the full local quality suite:
+
+```bash
+make quality
+```
+
+Useful commands:
+
+```bash
+make lint
+make mypy
+make test
+make typecheck
+make frontend-test
+make frontend-build
+make db-upgrade
+make db-seed
+```
 
 ## Project structure
 
 ```text
+alembic/                               Database migrations
 src/relational_fraud_intelligence/
-  api/                FastAPI routes and dependencies
-  application/        DTOs, ports, and use-case services
-  domain/             Pydantic domain models
-  infrastructure/     Demo data, providers, repositories, and reasoners
+  api/                                 FastAPI routes and dependencies
+  application/                         DTOs, ports, and services
+  domain/                              Pydantic domain models
+  infrastructure/persistence/          SQLAlchemy models, mapping, repository, seeding
+  infrastructure/reasoners/            Rule-based and RelationalAI-ready risk reasoning
+  infrastructure/seed/                 Realistic fraud scenario fixtures
+  infrastructure/text/                 Keyword, Hugging Face, and fallback text services
 frontend/
-  app/                Next.js app router
-  components/         Dashboard UI
-  lib/                API client and typed frontend contracts
-tests/                Backend unit and API tests
+  app/                                 Next.js app router and global styles
+  components/                          Product UI and tests
+  lib/                                 API client and typed frontend contracts
+tests/                                 Backend API, repository, and service tests
+.github/workflows/                     CI and CD automation
 ```
 
-## Quality checks
+## Quality gates
 
-```bash
-python3 -m pytest -q
-python3 -m compileall src tests
-npm --prefix frontend run typecheck
-```
+The repository is set up so local hooks and CI enforce the same standards:
+
+- Ruff formatting and linting
+- mypy strict type checking
+- pytest with coverage threshold
+- frontend TypeScript checks
+- frontend Vitest component tests
+- production Next.js build
+- Docker image builds in CI
 
 ## Notes
 
 - The default fraud logic is deterministic and explainable.
-- The project uses fallback wrappers so provider failures remain visible without taking the whole system down.
-- The RelationalAI adapter is intentionally isolated so deeper semantic modeling can replace or extend the local rules without changing API contracts.
+- Provider failures remain visible in the UI through fallback notes instead of taking the system down.
+- The RelationalAI adapter stays isolated so deeper semantic modeling can replace or extend the local rules without changing API contracts.

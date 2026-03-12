@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from pydantic import BaseModel
 
 from relational_fraud_intelligence.application.dto.investigation import (
@@ -28,7 +30,8 @@ class RelationalAIRiskReasoner:
                 "provider_notes": [
                     (
                         "Projected scenario data through RelationalAI semantics "
-                        f"({projection.projected_row_count} rows across {', '.join(projection.projected_table_names)})."
+                        f"({projection.projected_row_count} rows across "
+                        f"{', '.join(projection.projected_table_names)})."
                     ),
                     *base_result.provider_notes,
                 ],
@@ -36,14 +39,19 @@ class RelationalAIRiskReasoner:
         )
 
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
-        from relationalai.config import Config, create_config
-        from relationalai.semantics import Model
+        config_module = import_module("relationalai.config")
+        semantics_module = import_module("relationalai.semantics")
+        Config = config_module.Config
+        create_config = config_module.create_config
+        Model = semantics_module.Model
 
         if self._settings.relationalai_use_external_config:
             config = create_config()
         else:
             config = Config(
-                connections={"local": {"type": "duckdb", "path": self._settings.relationalai_duckdb_path}},
+                connections={
+                    "local": {"type": "duckdb", "path": self._settings.relationalai_duckdb_path}
+                },
                 default_connection="local",
                 install_mode=True,
             )

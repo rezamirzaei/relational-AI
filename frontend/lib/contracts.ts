@@ -95,3 +95,11 @@ export type InvestigationResponse = {
 export type ScenarioCatalogResponse = {
   scenarios: ScenarioOverview[];
 };
+
+export type HealthResponse = {
+  status: "ok" | "degraded";
+  app_name: string;
+  environment: string;
+  database_status: "ready" | "unavailable";
+  seeded_scenarios: number;
+};

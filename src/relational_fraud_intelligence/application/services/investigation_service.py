@@ -9,8 +9,12 @@ from relational_fraud_intelligence.application.dto.investigation import (
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
 from relational_fraud_intelligence.application.ports.repositories import ScenarioRepository
 from relational_fraud_intelligence.application.ports.text_signals import TextSignalService
-from relational_fraud_intelligence.application.services.case_assembler import InvestigationCaseAssembler
-from relational_fraud_intelligence.infrastructure.repositories.demo_repository import to_scenario_overview
+from relational_fraud_intelligence.application.services.case_assembler import (
+    InvestigationCaseAssembler,
+)
+from relational_fraud_intelligence.application.services.scenario_overview_factory import (
+    build_scenario_overview,
+)
 
 
 class InvestigationService:
@@ -27,8 +31,12 @@ class InvestigationService:
         self._case_assembler = case_assembler
 
     def execute(self, command: InvestigateScenarioCommand) -> InvestigateScenarioResult:
-        scenario_result = self._scenario_repository.get_scenario(GetScenarioQuery(scenario_id=command.scenario_id))
-        text_result = self._text_signal_service.score(ScoreTextSignalsCommand(scenario=scenario_result.scenario))
+        scenario_result = self._scenario_repository.get_scenario(
+            GetScenarioQuery(scenario_id=command.scenario_id)
+        )
+        text_result = self._text_signal_service.score(
+            ScoreTextSignalsCommand(scenario=scenario_result.scenario)
+        )
         reasoning_result = self._risk_reasoner.reason(
             ReasonAboutRiskCommand(
                 scenario=scenario_result.scenario,
@@ -37,7 +45,7 @@ class InvestigationService:
         )
         return self._case_assembler.assemble(
             AssembleInvestigationCommand(
-                scenario_overview=to_scenario_overview(scenario_result.scenario),
+                scenario_overview=build_scenario_overview(scenario_result.scenario),
                 text_result=text_result,
                 reasoning_result=reasoning_result,
             )

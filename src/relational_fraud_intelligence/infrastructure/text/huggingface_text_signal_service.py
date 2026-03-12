@@ -59,7 +59,9 @@ class HuggingFaceTextSignalService:
             )
 
         for merchant in command.scenario.merchants:
-            text = f"{merchant.display_name}. {merchant.description}. Category: {merchant.category}."
+            text = (
+                f"{merchant.display_name}. {merchant.description}. Category: {merchant.category}."
+            )
             outputs = self._client.zero_shot_classification(
                 text,
                 candidate_labels=self._merchant_labels,
@@ -79,7 +81,10 @@ class HuggingFaceTextSignalService:
         return ScoreTextSignalsResult(
             requested_provider="huggingface",
             active_provider="huggingface",
-            notes=["Hugging Face zero-shot classification enriched investigator notes and merchant descriptions."],
+            notes=[
+                "Hugging Face zero-shot classification enriched investigator notes "
+                "and merchant descriptions."
+            ],
             signals=signals,
         )
 
@@ -105,7 +110,10 @@ class HuggingFaceTextSignalService:
                     source_id=source_id,
                     label=label,
                     confidence=round(score, 4),
-                    rationale=f"Hugging Face classified this text as '{label}' with confidence {score:.2f}.",
+                    rationale=(
+                        "Hugging Face classified this text as "
+                        f"'{label}' with confidence {score:.2f}."
+                    ),
                 )
             )
         return signals

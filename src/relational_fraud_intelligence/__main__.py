@@ -1,4 +1,3 @@
-from relational_fraud_intelligence.app import create_app
 from relational_fraud_intelligence.settings import AppSettings
 
 

@@ -7,5 +7,4 @@ from relational_fraud_intelligence.application.dto.investigation import (
 
 
 class RiskReasoner(Protocol):
-    def reason(self, command: ReasonAboutRiskCommand) -> ReasonAboutRiskResult:
-        ...
+    def reason(self, command: ReasonAboutRiskCommand) -> ReasonAboutRiskResult: ...
