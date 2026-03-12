@@ -9,10 +9,7 @@ from redis.exceptions import RedisError
 
 class RedisRateLimiter:
     def __init__(self, redis_url: str) -> None:
-        self._client: Redis = cast(
-            Redis,
-            Redis.from_url(redis_url, decode_responses=True),
-        )
+        self._client: Redis = Redis.from_url(redis_url, decode_responses=True)
 
     def consume(self, key: str, limit: int, window_seconds: int) -> tuple[bool, int]:
         window_key = f"rate-limit:{key}"
@@ -20,7 +17,7 @@ class RedisRateLimiter:
             value = int(cast(int, self._client.incr(window_key)))
             if value == 1:
                 self._client.expire(window_key, window_seconds)
-            ttl = cast(int | None, self._client.ttl(window_key))
+            ttl = self._client.ttl(window_key)
         except RedisError as exc:
             raise RuntimeError("The shared rate-limit backend is unavailable.") from exc
 

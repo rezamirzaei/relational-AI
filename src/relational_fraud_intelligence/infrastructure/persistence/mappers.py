@@ -73,21 +73,22 @@ def to_scenario_record(scenario: FraudScenario) -> ScenarioRecord:
     )
 
     account_records: list[AccountRecord] = []
+    account_records_by_id: dict[str, AccountRecord] = {}
     for account in scenario.accounts:
         customer_record = customer_records[account.customer_id]
-        account_records.append(
-            AccountRecord(
-                account_id=account.account_id,
-                scenario_id=scenario.scenario_id,
-                customer_id=account.customer_id,
-                opened_at=account.opened_at,
-                current_balance=account.current_balance,
-                average_monthly_inflow=account.average_monthly_inflow,
-                chargeback_count=account.chargeback_count,
-                manual_review_count=account.manual_review_count,
-                customer=customer_record,
-            )
+        account_record = AccountRecord(
+            account_id=account.account_id,
+            scenario_id=scenario.scenario_id,
+            customer_id=account.customer_id,
+            opened_at=account.opened_at,
+            current_balance=account.current_balance,
+            average_monthly_inflow=account.average_monthly_inflow,
+            chargeback_count=account.chargeback_count,
+            manual_review_count=account.manual_review_count,
+            customer=customer_record,
         )
+        account_records.append(account_record)
+        account_records_by_id[account.account_id] = account_record
     scenario_record.accounts = account_records
 
     transaction_records: list[TransactionRecordOrm] = []
@@ -105,6 +106,10 @@ def to_scenario_record(scenario: FraudScenario) -> ScenarioRecord:
                 currency=transaction.currency,
                 channel=transaction.channel.value,
                 status=transaction.status.value,
+                customer=customer_records[transaction.customer_id],
+                account=account_records_by_id[transaction.account_id],
+                device=device_records[transaction.device_id],
+                merchant=merchant_records[transaction.merchant_id],
             )
         )
     scenario_record.transactions = transaction_records

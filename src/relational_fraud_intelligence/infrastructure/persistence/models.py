@@ -186,6 +186,10 @@ class TransactionRecordOrm(Base):
     status: Mapped[str] = mapped_column(String(40))
 
     scenario: Mapped[ScenarioRecord] = relationship(back_populates="transactions")
+    customer: Mapped[CustomerRecord] = relationship()
+    account: Mapped[AccountRecord] = relationship()
+    device: Mapped[DeviceRecord] = relationship()
+    merchant: Mapped[MerchantRecord] = relationship()
 
 
 class InvestigatorNoteRecord(Base):
