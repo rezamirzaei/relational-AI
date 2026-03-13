@@ -19,7 +19,7 @@ dependencies = [
     "python-multipart==0.0.20",
     "redis==5.2.1",
     "relationalai==1.0.3",
-    "sqlalchemy==2.0.43",
+    "sqlalchemy==2.0.48",
     "uvicorn[standard]==0.41.0",
     "networkx==3.4.2",
     "scipy>=1.14.0",
