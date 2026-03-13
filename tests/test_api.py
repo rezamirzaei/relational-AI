@@ -128,7 +128,7 @@ def test_workspace_guide_exposes_primary_workflow_and_roles() -> None:
     assert "does not change risk scores" in payload["llm_positioning_note"]
 
 
-def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
+def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -166,23 +166,21 @@ def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
         )
 
         create_case_response = client.post(
-            "/api/v1/cases",
+            f"/api/v1/datasets/{dataset_id}/case",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={
-                "source_type": "dataset",
-                "source_id": dataset_id,
-                "title": "Dataset case",
-                "summary": analysis["summary"],
-                "priority": analysis["risk_level"],
-                "risk_score": analysis["risk_score"],
-                "risk_level": analysis["risk_level"],
-            },
         )
         assert create_case_response.status_code == 200
-        created_case = create_case_response.json()["case"]
+        create_case_payload = create_case_response.json()
+        created_case = create_case_payload["case"]
         assert created_case["source_type"] == "dataset"
         assert created_case["source_id"] == dataset_id
         assert created_case["risk_score"] == analysis["risk_score"]
+        assert "Primary lead:" in created_case["summary"]
+        assert create_case_payload["linked_alerts"]
+        assert all(
+            alert["linked_case_id"] == created_case["case_id"]
+            for alert in create_case_payload["linked_alerts"]
+        )
 
         list_cases_response = client.get(
             "/api/v1/cases",
@@ -394,7 +392,7 @@ def test_dataset_explanation_returns_deterministic_operator_brief() -> None:
     payload = explanation_response.json()["explanation"]
     assert payload["dataset_id"] == dataset_id
     assert payload["provider_summary"]["requested_provider"] == "deterministic"
-    assert payload["provider_summary"]["source_of_truth"] == "deterministic-statistical-analysis"
+    assert payload["provider_summary"]["source_of_truth"] == "statistical-and-behavioral-analysis"
     assert payload["recommended_actions"]
     assert any("source of truth" in item.lower() for item in payload["watchouts"])
 

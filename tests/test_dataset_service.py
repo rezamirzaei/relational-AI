@@ -10,7 +10,7 @@ from relational_fraud_intelligence.application.services.dataset_service import (
     DatasetService,
     InMemoryDatasetStore,
 )
-from relational_fraud_intelligence.domain.models import DatasetStatus, RiskLevel
+from relational_fraud_intelligence.domain.models import AnomalyType, DatasetStatus, RiskLevel
 
 
 @pytest.fixture()
@@ -79,6 +79,7 @@ class TestDatasetAnalysis:
         assert len(result.benford_digits) == 9
         assert result.summary
         assert result.completed_at
+        assert result.investigation_leads
 
         # Check dataset status updated
         updated = service.get_dataset(dataset.dataset_id)
@@ -111,6 +112,71 @@ class TestDatasetAnalysis:
         service.analyze(dataset.dataset_id)
         result = service.get_result(dataset.dataset_id)
         assert result.total_transactions == 10
+
+    def test_behavioral_inference_detects_shared_device_and_graph_structure(
+        self,
+        service: DatasetService,
+    ) -> None:
+        dataset = service.ingest_transactions(
+            "behavioral.csv",
+            [
+                {
+                    "transaction_id": "R1",
+                    "account_id": "ACCT-1",
+                    "amount": 620,
+                    "timestamp": "2026-03-01 10:00:00",
+                    "merchant": "GiftCardKiosk-A",
+                    "category": "gift_cards",
+                    "device_fingerprint": "fp-shared-ring",
+                    "ip_country": "NL",
+                    "channel": "wallet",
+                },
+                {
+                    "transaction_id": "R2",
+                    "account_id": "ACCT-2",
+                    "amount": 710,
+                    "timestamp": "2026-03-01 10:06:00",
+                    "merchant": "GiftCardKiosk-A",
+                    "category": "gift_cards",
+                    "device_fingerprint": "fp-shared-ring",
+                    "ip_country": "DE",
+                    "channel": "wallet",
+                },
+                {
+                    "transaction_id": "R3",
+                    "account_id": "ACCT-1",
+                    "amount": 840,
+                    "timestamp": "2026-03-01 10:11:00",
+                    "merchant": "CryptoExchange-X",
+                    "category": "crypto",
+                    "device_fingerprint": "fp-shared-ring",
+                    "ip_country": "NL",
+                    "channel": "wallet",
+                },
+                {
+                    "transaction_id": "R4",
+                    "account_id": "ACCT-2",
+                    "amount": 930,
+                    "timestamp": "2026-03-01 10:17:00",
+                    "merchant": "CryptoExchange-X",
+                    "category": "crypto",
+                    "device_fingerprint": "fp-shared-ring",
+                    "ip_country": "DE",
+                    "channel": "wallet",
+                },
+            ],
+        )
+
+        result = service.analyze(dataset.dataset_id)
+
+        assert result.graph_analysis is not None
+        assert result.behavioral_insights
+        assert result.investigation_leads
+        assert any(
+            anomaly.anomaly_type == AnomalyType.SHARED_IDENTIFIER for anomaly in result.anomalies
+        )
+        assert result.investigation_leads[0].lead_type == "shared-device-ring"
+        assert result.graph_analysis.risk_amplification_factor > 1.0
 
     def test_get_result_not_found(self, service: DatasetService) -> None:
         dataset = service.upload_csv("test.csv", VALID_CSV)
@@ -167,6 +233,9 @@ class TestSampleDataset:
         assert result.total_anomalies > 0, "Sample dataset should have planted anomalies"
         assert result.risk_score > 0
         assert result.summary
+        assert result.behavioral_insights
+        assert result.investigation_leads
+        assert result.graph_analysis is not None
 
         # Check that at least some anomaly types were detected
         anomaly_types = {a.anomaly_type for a in result.anomalies}

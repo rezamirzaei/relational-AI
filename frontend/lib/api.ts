@@ -2,6 +2,7 @@ import type {
   AnalysisResponse,
   AnalysisExplanationResponse,
   AuditEventsResponse,
+  CreateCaseFromAnalysisResponse,
   CreateCaseFromAlertResponse,
   CreateCaseResponse,
   CurrentOperatorResponse,
@@ -129,6 +130,17 @@ export async function createCase(
   return fetchJson<CreateCaseResponse>(
     `${browserApiBaseUrl}/cases`,
     { method: "POST", body: JSON.stringify(params) },
+    token,
+  );
+}
+
+export async function createCaseFromAnalysis(
+  token: string,
+  datasetId: string,
+): Promise<CreateCaseFromAnalysisResponse> {
+  return fetchJson<CreateCaseFromAnalysisResponse>(
+    `${browserApiBaseUrl}/datasets/${datasetId}/case`,
+    { method: "POST" },
     token,
   );
 }

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
+    AnalysisResult,
     AppModel,
     CaseComment,
     CaseDisposition,
@@ -100,3 +101,9 @@ class DatasetListResponse(AppModel):
 class TransactionIngestBody(AppModel):
     name: str = "api-ingestion"
     transactions: list[dict[str, object]]
+
+
+class CreateCaseFromAnalysisResult(AppModel):
+    analysis: AnalysisResult
+    case: FraudCase
+    linked_alerts: list[FraudAlert]

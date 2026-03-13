@@ -314,8 +314,7 @@ class RelationalAIRiskReasoner:
 
             # Check if the shared devices have low trust
             low_trust_devices = [
-                d for d in devices_in_community
-                if device_trust.get(d.split(":", 1)[1], 1.0) < 0.5
+                d for d in devices_in_community if device_trust.get(d.split(":", 1)[1], 1.0) < 0.5
             ]
 
             if low_trust_devices:
@@ -394,9 +393,7 @@ class RelationalAIRiskReasoner:
                 path_label = " → ".join(path)
                 bonus = 6 if is_cross_border else 3
 
-                desc = (
-                    f"Indirect money path ({len(path) - 1} hops): {path_label}."
-                )
+                desc = f"Indirect money path ({len(path) - 1} hops): {path_label}."
                 if is_cross_border:
                     desc += (
                         f" Cross-border flow ({src_country} → {dst_country}) "

@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "@/components/dashboard";
 import {
   analyzeDataset,
+  createCaseFromAnalysis,
   createCaseFromAlert,
   fetchAlerts,
   fetchAnalysisExplanation,
@@ -28,6 +29,7 @@ import type {
   AnalysisResponse,
   AnalysisExplanationResponse,
   CreateCaseFromAlertResponse,
+  CreateCaseFromAnalysisResponse,
   DatasetListResponse,
   AuditEvent,
   ListAlertsResponse,
@@ -43,6 +45,7 @@ import type {
 vi.mock("@/lib/api", () => ({
   analyzeDataset: vi.fn(),
   createCase: vi.fn(),
+  createCaseFromAnalysis: vi.fn(),
   createCaseFromAlert: vi.fn(),
   fetchAlerts: vi.fn(),
   fetchAnalysisExplanation: vi.fn(),
@@ -61,6 +64,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const mockedAnalyzeDataset = vi.mocked(analyzeDataset);
+const mockedCreateCaseFromAnalysis = vi.mocked(createCaseFromAnalysis);
 const mockedCreateCaseFromAlert = vi.mocked(createCaseFromAlert);
 const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchAnalysisExplanation = vi.mocked(fetchAnalysisExplanation);
@@ -99,7 +103,7 @@ const backendHealth: HealthResponse = {
 const workspaceGuide: WorkspaceGuide = {
   primary_workflow_title: "Primary Workflow: Upload -> Analyze -> Alert -> Case",
   primary_workflow_summary:
-    "The main product path starts with transaction data. Analysts upload a dataset, run deterministic analysis, review alerts, and open a case when the evidence warrants it.",
+    "The main product path starts with transaction data. Analysts upload a dataset, run statistical and behavioral analysis, review alerts, and open a case when the evidence warrants it.",
   role_stories: [
     {
       story_id: "frontline-analyst",
@@ -109,7 +113,7 @@ const workspaceGuide: WorkspaceGuide = {
       goal: "Turn suspicious uploaded data into a triaged case quickly.",
       workflow_steps: [
         "Upload a transaction export.",
-        "Run deterministic analysis.",
+        "Run statistical and behavioral analysis.",
         "Open a case from the strongest findings.",
       ],
       success_signal: "A high-risk dataset becomes an alert-backed case in one pass.",
@@ -145,12 +149,12 @@ const workspaceGuide: WorkspaceGuide = {
     },
   ],
   scoring_guarantees: [
-    "Risk scores are deterministic.",
-    "Alert thresholds are deterministic.",
+    "Risk scores are computed from scored findings.",
+    "Alert thresholds are fixed.",
     "Cases stay linked to persistent workflow records.",
   ],
   llm_positioning_note:
-    "The copilot layer explains deterministic results. It does not change risk scores, suppress alerts, or open cases on its own.",
+    "The copilot layer explains scored results. It does not change risk scores, suppress alerts, or open cases on its own.",
 };
 
 const scenarios: ScenarioOverview[] = [
@@ -285,6 +289,20 @@ const linkedAlertList: ListAlertsResponse = {
   page_size: 20,
 };
 
+const linkedAlertListFromAnalysis: ListAlertsResponse = {
+  alerts: [
+    {
+      ...generatedAlertList.alerts[0],
+      title: "Potential shared-device coordination ring",
+      status: "investigating",
+      linked_case_id: "case-analysis-1",
+    },
+  ],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
 const caseFromAlertResponse: CreateCaseFromAlertResponse = {
   alert: linkedAlertList.alerts[0],
   case: {
@@ -313,6 +331,41 @@ const caseFromAlertResponse: CreateCaseFromAlertResponse = {
 
 const caseFromAlertList: ListCasesResponse = {
   cases: [caseFromAlertResponse.case],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
+const caseFromAnalysisResponse: CreateCaseFromAnalysisResponse = {
+  analysis: {} as AnalysisResponse["analysis"],
+  case: {
+    case_id: "case-analysis-1",
+    source_type: "dataset",
+    source_id: "dataset-1",
+    scenario_id: null,
+    title: "march-transactions.csv: Potential shared-device coordination ring",
+    status: "open",
+    priority: "high",
+    assigned_analyst_id: null,
+    assigned_analyst_name: null,
+    risk_score: 68,
+    risk_level: "high",
+    summary:
+      "Primary lead: Potential shared-device coordination ring. Multiple accounts are converging on the same device.",
+    disposition: null,
+    resolution_notes: null,
+    created_at: "2026-03-12T14:08:00",
+    updated_at: "2026-03-12T14:08:00",
+    resolved_at: null,
+    sla_deadline: "2026-03-13T14:08:00",
+    comment_count: 0,
+    alert_count: 0,
+  },
+  linked_alerts: linkedAlertListFromAnalysis.alerts,
+};
+
+const caseFromAnalysisList: ListCasesResponse = {
+  cases: [caseFromAnalysisResponse.case],
   total_count: 1,
   page: 1,
   page_size: 20,
@@ -371,7 +424,83 @@ const datasetAnalysisResponse: AnalysisResponse = {
         z_score: 4.8,
       },
     ],
-    graph_analysis: null,
+    graph_analysis: {
+      connected_components: 2,
+      density: 0.24,
+      highest_degree_entity: {
+        entity_type: "device",
+        entity_id: "fp-ring-shared-01",
+        display_name: "fp-ring-shared-01",
+      },
+      highest_degree_score: 4,
+      community_count: 2,
+      shortest_path_length: 2,
+      hub_entities: [
+        {
+          entity_type: "device",
+          entity_id: "fp-ring-shared-01",
+          display_name: "fp-ring-shared-01",
+        },
+      ],
+      risk_amplification_factor: 1.22,
+    },
+    behavioral_insights: [
+      {
+        insight_id: "shared-device::fp-ring-shared-01",
+        title: "Shared device links multiple accounts",
+        severity: "high",
+        narrative:
+          "Device fp-ring-shared-01 touched 3 accounts across 12 transactions totaling $8,420.00.",
+        entities: [
+          {
+            entity_type: "device",
+            entity_id: "fp-ring-shared-01",
+            display_name: "fp-ring-shared-01",
+          },
+          {
+            entity_type: "account",
+            entity_id: "acct-77",
+            display_name: "acct-77",
+          },
+        ],
+        evidence: {
+          account_count: 3,
+          transaction_count: 12,
+        },
+      },
+    ],
+    investigation_leads: [
+      {
+        lead_id: "lead::shared-device::fp-ring-shared-01",
+        lead_type: "shared-device-ring",
+        title: "Potential shared-device coordination ring",
+        severity: "high",
+        hypothesis:
+          "Multiple accounts are converging on the same device, which is consistent with coordinated cash-out or synthetic identity reuse.",
+        narrative:
+          "Device fp-ring-shared-01 touched 3 accounts across 12 transactions totaling $8,420.00. The relationship graph amplified this cluster to 1.22x baseline risk.",
+        entities: [
+          {
+            entity_type: "device",
+            entity_id: "fp-ring-shared-01",
+            display_name: "fp-ring-shared-01",
+          },
+          {
+            entity_type: "account",
+            entity_id: "acct-77",
+            display_name: "acct-77",
+          },
+        ],
+        supporting_anomaly_ids: ["shared-device::fp-ring-shared-01"],
+        recommended_actions: [
+          "Confirm whether the linked accounts share a legitimate owner or onboarding trail.",
+          "Review device binding, login, and credential-reset history for the linked accounts.",
+        ],
+        evidence: {
+          supporting_amount: 8420,
+        },
+      },
+    ],
     anomalies: [
       {
         anomaly_id: "anom-1",
@@ -396,9 +525,9 @@ const datasetAnalysisExplanation: AnalysisExplanationResponse = {
     audience: "admin",
     headline: "march-transactions.csv is a high-priority review candidate at 68/100.",
     narrative:
-      "The dataset was scored with deterministic analyzers only. Review the strongest anomaly evidence before opening or updating a case.",
+      "The dataset was scored from dataset-derived statistical and behavioral inference. Review the strongest anomaly evidence before opening or updating a case.",
     deterministic_evidence: [
-      "Risk score: 68/100 from deterministic anomaly weights and density.",
+      "Risk score: 68/100 from statistical anomaly weights, density, and relationship structure.",
       "Total anomalies: 3 across 128 transactions.",
     ],
     recommended_actions: [
@@ -406,14 +535,14 @@ const datasetAnalysisExplanation: AnalysisExplanationResponse = {
       "Open or update a case so the evidence trail stays attached to the dataset.",
     ],
     watchouts: [
-      "The explanation layer is advisory. Deterministic scoring remains the source of truth.",
+      "The explanation layer is advisory. Statistical and behavioral scoring remain the source of truth.",
     ],
     provider_summary: {
       requested_provider: "deterministic",
       active_provider: "deterministic",
-      source_of_truth: "deterministic-statistical-analysis",
+      source_of_truth: "statistical-and-behavioral-analysis",
       notes: [
-        "This brief is generated from deterministic scoring outputs.",
+        "This brief is generated from the dataset's statistical and behavioral scoring outputs.",
       ],
     },
   },
@@ -541,6 +670,7 @@ describe("Dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockedAnalyzeDataset.mockReset();
+    mockedCreateCaseFromAnalysis.mockReset();
     mockedCreateCaseFromAlert.mockReset();
     mockedFetchAlerts.mockReset();
     mockedFetchAnalysisExplanation.mockReset();
@@ -583,6 +713,10 @@ describe("Dashboard", () => {
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
     mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
     mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
+    mockedCreateCaseFromAnalysis.mockResolvedValue({
+      ...caseFromAnalysisResponse,
+      analysis: datasetAnalysisResponse.analysis,
+    });
     mockedCreateCaseFromAlert.mockResolvedValue(caseFromAlertResponse);
     mockedUpdateCaseStatus.mockResolvedValue({});
   });
@@ -767,7 +901,7 @@ describe("Dashboard", () => {
             {
               stage_id: "upload",
               title: "Upload",
-              description: "Datasets waiting to enter the deterministic workflow.",
+              description: "Datasets waiting to enter the scoring workflow.",
               total_count: 1,
               highlighted_count: 0,
               highlighted_label: "waiting for analysis",
@@ -775,7 +909,8 @@ describe("Dashboard", () => {
             {
               stage_id: "analyze",
               title: "Analyze",
-              description: "Completed deterministic analyses over uploaded transaction data.",
+              description:
+                "Completed statistical and behavioral analyses over uploaded transaction data.",
               total_count: 1,
               highlighted_count: 1,
               highlighted_label: "high-risk analyses",
@@ -783,7 +918,7 @@ describe("Dashboard", () => {
             {
               stage_id: "alert",
               title: "Alert",
-              description: "Alerts created from deterministic findings and triage thresholds.",
+              description: "Alerts created from scored findings and triage thresholds.",
               total_count: 1,
               highlighted_count: 1,
               highlighted_label: "new alerts",
@@ -981,6 +1116,96 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
       expect(screen.getByText("Dataset dataset-1")).toBeInTheDocument();
+    });
+  });
+
+  it("creates a linked case from the analysis view", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchDatasets.mockResolvedValue(completedDatasetList);
+    mockedFetchAlerts
+      .mockResolvedValueOnce(generatedAlertList)
+      .mockResolvedValueOnce(linkedAlertListFromAnalysis);
+    mockedFetchCases
+      .mockResolvedValueOnce({ cases: [], total_count: 0, page: 1, page_size: 20 })
+      .mockResolvedValueOnce(caseFromAnalysisList);
+    mockedFetchDashboardStats
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 0,
+          open_cases: 0,
+          critical_cases: 0,
+          total_alerts: 1,
+          unacknowledged_alerts: 1,
+          avg_risk_score: 68,
+          cases_by_status: {},
+          alerts_by_severity: { high: 1 },
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 1,
+          total_transactions_analyzed: 128,
+          total_anomalies_found: 3,
+          completed_analyses: 1,
+          high_risk_analyses: 1,
+          workflow_stages: [],
+          next_recommended_action:
+            "Create a case from the highest-risk dataset analysis so the review stays persistent.",
+        },
+      })
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 1,
+          open_cases: 1,
+          critical_cases: 0,
+          total_alerts: 1,
+          unacknowledged_alerts: 0,
+          avg_risk_score: 68,
+          cases_by_status: { open: 1 },
+          alerts_by_severity: { high: 1 },
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 1,
+          total_transactions_analyzed: 128,
+          total_anomalies_found: 3,
+          completed_analyses: 1,
+          high_risk_analyses: 1,
+          workflow_stages: [],
+          next_recommended_action:
+            "Advance open cases with comments, dispositions, or resolution notes.",
+        },
+      });
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Potential shared-device coordination ring")).toBeInTheDocument();
+      expect(screen.getByText("Investigation Leads")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create linked case from analysis" }));
+
+    await waitFor(() => {
+      expect(mockedCreateCaseFromAnalysis).toHaveBeenCalledWith("analyst-token", "dataset-1");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("march-transactions.csv: Potential shared-device coordination ring")).toBeInTheDocument();
     });
   });
 

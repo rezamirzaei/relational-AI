@@ -506,17 +506,17 @@ export function Dashboard({
                   <p className="eyebrow">
                     {workspaceGuide?.primary_workflow_title ?? "Primary Workflow"}
                   </p>
-                  <h2>Move uploaded transaction data through one deterministic workflow.</h2>
+                  <h2>Turn uploaded transaction data into behavioral risk insights.</h2>
                   <p className="muted-copy">
-                    Upload data, run statistical analysis, review the generated alerts, and
-                    create a case only when the evidence warrants it.
+                    Upload data, infer entity behavior and relationship structure, review the
+                    generated alerts, and create a case only when the evidence warrants it.
                   </p>
                 </div>
                 <div className="llm-note compact">
                   <strong>Copilot boundary</strong>
                   <p>
                     {workspaceGuide?.llm_positioning_note ??
-                      "The explanation layer rewrites deterministic findings. It does not change scores or thresholds."}
+                      "The explanation layer rewrites scored findings. It does not change scores or thresholds."}
                   </p>
                 </div>
               </section>
@@ -661,7 +661,7 @@ export function Dashboard({
                         <strong>{selectedDataset.name}</strong>
                       </p>
                       <p className="muted-copy" style={{ marginBottom: 16 }}>
-                        This dataset is waiting for deterministic analysis.
+                        This dataset is waiting for statistical and behavioral analysis.
                       </p>
                       <button
                         className="primary-button"
@@ -688,7 +688,7 @@ export function Dashboard({
 
                   {selectedDataset?.status === "analyzing" ? (
                     <div className="empty-state">
-                      Deterministic analysis is currently running for this dataset.
+                      Statistical and behavioral analysis is currently running for this dataset.
                     </div>
                   ) : null}
 
@@ -735,7 +735,7 @@ export function Dashboard({
                             <RiskGauge
                               score={activeAnalysis.risk_score}
                               level={activeAnalysis.risk_level}
-                              label="Deterministic Score"
+                              label="Risk Score"
                             />
                           </div>
                         </div>
@@ -761,6 +761,32 @@ export function Dashboard({
                             tone={activeAnalysis.velocity_spikes.length > 0 ? "warning" : "neutral"}
                             value={String(activeAnalysis.velocity_spikes.length)}
                           />
+                          <MetricCard
+                            label="Investigation leads"
+                            tone={
+                              activeAnalysis.investigation_leads.length > 0 ? "critical" : "neutral"
+                            }
+                            value={String(activeAnalysis.investigation_leads.length)}
+                          />
+                          <MetricCard
+                            label="Behavioral insights"
+                            tone={
+                              activeAnalysis.behavioral_insights.length > 0 ? "warning" : "neutral"
+                            }
+                            value={String(activeAnalysis.behavioral_insights.length)}
+                          />
+                          <MetricCard
+                            label="Graph factor"
+                            tone={
+                              (activeAnalysis.graph_analysis?.risk_amplification_factor ?? 1) > 1.15
+                                ? "critical"
+                                : "neutral"
+                            }
+                            value={`${
+                              activeAnalysis.graph_analysis?.risk_amplification_factor.toFixed(2) ??
+                              "1.00"
+                            }x`}
+                          />
                         </div>
 
                         <div className="action-bar">
@@ -769,7 +795,7 @@ export function Dashboard({
                             onClick={handleCreateCaseFromAnalysis}
                             type="button"
                           >
-                            Create case from dataset analysis
+                            Create linked case from analysis
                           </button>
                         </div>
                       </section>
@@ -780,6 +806,51 @@ export function Dashboard({
                         <section className="stack">
                           <section className="content-card">
                             <div className="mini-header">
+                              <span>Investigation Leads</span>
+                              <span>{activeAnalysis.investigation_leads.length}</span>
+                            </div>
+                            <p className="muted-copy" style={{ margin: "8px 0" }}>
+                              Dataset-derived hypotheses that group raw findings into case-ready
+                              review paths.
+                            </p>
+                            {activeAnalysis.investigation_leads.length > 0 ? (
+                              <div className="stack">
+                                {activeAnalysis.investigation_leads.map((lead) => (
+                                  <article key={lead.lead_id} className="signal-card">
+                                    <div className="signal-card-top">
+                                      <strong>{lead.title}</strong>
+                                      <span className={`risk-chip ${lead.severity}`}>
+                                        {lead.severity}
+                                      </span>
+                                    </div>
+                                    <p>{lead.hypothesis}</p>
+                                    <p className="muted-copy">{lead.narrative}</p>
+                                    {lead.entities.length > 0 ? (
+                                      <span className="signal-meta">
+                                        {lead.entities
+                                          .slice(0, 4)
+                                          .map((entity) => entity.display_name)
+                                          .join(" · ")}
+                                      </span>
+                                    ) : null}
+                                    {lead.recommended_actions.length > 0 ? (
+                                      <span className="signal-meta">
+                                        Next: {lead.recommended_actions.slice(0, 2).join(" / ")}
+                                      </span>
+                                    ) : null}
+                                  </article>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="empty-state">
+                                This dataset did not produce a case-level lead beyond the raw anomaly
+                                list.
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="content-card">
+                            <div className="mini-header">
                               <span>Benford&apos;s Law</span>
                               <span>
                                 p={activeAnalysis.benford_p_value.toFixed(4)}
@@ -787,10 +858,40 @@ export function Dashboard({
                             </div>
                             <p className="muted-copy" style={{ margin: "8px 0" }}>
                               Leading-digit distribution compared against Benford&apos;s expected
-                              frequencies. Suspicion is deterministic and threshold-based.
+                              frequencies. This is one scoring lens, not the whole story.
                             </p>
                             <BenfordChart digits={activeAnalysis.benford_digits} />
                           </section>
+
+                          {activeAnalysis.behavioral_insights.length > 0 ? (
+                            <section className="content-card">
+                              <div className="mini-header">
+                                <span>Behavioral Insights</span>
+                                <span>{activeAnalysis.behavioral_insights.length}</span>
+                              </div>
+                              <div className="stack">
+                                {activeAnalysis.behavioral_insights.map((insight) => (
+                                  <article key={insight.insight_id} className="signal-card">
+                                    <div className="signal-card-top">
+                                      <strong>{insight.title}</strong>
+                                      <span className={`risk-chip ${insight.severity}`}>
+                                        {insight.severity}
+                                      </span>
+                                    </div>
+                                    <p>{insight.narrative}</p>
+                                    {insight.entities.length > 0 ? (
+                                      <span className="signal-meta">
+                                        {insight.entities
+                                          .slice(0, 4)
+                                          .map((entity) => entity.display_name)
+                                          .join(" · ")}
+                                      </span>
+                                    ) : null}
+                                  </article>
+                                ))}
+                              </div>
+                            </section>
+                          ) : null}
 
                           <section className="content-card">
                             <div className="mini-header">
@@ -815,6 +916,61 @@ export function Dashboard({
                               ))}
                             </div>
                           </section>
+
+                          {activeAnalysis.graph_analysis ? (
+                            <section className="content-card">
+                              <div className="mini-header">
+                                <span>Relationship Graph</span>
+                                <span>
+                                  {activeAnalysis.graph_analysis.risk_amplification_factor.toFixed(2)}x
+                                </span>
+                              </div>
+                              <div className="metrics-grid">
+                                <MetricCard
+                                  label="Components"
+                                  tone="neutral"
+                                  value={String(activeAnalysis.graph_analysis.connected_components)}
+                                />
+                                <MetricCard
+                                  label="Density"
+                                  tone={
+                                    activeAnalysis.graph_analysis.density > 0.2
+                                      ? "warning"
+                                      : "neutral"
+                                  }
+                                  value={activeAnalysis.graph_analysis.density.toFixed(3)}
+                                />
+                                <MetricCard
+                                  label="Communities"
+                                  tone="neutral"
+                                  value={String(activeAnalysis.graph_analysis.community_count)}
+                                />
+                                <MetricCard
+                                  label="Top hub degree"
+                                  tone="neutral"
+                                  value={String(activeAnalysis.graph_analysis.highest_degree_score)}
+                                />
+                              </div>
+                              {activeAnalysis.graph_analysis.hub_entities.length > 0 ? (
+                                <div className="stack" style={{ marginTop: 8 }}>
+                                  {activeAnalysis.graph_analysis.hub_entities.map((hub) => (
+                                    <article
+                                      key={`${hub.entity_type}-${hub.entity_id}`}
+                                      className="transaction-row"
+                                    >
+                                      <div>
+                                        <strong>{hub.display_name}</strong>
+                                        <p>{hub.entity_type} hub in the inferred relationship graph</p>
+                                      </div>
+                                      <div className="transaction-meta">
+                                        <strong>{hub.entity_type}</strong>
+                                      </div>
+                                    </article>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </section>
+                          ) : null}
 
                           {activeAnalysis.velocity_spikes.length > 0 ? (
                             <section className="content-card">
@@ -888,4 +1044,3 @@ export function Dashboard({
     </div>
   );
 }
-

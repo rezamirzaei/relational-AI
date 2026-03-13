@@ -86,6 +86,14 @@ class AlertService:
             page_size=query.page_size,
         )
 
+    def list_alerts_for_source(
+        self,
+        *,
+        source_type: WorkflowSourceType,
+        source_id: str,
+    ) -> list[FraudAlert]:
+        return self._repo.list_alerts_for_source(source_type=source_type, source_id=source_id)
+
     def generate_alerts_from_investigation(
         self,
         scenario_id: str,

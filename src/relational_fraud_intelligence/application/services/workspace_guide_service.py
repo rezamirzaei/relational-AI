@@ -7,8 +7,9 @@ class WorkspaceGuideService:
             primary_workflow_title="Primary Workflow: Upload -> Analyze -> Alert -> Case",
             primary_workflow_summary=(
                 "The main product path starts with transaction data. Analysts upload a "
-                "dataset, run deterministic analysis, review the generated alerts, and "
-                "open a case when the findings warrant investigation."
+                "dataset, run statistical and behavioral analysis, review the generated "
+                "alerts, inspect the synthesized investigation leads, and open a case "
+                "when the evidence warrants investigation."
             ),
             role_stories=[
                 RoleStory(
@@ -19,10 +20,13 @@ class WorkspaceGuideService:
                     goal="Turn suspicious uploaded data into a triaged case quickly.",
                     workflow_steps=[
                         "Upload a transaction export from a bank, fintech, or merchant feed.",
-                        "Run deterministic analysis and inspect the strongest anomaly flags.",
-                        "Review the generated alerts and open a case with a clear summary.",
+                        "Run statistical and behavioral analysis and inspect the strongest "
+                        "investigation leads.",
+                        "Review the generated alerts and open a case with a lead-driven summary.",
                     ],
-                    success_signal="A high-risk dataset becomes an alert-backed case in one pass.",
+                    success_signal=(
+                        "A high-risk dataset becomes a lead-driven, alert-backed case in one pass."
+                    ),
                     recommended_view="analyze",
                 ),
                 RoleStory(
@@ -30,7 +34,7 @@ class WorkspaceGuideService:
                     persona_name="Marcus",
                     title="Queue Owner Analyst",
                     platform_role=OperatorRole.ANALYST,
-                    goal="Keep the alert queue moving without losing the deterministic evidence.",
+                    goal="Keep the alert queue moving without losing the inferred evidence.",
                     workflow_steps=[
                         "Review newly generated alerts from recent analyses.",
                         "Prioritize open cases by risk and triage status.",
@@ -58,15 +62,15 @@ class WorkspaceGuideService:
                 ),
             ],
             scoring_guarantees=[
-                "Risk scores are computed from deterministic Benford, outlier, "
-                "velocity, and round-amount analyzers.",
-                "Alert generation thresholds are deterministic and do not depend "
+                "Risk scores are computed from Benford, outlier, velocity, round-amount, "
+                "behavioral, and relationship-graph analysis.",
+                "Alert generation thresholds are fixed and do not depend "
                 "on the LLM explanation layer.",
                 "Cases remain linked to datasets or reference scenarios with "
                 "persistent audit history.",
             ],
             llm_positioning_note=(
-                "The copilot layer explains deterministic results. It does not change risk scores, "
+                "The copilot layer explains scored results. It does not change risk scores, "
                 "suppress alerts, or open cases on its own."
             ),
         )

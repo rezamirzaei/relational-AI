@@ -165,7 +165,7 @@ export function SignedOutPanel({
           <h2>Fraud triage starts with real transaction data.</h2>
           <p className="hero-copy">
             {workspaceGuide?.primary_workflow_summary ??
-              "Upload transaction data, run deterministic anomaly analysis, generate triageable alerts, and open cases only when the evidence supports it."}
+              "Upload transaction data, run statistical and behavioral analysis, turn the strongest findings into investigation leads, and open cases only when the evidence supports it."}
           </p>
           <div className="hero-ribbon">
             <span>Upload</span>
@@ -374,7 +374,7 @@ export function OverviewSection({
               <strong>Next action</strong>
               <p>
                 {dashboardStats?.next_recommended_action ??
-                  "Upload a dataset and move it through the deterministic workflow."}
+                  "Upload a dataset and move it through the analysis-to-case workflow."}
               </p>
             </div>
             <button className="primary-button" onClick={() => onViewChange("analyze")} type="button">
@@ -752,7 +752,7 @@ export function AnalysisCopilotCard({
           <span>Loading</span>
         </div>
         <p className="muted-copy">
-          Building an operator-facing explanation from the deterministic analysis.
+          Building an operator-facing explanation from the scored dataset findings.
         </p>
       </section>
     );
@@ -799,7 +799,7 @@ export function AnalysisCopilotCard({
         <div className="insight-grid compact">
           <section className="content-card inset-card">
             <div className="mini-header">
-              <span>Deterministic Evidence</span>
+              <span>Scored Evidence</span>
               <span>{explanation.deterministic_evidence.length}</span>
             </div>
             <div className="action-stack">

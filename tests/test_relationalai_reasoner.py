@@ -162,9 +162,7 @@ class TestScoreToLevel:
 class TestBuildMoneyFlowGraph:
     def test_empty_transactions(self) -> None:
         reasoner, _ = _build_reasoner()
-        cmd = ReasonAboutRiskCommand(
-            scenario=_make_scenario(), text_signals=[]
-        )
+        cmd = ReasonAboutRiskCommand(scenario=_make_scenario(), text_signals=[])
         G = reasoner._build_money_flow_graph(cmd)
         assert G.number_of_nodes() == 0
 
@@ -193,15 +191,22 @@ class TestBuildEntityGraph:
             scenario=_make_scenario(
                 customers=[
                     CustomerProfile(
-                        customer_id="c1", full_name="Alice", country_code="US",
-                        segment="consumer", declared_income_band="$50k",
-                        linked_account_ids=["a1"], linked_device_ids=["d1"],
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=["d1"],
                     ),
                 ],
                 devices=[
                     DeviceProfile(
-                        device_id="d1", fingerprint="fp1", ip_country_code="US",
-                        linked_customer_ids=["c1"], trust_score=0.8,
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1"],
+                        trust_score=0.8,
                     ),
                 ],
                 transactions=[
@@ -283,8 +288,11 @@ class TestDetectSuspiciousCommunities:
             scenario=_make_scenario(
                 devices=[
                     DeviceProfile(
-                        device_id="d1", fingerprint="fp1", ip_country_code="US",
-                        linked_customer_ids=["c1", "c2"], trust_score=0.1,
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1", "c2"],
+                        trust_score=0.1,
                     ),
                 ],
             ),
@@ -315,12 +323,18 @@ class TestDetectSuspiciousCommunities:
             scenario=_make_scenario(
                 devices=[
                     DeviceProfile(
-                        device_id="d1", fingerprint="fp1", ip_country_code="US",
-                        linked_customer_ids=["c1", "c2"], trust_score=0.1,
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1", "c2"],
+                        trust_score=0.1,
                     ),
                     DeviceProfile(
-                        device_id="d2", fingerprint="fp2", ip_country_code="US",
-                        linked_customer_ids=["c3", "c4"], trust_score=0.2,
+                        device_id="d2",
+                        fingerprint="fp2",
+                        ip_country_code="US",
+                        linked_customer_ids=["c3", "c4"],
+                        trust_score=0.2,
                     ),
                 ],
             ),
@@ -346,16 +360,23 @@ class TestDetectMoneyMulePaths:
             scenario=_make_scenario(
                 customers=[
                     CustomerProfile(
-                        customer_id="c1", full_name="Alice", country_code="US",
-                        segment="consumer", declared_income_band="$50k",
-                        linked_account_ids=["a1"], linked_device_ids=[],
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=[],
                     ),
                 ],
                 accounts=[
                     AccountProfile(
-                        account_id="a1", customer_id="c1",
-                        opened_at=datetime(2026, 1, 1), current_balance=1000.0,
-                        average_monthly_inflow=2000.0, chargeback_count=0,
+                        account_id="a1",
+                        customer_id="c1",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=1000.0,
+                        average_monthly_inflow=2000.0,
+                        chargeback_count=0,
                         manual_review_count=0,
                     ),
                 ],
@@ -378,27 +399,41 @@ class TestDetectMoneyMulePaths:
             scenario=_make_scenario(
                 customers=[
                     CustomerProfile(
-                        customer_id="c1", full_name="Alice", country_code="US",
-                        segment="consumer", declared_income_band="$50k",
-                        linked_account_ids=["a1"], linked_device_ids=[],
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=[],
                     ),
                     CustomerProfile(
-                        customer_id="c2", full_name="Bob", country_code="NG",
-                        segment="consumer", declared_income_band="$30k",
-                        linked_account_ids=["a2"], linked_device_ids=[],
+                        customer_id="c2",
+                        full_name="Bob",
+                        country_code="NG",
+                        segment="consumer",
+                        declared_income_band="$30k",
+                        linked_account_ids=["a2"],
+                        linked_device_ids=[],
                     ),
                 ],
                 accounts=[
                     AccountProfile(
-                        account_id="a1", customer_id="c1",
-                        opened_at=datetime(2026, 1, 1), current_balance=1000.0,
-                        average_monthly_inflow=2000.0, chargeback_count=0,
+                        account_id="a1",
+                        customer_id="c1",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=1000.0,
+                        average_monthly_inflow=2000.0,
+                        chargeback_count=0,
                         manual_review_count=0,
                     ),
                     AccountProfile(
-                        account_id="a2", customer_id="c2",
-                        opened_at=datetime(2026, 1, 1), current_balance=500.0,
-                        average_monthly_inflow=1000.0, chargeback_count=0,
+                        account_id="a2",
+                        customer_id="c2",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=500.0,
+                        average_monthly_inflow=1000.0,
+                        chargeback_count=0,
                         manual_review_count=0,
                     ),
                 ],
@@ -424,9 +459,7 @@ class TestReasonIntegration:
         base = _make_base_result(score=40)
         local.reason.return_value = base
 
-        cmd = ReasonAboutRiskCommand(
-            scenario=_make_scenario(), text_signals=[]
-        )
+        cmd = ReasonAboutRiskCommand(scenario=_make_scenario(), text_signals=[])
         result = reasoner.reason(cmd)
 
         assert result.active_provider == "hybrid-relationalai"
@@ -444,44 +477,67 @@ class TestReasonIntegration:
             scenario=_make_scenario(
                 customers=[
                     CustomerProfile(
-                        customer_id="c1", full_name="Alice", country_code="US",
-                        segment="consumer", declared_income_band="$50k",
-                        linked_account_ids=["a1"], linked_device_ids=["d1"],
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=["d1"],
                     ),
                     CustomerProfile(
-                        customer_id="c2", full_name="Bob", country_code="NG",
-                        segment="consumer", declared_income_band="$30k",
-                        linked_account_ids=["a2"], linked_device_ids=["d1"],
+                        customer_id="c2",
+                        full_name="Bob",
+                        country_code="NG",
+                        segment="consumer",
+                        declared_income_band="$30k",
+                        linked_account_ids=["a2"],
+                        linked_device_ids=["d1"],
                     ),
                 ],
                 accounts=[
                     AccountProfile(
-                        account_id="a1", customer_id="c1",
-                        opened_at=datetime(2026, 1, 1), current_balance=5000.0,
-                        average_monthly_inflow=3000.0, chargeback_count=0,
+                        account_id="a1",
+                        customer_id="c1",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=5000.0,
+                        average_monthly_inflow=3000.0,
+                        chargeback_count=0,
                         manual_review_count=0,
                     ),
                     AccountProfile(
-                        account_id="a2", customer_id="c2",
-                        opened_at=datetime(2026, 1, 1), current_balance=2000.0,
-                        average_monthly_inflow=1500.0, chargeback_count=0,
+                        account_id="a2",
+                        customer_id="c2",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=2000.0,
+                        average_monthly_inflow=1500.0,
+                        chargeback_count=0,
                         manual_review_count=0,
                     ),
                 ],
                 devices=[
                     DeviceProfile(
-                        device_id="d1", fingerprint="fp1", ip_country_code="US",
-                        linked_customer_ids=["c1", "c2"], trust_score=0.15,
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1", "c2"],
+                        trust_score=0.15,
                     ),
                 ],
                 merchants=[
                     MerchantProfile(
-                        merchant_id="m1", display_name="Merch 1", country_code="US",
-                        category="digital_goods", description="Gift cards",
+                        merchant_id="m1",
+                        display_name="Merch 1",
+                        country_code="US",
+                        category="digital_goods",
+                        description="Gift cards",
                     ),
                     MerchantProfile(
-                        merchant_id="m2", display_name="Merch 2", country_code="NG",
-                        category="money_transfer", description="Wire service",
+                        merchant_id="m2",
+                        display_name="Merch 2",
+                        country_code="NG",
+                        category="money_transfer",
+                        description="Wire service",
                     ),
                 ],
                 transactions=[

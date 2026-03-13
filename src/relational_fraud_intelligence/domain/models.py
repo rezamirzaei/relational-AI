@@ -100,6 +100,10 @@ class AnomalyType(StrEnum):
     VELOCITY_SPIKE = "velocity-spike"
     GRAPH_CLUSTER = "graph-cluster"
     ROUND_AMOUNT = "round-amount"
+    SHARED_IDENTIFIER = "shared-identifier"
+    MERCHANT_CONCENTRATION = "merchant-concentration"
+    GEOGRAPHIC_DRIFT = "geographic-drift"
+    PEER_GROUP_OUTLIER = "peer-group-outlier"
 
 
 class OperatorRole(StrEnum):
@@ -481,6 +485,32 @@ class AnomalyFlag(AppModel):
     evidence: dict[str, object] = Field(default_factory=dict)
 
 
+class BehavioralInsight(AppModel):
+    """A higher-level inference synthesized from multiple related transactions."""
+
+    insight_id: str
+    title: str
+    severity: RiskLevel
+    narrative: str
+    entities: list[EntityReference] = Field(default_factory=list)
+    evidence: dict[str, object] = Field(default_factory=dict)
+
+
+class InvestigationLead(AppModel):
+    """An investigation-ready hypothesis assembled from related findings."""
+
+    lead_id: str
+    lead_type: str
+    title: str
+    severity: RiskLevel
+    hypothesis: str
+    narrative: str
+    entities: list[EntityReference] = Field(default_factory=list)
+    supporting_anomaly_ids: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    evidence: dict[str, object] = Field(default_factory=dict)
+
+
 class AnalysisResult(AppModel):
     """Complete analysis output for an uploaded dataset."""
 
@@ -507,6 +537,12 @@ class AnalysisResult(AppModel):
 
     # Graph analysis
     graph_analysis: GraphAnalysisResult | None = None
+
+    # Higher-level behavioral findings derived from entity relationships
+    behavioral_insights: list[BehavioralInsight] = Field(default_factory=list)
+
+    # Investigation-ready hypotheses synthesized from the analysis output
+    investigation_leads: list[InvestigationLead] = Field(default_factory=list)
 
     # All anomaly flags
     anomalies: list[AnomalyFlag] = Field(default_factory=list)

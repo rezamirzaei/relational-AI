@@ -388,6 +388,28 @@ export type AnomalyFlag = {
   evidence: Record<string, unknown>;
 };
 
+export type BehavioralInsight = {
+  insight_id: string;
+  title: string;
+  severity: RiskLevel;
+  narrative: string;
+  entities: EntityReference[];
+  evidence: Record<string, unknown>;
+};
+
+export type InvestigationLead = {
+  lead_id: string;
+  lead_type: string;
+  title: string;
+  severity: RiskLevel;
+  hypothesis: string;
+  narrative: string;
+  entities: EntityReference[];
+  supporting_anomaly_ids: string[];
+  recommended_actions: string[];
+  evidence: Record<string, unknown>;
+};
+
 export type AnalysisResultData = {
   analysis_id: string;
   dataset_id: string;
@@ -404,12 +426,20 @@ export type AnalysisResultData = {
   outlier_pct: number;
   velocity_spikes: VelocitySpike[];
   graph_analysis: GraphAnalysisResult | null;
+  behavioral_insights: BehavioralInsight[];
+  investigation_leads: InvestigationLead[];
   anomalies: AnomalyFlag[];
   summary: string;
 };
 
 export type AnalysisResponse = {
   analysis: AnalysisResultData;
+};
+
+export type CreateCaseFromAnalysisResponse = {
+  analysis: AnalysisResultData;
+  case: FraudCase;
+  linked_alerts: FraudAlert[];
 };
 
 export type AnalysisExplanation = {

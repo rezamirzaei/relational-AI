@@ -17,10 +17,19 @@ from relational_fraud_intelligence.domain.models import (
     AnalysisResult,
     AnomalyFlag,
     AnomalyType,
+    BehavioralInsight,
     Dataset,
     DatasetStatus,
+    EntityReference,
+    EntityType,
+    GraphAnalysisResult,
+    InvestigationLead,
     RiskLevel,
     UploadedTransaction,
+    VelocitySpike,
+)
+from relational_fraud_intelligence.infrastructure.analysis.behavioral import (
+    analyze_behavioral_patterns,
 )
 from relational_fraud_intelligence.infrastructure.analysis.benford import analyze_benford
 from relational_fraud_intelligence.infrastructure.analysis.outliers import detect_outliers
@@ -271,23 +280,39 @@ class DatasetService:
             round_flags = detect_round_amounts(transactions)
             all_anomalies.extend(round_flags)
 
+            # 5. Behavioral inference over accounts, merchants, devices, and geographies
+            behavioral_analysis = analyze_behavioral_patterns(transactions)
+            all_anomalies.extend(behavioral_analysis.anomalies)
+            investigation_leads = _build_investigation_leads(
+                anomalies=all_anomalies,
+                behavioral_insights=behavioral_analysis.insights,
+                graph_analysis=behavioral_analysis.graph_analysis,
+                velocity_spikes=velocity_spikes,
+                benford_suspicious=benford_suspicious,
+            )
+
             # Compute overall risk score
-            risk_score = _compute_risk_score(all_anomalies, len(transactions), benford_suspicious)
+            risk_score = _compute_risk_score(
+                all_anomalies,
+                len(transactions),
+                benford_suspicious,
+                behavioral_analysis.graph_analysis,
+            )
             risk_level = _risk_level_from_score(risk_score)
 
             # Build summary
-            summary_parts: list[str] = []
-            summary_parts.append(f"Analyzed {len(transactions)} transactions.")
-            if benford_suspicious:
-                summary_parts.append(f"Benford's Law violation detected (p={p_value:.4f}).")
-            if outlier_flags:
-                summary_parts.append(f"{len(outlier_flags)} statistical outlier(s) found.")
-            if velocity_spikes:
-                summary_parts.append(f"{len(velocity_spikes)} velocity spike(s) detected.")
-            if round_flags:
-                summary_parts.append(f"{len(round_flags)} round-amount pattern(s) flagged.")
-            if not all_anomalies:
-                summary_parts.append("No significant anomalies detected.")
+            summary_parts = _build_summary_parts(
+                total_transactions=len(transactions),
+                benford_suspicious=benford_suspicious,
+                p_value=p_value,
+                outlier_flags=outlier_flags,
+                velocity_spikes=velocity_spikes,
+                round_flags=round_flags,
+                behavioral_insights=behavioral_analysis.insights,
+                investigation_leads=investigation_leads,
+                graph_analysis=behavioral_analysis.graph_analysis,
+                all_anomalies=all_anomalies,
+            )
 
             result = AnalysisResult(
                 analysis_id=str(uuid4()),
@@ -306,6 +331,9 @@ class DatasetService:
                     round(len(outlier_flags) / len(transactions) * 100, 2) if transactions else 0
                 ),
                 velocity_spikes=velocity_spikes,
+                graph_analysis=behavioral_analysis.graph_analysis,
+                behavioral_insights=behavioral_analysis.insights,
+                investigation_leads=investigation_leads,
                 anomalies=all_anomalies,
                 summary=" ".join(summary_parts),
             )
@@ -344,6 +372,7 @@ def _compute_risk_score(
     anomalies: list[AnomalyFlag],
     total_txns: int,
     benford_suspicious: bool,
+    graph_analysis: GraphAnalysisResult | None,
 ) -> int:
     if not anomalies:
         return 5
@@ -366,7 +395,427 @@ def _compute_risk_score(
     density = len(anomalies) / max(total_txns, 1)
     density_bonus = int(density * 100)
 
-    return min(100, base + density_bonus)
+    graph_bonus = 0
+    if graph_analysis is not None and graph_analysis.risk_amplification_factor > 1.0:
+        graph_bonus = int((graph_analysis.risk_amplification_factor - 1.0) * 20)
+
+    return min(100, base + density_bonus + graph_bonus)
+
+
+def _build_summary_parts(
+    *,
+    total_transactions: int,
+    benford_suspicious: bool,
+    p_value: float,
+    outlier_flags: list[AnomalyFlag],
+    velocity_spikes: list[VelocitySpike],
+    round_flags: list[AnomalyFlag],
+    behavioral_insights: list[BehavioralInsight],
+    investigation_leads: list[InvestigationLead],
+    graph_analysis: GraphAnalysisResult | None,
+    all_anomalies: list[AnomalyFlag],
+) -> list[str]:
+    summary_parts: list[str] = [f"Analyzed {total_transactions} transactions."]
+    if benford_suspicious:
+        summary_parts.append(f"Benford's Law violation detected (p={p_value:.4f}).")
+    if outlier_flags:
+        summary_parts.append(f"{len(outlier_flags)} statistical outlier(s) found.")
+    if velocity_spikes:
+        summary_parts.append(f"{len(velocity_spikes)} velocity spike(s) detected.")
+    if round_flags:
+        summary_parts.append(f"{len(round_flags)} round-amount pattern(s) flagged.")
+    if behavioral_insights:
+        summary_parts.append(
+            f"{len(behavioral_insights)} behavioral inference(s) highlighted "
+            "account, device, or merchant structure."
+        )
+        summary_parts.append(behavioral_insights[0].narrative)
+    if investigation_leads:
+        summary_parts.append(
+            f"Synthesized {len(investigation_leads)} investigation lead(s) from the dataset."
+        )
+        summary_parts.append(
+            f"Top lead: {investigation_leads[0].title}. {investigation_leads[0].hypothesis}"
+        )
+    if graph_analysis is not None and graph_analysis.highest_degree_entity is not None:
+        summary_parts.append(
+            "Relationship graph centered on "
+            f"{graph_analysis.highest_degree_entity.display_name} with degree "
+            f"{graph_analysis.highest_degree_score} and amplification "
+            f"{graph_analysis.risk_amplification_factor:.2f}x."
+        )
+    if not all_anomalies:
+        summary_parts.append("No significant anomalies detected.")
+    return summary_parts
+
+
+def _build_investigation_leads(
+    *,
+    anomalies: list[AnomalyFlag],
+    behavioral_insights: list[BehavioralInsight],
+    graph_analysis: GraphAnalysisResult | None,
+    velocity_spikes: list[VelocitySpike],
+    benford_suspicious: bool,
+) -> list[InvestigationLead]:
+    leads: list[InvestigationLead] = []
+    anomaly_ids = {anomaly.anomaly_id for anomaly in anomalies}
+
+    for insight in behavioral_insights:
+        related_ids = [
+            anomaly.anomaly_id
+            for anomaly in anomalies
+            if anomaly.anomaly_id == insight.insight_id
+            or anomaly.anomaly_id.endswith(f"::{insight.insight_id.split('::', 1)[-1]}")
+        ]
+        lead = _lead_from_behavioral_insight(
+            insight=insight,
+            graph_analysis=graph_analysis,
+            supporting_anomaly_ids=related_ids,
+        )
+        if lead is not None:
+            leads.append(lead)
+
+    velocity_lead = _lead_from_velocity_spikes(velocity_spikes, anomalies)
+    if velocity_lead is not None:
+        leads.append(velocity_lead)
+
+    structuring_lead = _lead_from_amount_patterns(anomalies, benford_suspicious)
+    if structuring_lead is not None:
+        leads.append(structuring_lead)
+
+    graph_lead = _lead_from_graph(graph_analysis, behavioral_insights, anomaly_ids)
+    if graph_lead is not None:
+        leads.append(graph_lead)
+
+    deduped: list[InvestigationLead] = []
+    seen_ids: set[str] = set()
+    for lead in sorted(leads, key=_lead_sort_key, reverse=True):
+        if lead.lead_id in seen_ids:
+            continue
+        seen_ids.add(lead.lead_id)
+        deduped.append(lead)
+    return deduped[:4]
+
+
+def _severity_rank(level: RiskLevel) -> int:
+    return {
+        RiskLevel.CRITICAL: 4,
+        RiskLevel.HIGH: 3,
+        RiskLevel.MEDIUM: 2,
+        RiskLevel.LOW: 1,
+    }[level]
+
+
+def _coerce_float(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0
+
+
+def _lead_from_behavioral_insight(
+    *,
+    insight: BehavioralInsight,
+    graph_analysis: GraphAnalysisResult | None,
+    supporting_anomaly_ids: list[str],
+) -> InvestigationLead | None:
+    prefix = insight.insight_id.split("::", 1)[0]
+    if prefix == "shared-device":
+        narrative = insight.narrative
+        if graph_analysis is not None and graph_analysis.risk_amplification_factor > 1.1:
+            narrative += (
+                " The relationship graph amplified this cluster to "
+                f"{graph_analysis.risk_amplification_factor:.2f}x baseline risk."
+            )
+        return InvestigationLead(
+            lead_id=f"lead::{insight.insight_id}",
+            lead_type="shared-device-ring",
+            title="Potential shared-device coordination ring",
+            severity=insight.severity,
+            hypothesis=(
+                "Multiple accounts are converging on the same device, which is consistent "
+                "with coordinated cash-out, account sharing, or synthetic identity reuse."
+            ),
+            narrative=narrative,
+            entities=insight.entities,
+            supporting_anomaly_ids=supporting_anomaly_ids,
+            recommended_actions=[
+                (
+                    "Confirm whether the linked accounts share a legitimate owner or "
+                    "onboarding trail."
+                ),
+                (
+                    "Review device binding, login, and credential-reset history for the "
+                    "linked accounts."
+                ),
+                (
+                    "Hold downstream payout, gift card, or crypto redemption activity if "
+                    "the cluster is unauthorized."
+                ),
+            ],
+            evidence=insight.evidence,
+        )
+    if prefix == "geo-drift":
+        return InvestigationLead(
+            lead_id=f"lead::{insight.insight_id}",
+            lead_type="account-takeover",
+            title="Potential account takeover from geographic drift",
+            severity=insight.severity,
+            hypothesis=(
+                "The account shifted away from its normal geography while meaningful value "
+                "continued to move, which is consistent with takeover or mule usage."
+            ),
+            narrative=insight.narrative,
+            entities=insight.entities,
+            supporting_anomaly_ids=supporting_anomaly_ids,
+            recommended_actions=[
+                "Check recent login, MFA, and password-reset events for the affected account.",
+                (
+                    "Compare the drifted activity against customer travel signals or known "
+                    "device history."
+                ),
+                (
+                    "Step up authentication or contact the customer before more value "
+                    "leaves the account."
+                ),
+            ],
+            evidence=insight.evidence,
+        )
+    if prefix == "merchant-concentration":
+        return InvestigationLead(
+            lead_id=f"lead::{insight.insight_id}",
+            lead_type="merchant-funnel",
+            title="Potential funnel or bust-out concentration",
+            severity=insight.severity,
+            hypothesis=(
+                "One account concentrated an unusual share of spend into a single merchant, "
+                "which can indicate cash-out, bust-out behavior, or laundering through a "
+                "known counterparty."
+            ),
+            narrative=insight.narrative,
+            entities=insight.entities,
+            supporting_anomaly_ids=supporting_anomaly_ids,
+            recommended_actions=[
+                (
+                    "Review the merchant relationship and any prior fraud history for the "
+                    "same counterparty."
+                ),
+                (
+                    "Inspect whether the concentrated spend aligns with the account's "
+                    "stated profile or limits."
+                ),
+                "Check whether related accounts are also routing value into the same merchant.",
+            ],
+            evidence=insight.evidence,
+        )
+    if prefix == "peer-outlier":
+        return InvestigationLead(
+            lead_id=f"lead::{insight.insight_id}",
+            lead_type="peer-outlier",
+            title="Account behavior diverges sharply from peers",
+            severity=insight.severity,
+            hypothesis=(
+                "This account's volume and frequency sit far outside the dataset peer group, "
+                "so it likely deserves case-level review instead of queue-only triage."
+            ),
+            narrative=insight.narrative,
+            entities=insight.entities,
+            supporting_anomaly_ids=supporting_anomaly_ids,
+            recommended_actions=[
+                "Review recent account lifecycle events and compare them to the peer cohort.",
+                (
+                    "Sample the largest transactions to determine whether the outlier "
+                    "behavior is legitimate."
+                ),
+                (
+                    "Escalate if the account's purpose, limits, or ownership do not "
+                    "explain the deviation."
+                ),
+            ],
+            evidence=insight.evidence,
+        )
+    return None
+
+
+def _lead_from_velocity_spikes(
+    velocity_spikes: list[VelocitySpike],
+    anomalies: list[AnomalyFlag],
+) -> InvestigationLead | None:
+    if not velocity_spikes:
+        return None
+
+    spike = max(
+        velocity_spikes,
+        key=lambda item: (item.z_score, item.total_amount, item.transaction_count),
+    )
+    supporting_anomaly_ids = [
+        anomaly.anomaly_id
+        for anomaly in anomalies
+        if anomaly.anomaly_type == AnomalyType.VELOCITY_SPIKE
+        and anomaly.affected_entity_id == spike.entity_id
+    ]
+    severity = (
+        RiskLevel.HIGH if spike.z_score >= 4.5 or spike.transaction_count >= 6 else RiskLevel.MEDIUM
+    )
+    return InvestigationLead(
+        lead_id=f"lead::velocity::{spike.entity_type}::{spike.entity_id}",
+        lead_type="velocity-burst",
+        title="Rapid transaction burst requires timeline review",
+        severity=severity,
+        hypothesis=(
+            "The entity compressed unusual transaction volume into a short window, which is "
+            "consistent with account takeover, automated testing, or fast cash-out behavior."
+        ),
+        narrative=(
+            f"{spike.entity_type.title()} {spike.entity_id} generated {spike.transaction_count} "
+            f"transactions totaling ${spike.total_amount:,.2f} with z={spike.z_score:.1f}."
+        ),
+        entities=[
+            EntityReference(
+                entity_type=(
+                    EntityType.ACCOUNT if spike.entity_type == "account" else EntityType.MERCHANT
+                ),
+                entity_id=spike.entity_id,
+                display_name=spike.entity_id,
+            )
+        ],
+        supporting_anomaly_ids=supporting_anomaly_ids,
+        recommended_actions=[
+            ("Reconstruct the timeline around the spike window and identify the triggering event."),
+            "Review authorizations, declines, and any repeated retries tied to the same entity.",
+            "Consider temporary controls if the burst is still in progress.",
+        ],
+        evidence={
+            "entity_id": spike.entity_id,
+            "entity_type": spike.entity_type,
+            "transaction_count": spike.transaction_count,
+            "supporting_amount": round(spike.total_amount, 2),
+            "z_score": round(spike.z_score, 2),
+        },
+    )
+
+
+def _lead_from_amount_patterns(
+    anomalies: list[AnomalyFlag],
+    benford_suspicious: bool,
+) -> InvestigationLead | None:
+    supporting_anomalies = [
+        anomaly
+        for anomaly in anomalies
+        if anomaly.anomaly_type in {AnomalyType.BENFORD_VIOLATION, AnomalyType.ROUND_AMOUNT}
+    ]
+    if not supporting_anomalies:
+        return None
+
+    round_amount_flags = [
+        anomaly
+        for anomaly in supporting_anomalies
+        if anomaly.anomaly_type == AnomalyType.ROUND_AMOUNT
+    ]
+    fallback_severity = max(
+        supporting_anomalies,
+        key=lambda anomaly: _severity_rank(anomaly.severity),
+    ).severity
+    severity = (
+        RiskLevel.HIGH if benford_suspicious and len(round_amount_flags) >= 1 else fallback_severity
+    )
+    narrative_parts: list[str] = []
+    if benford_suspicious:
+        narrative_parts.append("Leading digits deviated materially from expected frequencies.")
+    if round_amount_flags:
+        narrative_parts.append(
+            f"{len(round_amount_flags)} round-amount pattern(s) suggest structured or "
+            "manually chosen values."
+        )
+    return InvestigationLead(
+        lead_id="lead::amount-structuring",
+        lead_type="structured-amounts",
+        title="Structured or fabricated amount pattern across the dataset",
+        severity=severity,
+        hypothesis=(
+            "The batch contains amount patterns that are more consistent with manual structuring "
+            "or fabricated values than organic customer behavior."
+        ),
+        narrative=" ".join(narrative_parts),
+        supporting_anomaly_ids=[anomaly.anomaly_id for anomaly in supporting_anomalies],
+        recommended_actions=[
+            (
+                "Sample the largest structured amounts and compare them to known "
+                "merchant or card denomination patterns."
+            ),
+            "Check whether the suspicious amounts cluster in time, channel, or destination.",
+            (
+                "Verify whether upstream systems could have generated synthetic or "
+                "rounded values in bulk."
+            ),
+        ],
+        evidence={
+            "benford_suspicious": benford_suspicious,
+            "round_amount_count": len(round_amount_flags),
+            "supporting_amount": round(
+                sum(
+                    _coerce_float(anomaly.evidence.get("total_round_amount", 0.0))
+                    for anomaly in round_amount_flags
+                ),
+                2,
+            ),
+        },
+    )
+
+
+def _lead_from_graph(
+    graph_analysis: GraphAnalysisResult | None,
+    behavioral_insights: list[BehavioralInsight],
+    anomaly_ids: set[str],
+) -> InvestigationLead | None:
+    if graph_analysis is None or graph_analysis.risk_amplification_factor <= 1.2:
+        return None
+    if any(
+        anomaly_id.startswith(("shared-device::", "merchant-concentration::"))
+        for anomaly_id in anomaly_ids
+    ):
+        return None
+    hub_entity = graph_analysis.highest_degree_entity
+    if hub_entity is None:
+        return None
+    return InvestigationLead(
+        lead_id="lead::graph-cluster",
+        lead_type="network-cluster",
+        title="Related entities should be investigated as one network",
+        severity=RiskLevel.MEDIUM,
+        hypothesis=(
+            "The inferred relationship graph suggests the anomalies are connected and should "
+            "be reviewed as one scheme rather than as isolated records."
+        ),
+        narrative=(
+            f"The graph centers on {hub_entity.display_name} with degree "
+            f"{graph_analysis.highest_degree_score} and a "
+            f"{graph_analysis.risk_amplification_factor:.2f}x amplification factor."
+        ),
+        entities=[hub_entity, *graph_analysis.hub_entities[:3]],
+        supporting_anomaly_ids=[],
+        recommended_actions=[
+            (
+                "Open a single case for the connected entities instead of triaging the "
+                "findings separately."
+            ),
+            "Map ownership, device, and merchant overlap for the hub entity first.",
+            "Use the graph hubs to prioritize which entities to review before the long tail.",
+        ],
+        evidence={
+            "connected_components": graph_analysis.connected_components,
+            "community_count": graph_analysis.community_count,
+            "risk_amplification_factor": graph_analysis.risk_amplification_factor,
+            "supporting_amount": float(len(behavioral_insights)),
+        },
+    )
+
+
+def _lead_sort_key(lead: InvestigationLead) -> tuple[int, float, int]:
+    return (
+        _severity_rank(lead.severity),
+        _coerce_float(lead.evidence.get("supporting_amount", 0.0)),
+        len(lead.supporting_anomaly_ids),
+    )
 
 
 def _risk_level_from_score(score: int) -> RiskLevel:

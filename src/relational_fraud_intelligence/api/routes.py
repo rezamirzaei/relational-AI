@@ -52,6 +52,7 @@ from relational_fraud_intelligence.application.dto.routes import (
     AddCommentBody,
     AddCommentResult,
     CreateCaseFromAlertResult,
+    CreateCaseFromAnalysisResult,
     DatasetListResponse,
     DatasetResponse,
     HealthResponse,
@@ -582,7 +583,7 @@ def create_case_from_alert(
     tags=["Dashboard"],
     summary="Get the primary workflow guide",
     description=(
-        "Returns the dataset-first workflow, role stories, deterministic scoring "
+        "Returns the dataset-first workflow, role stories, scoring "
         "guarantees, and copilot positioning used by the frontend workspace."
     ),
 )
@@ -728,7 +729,9 @@ def list_datasets(
     summary="Run fraud analysis on a dataset",
     description=(
         "Executes Benford's Law analysis, statistical outlier detection, "
-        "velocity spike detection, and round-amount structuring detection."
+        "velocity spike detection, round-amount structuring detection, and "
+        "behavioral relationship inference over accounts, devices, merchants, "
+        "and geographies."
     ),
 )
 def analyze_dataset(
@@ -745,12 +748,21 @@ def analyze_dataset(
         result = container.dataset_service.analyze(dataset_id)
         findings: list[dict[str, object]] = [
             {
-                "rule_code": anomaly.anomaly_type,
-                "title": anomaly.title,
-                "narrative": anomaly.description,
+                "rule_code": lead.lead_type,
+                "title": lead.title,
+                "narrative": f"{lead.hypothesis} {lead.narrative}".strip(),
             }
-            for anomaly in result.anomalies
+            for lead in result.investigation_leads
         ]
+        if not findings:
+            findings = [
+                {
+                    "rule_code": anomaly.anomaly_type,
+                    "title": anomaly.title,
+                    "narrative": anomaly.description,
+                }
+                for anomaly in result.anomalies
+            ]
         container.alert_service.generate_alerts_from_analysis(
             dataset_id=dataset_id,
             risk_score=result.risk_score,
@@ -785,6 +797,72 @@ def get_analysis_results(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post(
+    "/datasets/{dataset_id}/case",
+    response_model=CreateCaseFromAnalysisResult,
+    tags=["Datasets"],
+    summary="Create a case from a dataset analysis",
+    description=(
+        "Creates a persistent fraud case from a completed dataset analysis using the "
+        "analysis-generated investigation leads, and links any open dataset alerts to that case."
+    ),
+)
+def create_case_from_analysis(
+    dataset_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> CreateCaseFromAnalysisResult:
+    request.state.current_principal = principal
+    request.state.audit_action = "create-case-from-analysis"
+    request.state.audit_resource_type = "dataset"
+    request.state.audit_resource_id = dataset_id
+    try:
+        analysis = container.dataset_service.get_result(dataset_id)
+        case_command = _build_case_command_from_analysis(dataset_id, container)
+        _validate_case_source(case_command, container)
+
+        related_alerts = container.alert_service.list_alerts_for_source(
+            source_type=WorkflowSourceType.DATASET,
+            source_id=dataset_id,
+        )
+        existing_case_id = next(
+            (alert.linked_case_id for alert in related_alerts if alert.linked_case_id),
+            None,
+        )
+        if existing_case_id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Dataset '{dataset_id}' already has alerts linked to case "
+                    f"'{existing_case_id}'."
+                ),
+            )
+
+        created_case = container.case_service.create_case(case_command).case
+        linked_alerts: list[FraudAlert] = []
+        for alert in related_alerts:
+            if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
+                continue
+            linked_alerts.append(
+                container.alert_service.update_status(
+                    UpdateAlertStatusCommand(
+                        alert_id=alert.alert_id,
+                        status=AlertStatus.INVESTIGATING,
+                        linked_case_id=created_case.case_id,
+                    )
+                ).alert
+            )
+
+        return CreateCaseFromAnalysisResult(
+            analysis=analysis,
+            case=created_case,
+            linked_alerts=linked_alerts,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get(
     "/datasets/{dataset_id}/explanation",
     response_model=GetAnalysisExplanationResult,
@@ -792,7 +870,7 @@ def get_analysis_results(
     summary="Explain a dataset analysis",
     description=(
         "Returns an operator-facing explanation of a completed dataset analysis. "
-        "Deterministic scoring remains the source of truth even when the optional "
+        "Statistical and behavioral scoring remain the source of truth even when the optional "
         "Hugging Face explanation provider is active."
     ),
 )
@@ -857,6 +935,44 @@ def _build_case_command_from_alert(
         priority=_priority_from_risk_level(risk_level),
         risk_score=risk_score,
         risk_level=risk_level,
+    )
+
+
+def _build_case_command_from_analysis(
+    dataset_id: str,
+    container: ApplicationContainer,
+) -> CreateCaseCommand:
+    dataset = container.dataset_service.get_dataset(dataset_id)
+    analysis = container.dataset_service.get_result(dataset_id)
+    top_lead = analysis.investigation_leads[0] if analysis.investigation_leads else None
+    additional_leads = max(0, len(analysis.investigation_leads) - 1)
+
+    summary_parts = [analysis.summary]
+    if top_lead is not None:
+        summary_parts.append(f"Primary lead: {top_lead.title}.")
+        summary_parts.append(top_lead.hypothesis)
+        summary_parts.append(top_lead.narrative)
+        if top_lead.recommended_actions:
+            summary_parts.append("Next steps: " + " ".join(top_lead.recommended_actions[:2]))
+    if additional_leads:
+        summary_parts.append(
+            f"{additional_leads} additional investigation lead(s) remain attached to the analysis."
+        )
+
+    title = (
+        f"{dataset.name}: {top_lead.title}"
+        if top_lead is not None
+        else f"Dataset review: {dataset.name}"
+    )
+
+    return CreateCaseCommand(
+        source_type=WorkflowSourceType.DATASET,
+        source_id=dataset_id,
+        title=title,
+        summary=" ".join(summary_parts),
+        priority=_priority_from_risk_level(analysis.risk_level),
+        risk_score=analysis.risk_score,
+        risk_level=analysis.risk_level,
     )
 
 

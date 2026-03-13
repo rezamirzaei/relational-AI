@@ -91,11 +91,11 @@ class HuggingFaceAnalysisExplanationService:
                 "provider_summary": ExplanationProviderSummary(
                     requested_provider="huggingface",
                     active_provider="huggingface",
-                    source_of_truth="deterministic-statistical-analysis",
+                    source_of_truth="statistical-and-behavioral-analysis",
                     notes=[
-                        "The Hugging Face copilot rewrote deterministic findings "
+                        "The Hugging Face copilot rewrote dataset-derived findings "
                         "into operator language.",
-                        "The deterministic analyzers still own the score, alerts, "
+                        "The underlying analyzers still own the score, alerts, "
                         "and case thresholds.",
                     ],
                 ),

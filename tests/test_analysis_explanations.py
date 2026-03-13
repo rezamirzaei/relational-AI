@@ -14,6 +14,7 @@ from relational_fraud_intelligence.domain.models import (
     Dataset,
     DatasetStatus,
     ExplanationAudience,
+    InvestigationLead,
     RiskLevel,
     VelocitySpike,
 )
@@ -36,10 +37,11 @@ def test_deterministic_explanation_service_builds_operator_brief() -> None:
 
     assert explanation.dataset_name == "march-transactions.csv"
     assert explanation.provider_summary.active_provider == "deterministic"
-    assert explanation.provider_summary.source_of_truth == "deterministic-statistical-analysis"
+    assert explanation.provider_summary.source_of_truth == "statistical-and-behavioral-analysis"
     assert explanation.recommended_actions
     assert any("source of truth" in item.lower() for item in explanation.watchouts)
     assert any("Benford" in item for item in explanation.deterministic_evidence)
+    assert any("Top lead" in item for item in explanation.deterministic_evidence)
 
 
 def test_fallback_explanation_service_annotates_primary_failure() -> None:
@@ -121,7 +123,7 @@ def test_huggingface_explanation_service_rewrites_deterministic_brief(
     assert explanation.recommended_actions == ["Inspect queue"]
     assert explanation.watchouts == ["Stay deterministic"]
     assert explanation.provider_summary.active_provider == "huggingface"
-    assert explanation.provider_summary.source_of_truth == "deterministic-statistical-analysis"
+    assert explanation.provider_summary.source_of_truth == "statistical-and-behavioral-analysis"
 
 
 def _build_dataset() -> Dataset:
@@ -186,6 +188,29 @@ def _build_analysis_result() -> AnalysisResult:
                 score=0.54,
                 evidence={},
             ),
+        ],
+        investigation_leads=[
+            InvestigationLead(
+                lead_id="lead::velocity::account::acct-77",
+                lead_type="velocity-burst",
+                title="Rapid transaction burst requires timeline review",
+                severity=RiskLevel.HIGH,
+                hypothesis=(
+                    "The account compressed unusual volume into a short window, which is "
+                    "consistent with takeover or fast cash-out behavior."
+                ),
+                narrative=(
+                    "Account acct-77 generated 7 transactions totaling $12,400.00 with z=4.8."
+                ),
+                supporting_anomaly_ids=["anom-1"],
+                recommended_actions=[
+                    (
+                        "Reconstruct the timeline around the spike window and identify "
+                        "the triggering event."
+                    )
+                ],
+                evidence={"supporting_amount": 12400.0},
+            )
         ],
         summary="Dataset analysis generated a high-risk alert candidate.",
     )

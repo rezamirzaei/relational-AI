@@ -11,6 +11,7 @@ import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from 
 import {
   analyzeDataset,
   createCaseFromAlert,
+  createCaseFromAnalysis,
   createCase,
   fetchAlerts,
   fetchAnalysisExplanation,
@@ -527,18 +528,14 @@ export function useDashboardState(
 
   async function handleCreateCaseFromAnalysis() {
     if (!authToken || !activeAnalysis) return;
-    const dataset = datasets.find((item) => item.dataset_id === activeAnalysis.dataset_id);
     try {
-      await createCase(authToken, {
-        source_type: "dataset",
-        source_id: activeAnalysis.dataset_id,
-        title: dataset ? `Dataset review: ${dataset.name}` : "Dataset review",
-        summary: activeAnalysis.summary,
-        priority: activeAnalysis.risk_level,
-        risk_score: activeAnalysis.risk_score,
-        risk_level: activeAnalysis.risk_level,
+      await createCaseFromAnalysis(authToken, activeAnalysis.dataset_id);
+      await refreshWorkspaceSlices(authToken, {
+        alerts: true,
+        audit: true,
+        cases: true,
+        stats: true,
       });
-      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
       setActiveView("cases");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
@@ -606,5 +603,4 @@ export function useDashboardState(
 
   return [state, actions];
 }
-
 

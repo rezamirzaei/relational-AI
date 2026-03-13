@@ -128,7 +128,7 @@ class DashboardService:
             WorkflowStageSnapshot(
                 stage_id="upload",
                 title="Upload",
-                description="Datasets waiting to enter the deterministic workflow.",
+                description="Datasets waiting to enter the scoring workflow.",
                 total_count=total_datasets,
                 highlighted_count=pending_analysis,
                 highlighted_label="waiting for analysis",
@@ -136,7 +136,9 @@ class DashboardService:
             WorkflowStageSnapshot(
                 stage_id="analyze",
                 title="Analyze",
-                description="Completed deterministic analyses over uploaded transaction data.",
+                description=(
+                    "Completed statistical and behavioral analyses over uploaded transaction data."
+                ),
                 total_count=completed_analyses,
                 highlighted_count=high_risk_analyses,
                 highlighted_label="high-risk analyses",
@@ -144,7 +146,7 @@ class DashboardService:
             WorkflowStageSnapshot(
                 stage_id="alert",
                 title="Alert",
-                description="Alerts created from deterministic findings and triage thresholds.",
+                description="Alerts created from scored findings and triage thresholds.",
                 total_count=total_alerts,
                 highlighted_count=unacknowledged,
                 highlighted_label="new alerts",
