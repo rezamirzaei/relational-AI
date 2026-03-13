@@ -1,21 +1,100 @@
 import type { FormEvent } from "react";
 
 import type {
+  AnalysisExplanation,
   AuditEvent,
   DashboardStats,
   FraudAlert,
   FraudCase,
   HealthResponse,
   OperatorPrincipal,
+  WorkspaceGuide,
 } from "@/lib/contracts";
 
-export type ActiveView = "overview" | "investigate" | "analyze" | "cases" | "alerts" | "audit";
+export type ActiveView =
+  | "overview"
+  | "investigate"
+  | "analyze"
+  | "cases"
+  | "alerts"
+  | "audit";
 
 type MetricCardProps = {
   label: string;
   tone: "critical" | "good" | "neutral" | "warning";
   value: string;
 };
+
+type StatusPillProps = {
+  label: string;
+  tone: "critical" | "good" | "neutral" | "warning";
+};
+
+type DashboardHeaderProps = {
+  backendHealth: HealthResponse | null;
+  operator: OperatorPrincipal | null;
+  workspaceGuide: WorkspaceGuide | null;
+};
+
+type SignedOutPanelProps = {
+  backendHealth: HealthResponse | null;
+  isAuthenticating: boolean;
+  loginError: string | null;
+  password: string;
+  showBootstrapCredentials: boolean;
+  username: string;
+  workspaceGuide: WorkspaceGuide | null;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onUsernameChange: (value: string) => void;
+};
+
+type DashboardNavProps = {
+  activeView: ActiveView;
+  alerts: FraudAlert[];
+  cases: FraudCase[];
+  operator: OperatorPrincipal;
+  onLogout: () => void;
+  onViewChange: (view: ActiveView) => void;
+};
+
+type OverviewSectionProps = {
+  dashboardStats: DashboardStats | null;
+  datasetsCount: number;
+  scenariosCount: number;
+  workspaceGuide: WorkspaceGuide | null;
+  onViewChange: (view: ActiveView) => void;
+};
+
+type CasesSectionProps = {
+  cases: FraudCase[];
+  dateFormatter: Intl.DateTimeFormat;
+  onResolveCase: (caseId: string) => void;
+};
+
+type AlertsSectionProps = {
+  alerts: FraudAlert[];
+  dateFormatter: Intl.DateTimeFormat;
+  onAcknowledgeAlert: (alertId: string) => void;
+};
+
+type AuditSectionProps = {
+  auditEvents: AuditEvent[];
+  dateFormatter: Intl.DateTimeFormat;
+};
+
+type AnalysisCopilotCardProps = {
+  explanation: AnalysisExplanation | null;
+  isLoading: boolean;
+  loadError: string | null;
+};
+
+const activityDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  month: "short",
+});
 
 export function MetricCard({ label, tone, value }: MetricCardProps) {
   return (
@@ -26,25 +105,21 @@ export function MetricCard({ label, tone, value }: MetricCardProps) {
   );
 }
 
-type StatusPillProps = {
-  label: string;
-  tone: "critical" | "good" | "neutral" | "warning";
-};
-
 export function StatusPill({ label, tone }: StatusPillProps) {
   return <span className={`status-pill ${tone}`}>{label}</span>;
 }
 
-type DashboardHeaderProps = {
-  backendHealth: HealthResponse | null;
-  operator: OperatorPrincipal | null;
-};
-
-export function DashboardHeader({ backendHealth, operator }: DashboardHeaderProps) {
+export function DashboardHeader({
+  backendHealth,
+  operator,
+  workspaceGuide,
+}: DashboardHeaderProps) {
   return (
     <header className="ops-header">
       <div>
-        <div className="eyebrow">Dataset Fraud Triage Workspace</div>
+        <div className="eyebrow">
+          {workspaceGuide?.primary_workflow_title ?? "Dataset Fraud Triage Workspace"}
+        </div>
         <h1>Relational Fraud Intelligence</h1>
       </div>
       <div className="status-row">
@@ -65,18 +140,6 @@ export function DashboardHeader({ backendHealth, operator }: DashboardHeaderProp
   );
 }
 
-type SignedOutPanelProps = {
-  backendHealth: HealthResponse | null;
-  isAuthenticating: boolean;
-  loginError: string | null;
-  password: string;
-  showBootstrapCredentials: boolean;
-  username: string;
-  onPasswordChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onUsernameChange: (value: string) => void;
-};
-
 export function SignedOutPanel({
   backendHealth,
   isAuthenticating,
@@ -84,6 +147,7 @@ export function SignedOutPanel({
   password,
   showBootstrapCredentials,
   username,
+  workspaceGuide,
   onPasswordChange,
   onSubmit,
   onUsernameChange,
@@ -92,16 +156,17 @@ export function SignedOutPanel({
     <>
       <section className="hero-panel">
         <div className="hero-copy-block">
+          <p className="eyebrow">{workspaceGuide?.primary_workflow_title ?? "Primary Workflow"}</p>
+          <h2>Fraud triage starts with real transaction data.</h2>
           <p className="hero-copy">
-            Upload transaction data, detect anomalies automatically, and move the suspicious
-            findings into persistent alerts and cases. Reference scenarios are still available,
-            but the main workflow now starts from your own data.
+            {workspaceGuide?.primary_workflow_summary ??
+              "Upload transaction data, run deterministic anomaly analysis, generate triageable alerts, and open cases only when the evidence supports it."}
           </p>
           <div className="hero-ribbon">
-            <span>CSV data upload</span>
-            <span>Benford&apos;s Law</span>
-            <span>Persistent alerts</span>
-            <span>Case triage</span>
+            <span>Upload</span>
+            <span>Analyze</span>
+            <span>Alert</span>
+            <span>Case</span>
           </div>
         </div>
         <div className="hero-stats">
@@ -113,12 +178,12 @@ export function SignedOutPanel({
           <article className="hero-stat-card">
             <span className="hero-label">Scenarios</span>
             <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-            <p>Reference scenarios available for validation workflows.</p>
+            <p>Reference scenarios reserved for validation and training.</p>
           </article>
           <article className="hero-stat-card">
             <span className="hero-label">Operators</span>
             <strong>{backendHealth?.seeded_operators ?? 0}</strong>
-            <p>Bootstrap operator accounts.</p>
+            <p>Bootstrap accounts available for the analyst and admin roles.</p>
           </article>
         </div>
       </section>
@@ -132,6 +197,7 @@ export function SignedOutPanel({
           <label className="auth-field">
             <span>Username</span>
             <input
+              aria-label="Username"
               autoComplete="username"
               name="username"
               onChange={(event) => onUsernameChange(event.target.value)}
@@ -142,6 +208,7 @@ export function SignedOutPanel({
           <label className="auth-field">
             <span>Password</span>
             <input
+              aria-label="Password"
               autoComplete="current-password"
               name="password"
               onChange={(event) => onPasswordChange(event.target.value)}
@@ -162,18 +229,59 @@ export function SignedOutPanel({
           </div>
         ) : null}
       </section>
+
+      {workspaceGuide ? (
+        <section className="guide-grid">
+          <section className="surface guide-panel">
+            <div className="mini-header">
+              <span>Role Stories</span>
+              <span>{workspaceGuide.role_stories.length}</span>
+            </div>
+            <div className="story-grid">
+              {workspaceGuide.role_stories.map((story) => (
+                <article key={story.story_id} className="story-card">
+                  <div className="story-card-top">
+                    <span className="tag-pill">{story.platform_role}</span>
+                    <span className="story-persona">{story.persona_name}</span>
+                  </div>
+                  <h3>{story.title}</h3>
+                  <p className="muted-copy">{story.goal}</p>
+                  <div className="story-steps">
+                    {story.workflow_steps.map((step) => (
+                      <article key={step} className="action-item compact">
+                        <span className="action-marker" />
+                        <p>{step}</p>
+                      </article>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="surface guide-panel">
+            <div className="mini-header">
+              <span>Scoring Guardrails</span>
+              <span>Deterministic</span>
+            </div>
+            <div className="action-stack">
+              {workspaceGuide.scoring_guarantees.map((guarantee) => (
+                <article key={guarantee} className="action-item">
+                  <span className="action-marker" />
+                  <p>{guarantee}</p>
+                </article>
+              ))}
+            </div>
+            <div className="llm-note">
+              <strong>Copilot boundary</strong>
+              <p>{workspaceGuide.llm_positioning_note}</p>
+            </div>
+          </section>
+        </section>
+      ) : null}
     </>
   );
 }
-
-type DashboardNavProps = {
-  activeView: ActiveView;
-  alerts: FraudAlert[];
-  cases: FraudCase[];
-  operator: OperatorPrincipal;
-  onLogout: () => void;
-  onViewChange: (view: ActiveView) => void;
-};
 
 export function DashboardNav({
   activeView,
@@ -189,8 +297,8 @@ export function DashboardNav({
   ).length;
   const views: ActiveView[] =
     operator.role === "admin"
-      ? ["overview", "investigate", "analyze", "cases", "alerts", "audit"]
-      : ["overview", "investigate", "analyze", "cases", "alerts"];
+      ? ["analyze", "alerts", "cases", "overview", "investigate", "audit"]
+      : ["analyze", "alerts", "cases", "overview", "investigate"];
 
   return (
     <nav className="nav-bar">
@@ -202,15 +310,7 @@ export function DashboardNav({
             onClick={() => onViewChange(view)}
             type="button"
           >
-            {view === "overview"
-              ? "Dashboard"
-              : view === "investigate"
-                ? "Reference Scenarios"
-                : view === "analyze"
-                  ? "Analyze Data"
-                  : view === "audit"
-                    ? "Audit Trail"
-                    : view.charAt(0).toUpperCase() + view.slice(1)}
+            {viewLabel(view)}
             {view === "alerts" && newAlertsCount > 0 ? (
               <span className="nav-badge">{newAlertsCount}</span>
             ) : null}
@@ -232,29 +332,79 @@ export function DashboardNav({
   );
 }
 
-type OverviewSectionProps = {
-  dashboardStats: DashboardStats | null;
-  datasetsCount: number;
-  scenariosCount: number;
-};
-
 export function OverviewSection({
   dashboardStats,
   datasetsCount,
   scenariosCount,
+  workspaceGuide,
+  onViewChange,
 }: OverviewSectionProps) {
   return (
     <section className="dashboard-overview">
+      {workspaceGuide ? (
+        <section className="content-card overview-hero">
+          <div>
+            <p className="eyebrow">{workspaceGuide.primary_workflow_title}</p>
+            <h2>{workspaceGuide.primary_workflow_summary}</h2>
+          </div>
+          <div className="overview-hero-actions">
+            <div className="llm-note compact">
+              <strong>Next action</strong>
+              <p>
+                {dashboardStats?.next_recommended_action ??
+                  "Upload a dataset and move it through the deterministic workflow."}
+              </p>
+            </div>
+            <button className="primary-button" onClick={() => onViewChange("analyze")} type="button">
+              Open Analyze Data
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {dashboardStats?.workflow_stages && dashboardStats.workflow_stages.length > 0 ? (
+        <section className="workflow-strip">
+          {dashboardStats.workflow_stages.map((stage) => (
+            <article key={stage.stage_id} className="workflow-stage-card">
+              <div className="mini-header">
+                <span>{stage.title}</span>
+                <span>{stage.total_count}</span>
+              </div>
+              <p className="muted-copy">{stage.description}</p>
+              <div className="workflow-stage-foot">
+                <strong>{stage.highlighted_count}</strong>
+                <span>{stage.highlighted_label}</span>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
       <div className="stats-grid">
         <MetricCard
-          label="Total Scenarios"
-          tone="neutral"
-          value={String(dashboardStats?.total_scenarios ?? scenariosCount)}
-        />
-        <MetricCard
-          label="Datasets Uploaded"
+          label="Uploaded Datasets"
           tone="neutral"
           value={String(dashboardStats?.total_datasets ?? datasetsCount)}
+        />
+        <MetricCard
+          label="Completed Analyses"
+          tone="neutral"
+          value={String(dashboardStats?.completed_analyses ?? 0)}
+        />
+        <MetricCard
+          label="High-Risk Analyses"
+          tone={dashboardStats?.high_risk_analyses ? "critical" : "neutral"}
+          value={String(dashboardStats?.high_risk_analyses ?? 0)}
+        />
+        <MetricCard
+          label="New Alerts"
+          tone={dashboardStats?.unacknowledged_alerts ? "critical" : "neutral"}
+          value={String(dashboardStats?.unacknowledged_alerts ?? 0)}
+        />
+        <MetricCard
+          label="Open Cases"
+          tone={dashboardStats?.open_cases ? "warning" : "neutral"}
+          value={String(dashboardStats?.open_cases ?? 0)}
         />
         <MetricCard
           label="Transactions Analyzed"
@@ -267,26 +417,71 @@ export function OverviewSection({
           value={String(dashboardStats?.total_anomalies_found ?? 0)}
         />
         <MetricCard
-          label="Active Cases"
-          tone="warning"
-          value={String(dashboardStats?.open_cases ?? 0)}
-        />
-        <MetricCard
-          label="Pending Alerts"
-          tone="critical"
-          value={String(dashboardStats?.unacknowledged_alerts ?? 0)}
-        />
-        <MetricCard
-          label="Total Cases"
-          tone="neutral"
-          value={String(dashboardStats?.total_cases ?? 0)}
-        />
-        <MetricCard
-          label="Avg Risk Score"
-          tone="warning"
-          value={`${dashboardStats?.avg_risk_score?.toFixed(0) ?? 0}/100`}
+          label="Reference Scenarios"
+          tone="good"
+          value={String(dashboardStats?.total_scenarios ?? scenariosCount)}
         />
       </div>
+
+      {workspaceGuide ? (
+        <div className="insight-grid">
+          <section className="content-card">
+            <div className="mini-header">
+              <span>Role Stories</span>
+              <span>{workspaceGuide.role_stories.length}</span>
+            </div>
+            <div className="story-grid">
+              {workspaceGuide.role_stories.map((story) => (
+                <article key={story.story_id} className="story-card">
+                  <div className="story-card-top">
+                    <span className="tag-pill">{story.platform_role}</span>
+                    <span className="story-persona">{story.persona_name}</span>
+                  </div>
+                  <h3>{story.title}</h3>
+                  <p className="muted-copy">{story.goal}</p>
+                  <div className="story-steps">
+                    {story.workflow_steps.map((step) => (
+                      <article key={step} className="action-item compact">
+                        <span className="action-marker" />
+                        <p>{step}</p>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="story-card-foot">
+                    <p>{story.success_signal}</p>
+                    <button
+                      className="small-button"
+                      onClick={() => onViewChange(asActiveView(story.recommended_view))}
+                      type="button"
+                    >
+                      Open {viewLabel(asActiveView(story.recommended_view))}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="content-card">
+            <div className="mini-header">
+              <span>Scoring Guardrails</span>
+              <span>Copilot safe</span>
+            </div>
+            <div className="action-stack">
+              {workspaceGuide.scoring_guarantees.map((guarantee) => (
+                <article key={guarantee} className="action-item">
+                  <span className="action-marker" />
+                  <p>{guarantee}</p>
+                </article>
+              ))}
+            </div>
+            <div className="llm-note">
+              <strong>LLM boundary</strong>
+              <p>{workspaceGuide.llm_positioning_note}</p>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {dashboardStats && Object.keys(dashboardStats.cases_by_status).length > 0 ? (
         <div className="insight-grid">
@@ -351,69 +546,22 @@ export function OverviewSection({
           </div>
           <div className="stack">
             {dashboardStats.recent_activity.map((event, index) => (
-              <article key={index} className="transaction-row">
+              <article key={`${event.resource_id ?? "activity"}-${index}`} className="transaction-row">
                 <div>
                   <strong>{event.event_type}</strong>
                   <p>{event.description}</p>
                 </div>
                 <div className="transaction-meta">
-                  <span>{new Intl.DateTimeFormat("en-US", {
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    month: "short",
-                  }).format(new Date(event.occurred_at))}</span>
+                  <span>{activityDateFormatter.format(new Date(event.occurred_at))}</span>
                 </div>
               </article>
             ))}
           </div>
         </section>
       ) : null}
-
-      {!dashboardStats || dashboardStats.total_cases === 0 ? (
-        <section className="content-card emphasis-card">
-          <div className="mini-header">
-            <span>Getting Started</span>
-            <span>Guide</span>
-          </div>
-          <div className="action-stack">
-            <article className="action-item">
-              <span className="action-marker" />
-              <p>
-                Start in <strong>Analyze Data</strong> and upload a transaction dataset.
-              </p>
-            </article>
-            <article className="action-item">
-              <span className="action-marker" />
-              <p>
-                High-risk analyses <strong>auto-generate alerts</strong> for triage.
-              </p>
-            </article>
-            <article className="action-item">
-              <span className="action-marker" />
-              <p>
-                Create a <strong>case</strong> from the dataset analysis to track resolution.
-              </p>
-            </article>
-            <article className="action-item">
-              <span className="action-marker" />
-              <p>
-                Use <strong>Reference Scenarios</strong> when you want to validate the rule
-                engine or train analysts.
-              </p>
-            </article>
-          </div>
-        </section>
-      ) : null}
     </section>
   );
 }
-
-type CasesSectionProps = {
-  cases: FraudCase[];
-  dateFormatter: Intl.DateTimeFormat;
-  onResolveCase: (caseId: string) => void;
-};
 
 export function CasesSection({
   cases,
@@ -427,7 +575,9 @@ export function CasesSection({
         <span>{cases.length} total</span>
       </div>
       {cases.length === 0 ? (
-        <div className="empty-state">No cases yet. Investigate a scenario and create one.</div>
+        <div className="empty-state">
+          No cases yet. Create one from a high-risk dataset analysis or a reference investigation.
+        </div>
       ) : (
         <div className="stack">
           {cases.map((fraudCase) => (
@@ -476,12 +626,6 @@ export function CasesSection({
   );
 }
 
-type AlertsSectionProps = {
-  alerts: FraudAlert[];
-  dateFormatter: Intl.DateTimeFormat;
-  onAcknowledgeAlert: (alertId: string) => void;
-};
-
 export function AlertsSection({
   alerts,
   dateFormatter,
@@ -495,7 +639,7 @@ export function AlertsSection({
       </div>
       {alerts.length === 0 ? (
         <div className="empty-state">
-          No alerts yet. They are auto-generated when investigations detect risk.
+          No alerts yet. High-risk dataset analyses create them automatically.
         </div>
       ) : (
         <div className="stack">
@@ -533,11 +677,6 @@ export function AlertsSection({
   );
 }
 
-type AuditSectionProps = {
-  auditEvents: AuditEvent[];
-  dateFormatter: Intl.DateTimeFormat;
-};
-
 export function AuditSection({ auditEvents, dateFormatter }: AuditSectionProps) {
   return (
     <section className="surface" style={{ padding: 24 }}>
@@ -563,4 +702,160 @@ export function AuditSection({ auditEvents, dateFormatter }: AuditSectionProps) 
       </div>
     </section>
   );
+}
+
+export function AnalysisCopilotCard({
+  explanation,
+  isLoading,
+  loadError,
+}: AnalysisCopilotCardProps) {
+  if (isLoading) {
+    return (
+      <section className="content-card copilot-card">
+        <div className="mini-header">
+          <span>Copilot Brief</span>
+          <span>Loading</span>
+        </div>
+        <p className="muted-copy">
+          Building an operator-facing explanation from the deterministic analysis.
+        </p>
+      </section>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <section className="content-card copilot-card">
+        <div className="mini-header">
+          <span>Copilot Brief</span>
+          <span>Error</span>
+        </div>
+        <div className="error-banner">{loadError}</div>
+      </section>
+    );
+  }
+
+  if (!explanation) {
+    return (
+      <section className="content-card copilot-card">
+        <div className="mini-header">
+          <span>Copilot Brief</span>
+          <span>Ready</span>
+        </div>
+        <p className="muted-copy">
+          Select or analyze a completed dataset to generate an explanation brief.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="content-card copilot-card">
+      <div className="mini-header">
+        <span>Copilot Brief</span>
+        <span>{explanation.audience}</span>
+      </div>
+      <div className="stack">
+        <article className="llm-note">
+          <strong>{explanation.headline}</strong>
+          <p>{explanation.narrative}</p>
+        </article>
+
+        <div className="insight-grid compact">
+          <section className="content-card inset-card">
+            <div className="mini-header">
+              <span>Deterministic Evidence</span>
+              <span>{explanation.deterministic_evidence.length}</span>
+            </div>
+            <div className="action-stack">
+              {explanation.deterministic_evidence.map((item) => (
+                <article key={item} className="action-item compact">
+                  <span className="action-marker" />
+                  <p>{item}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="content-card inset-card">
+            <div className="mini-header">
+              <span>Recommended Actions</span>
+              <span>{explanation.recommended_actions.length}</span>
+            </div>
+            <div className="action-stack">
+              {explanation.recommended_actions.map((item) => (
+                <article key={item} className="action-item compact">
+                  <span className="action-marker" />
+                  <p>{item}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <section className="content-card inset-card">
+          <div className="mini-header">
+            <span>Guardrails</span>
+            <span>{explanation.provider_summary.source_of_truth}</span>
+          </div>
+          <div className="action-stack">
+            {explanation.watchouts.map((item) => (
+              <article key={item} className="action-item compact">
+                <span className="action-marker" />
+                <p>{item}</p>
+              </article>
+            ))}
+          </div>
+          <div className="provider-grid">
+            <span>Requested</span>
+            <strong>{explanation.provider_summary.requested_provider}</strong>
+            <span>Active</span>
+            <strong>{explanation.provider_summary.active_provider}</strong>
+            <span>Source of truth</span>
+            <strong>{explanation.provider_summary.source_of_truth}</strong>
+          </div>
+          <div className="stack">
+            {explanation.provider_summary.notes.map((note) => (
+              <p key={note} className="provider-note">
+                {note}
+              </p>
+            ))}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function viewLabel(view: ActiveView): string {
+  switch (view) {
+    case "overview":
+      return "Workspace";
+    case "investigate":
+      return "Reference Scenarios";
+    case "analyze":
+      return "Analyze Data";
+    case "cases":
+      return "Cases";
+    case "alerts":
+      return "Alerts";
+    case "audit":
+      return "Audit Trail";
+    default:
+      return view;
+  }
+}
+
+function asActiveView(view: string): ActiveView {
+  if (
+    view === "overview" ||
+    view === "investigate" ||
+    view === "analyze" ||
+    view === "cases" ||
+    view === "alerts" ||
+    view === "audit"
+  ) {
+    return view;
+  }
+  return "analyze";
 }

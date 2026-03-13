@@ -38,7 +38,9 @@ def create_app() -> FastAPI:
         description=(
             "A fraud triage workspace for uploaded transaction datasets, with "
             "persistent alerts and cases, plus reference scenario investigations "
-            "for validation and rule calibration."
+            "for validation and rule calibration. Deterministic analysis remains "
+            "the source of truth, while the optional copilot layer explains the "
+            "results in operator-facing language."
         ),
         docs_url="/docs",
         redoc_url="/redoc",
@@ -60,7 +62,7 @@ def create_app() -> FastAPI:
             },
             {
                 "name": "Dashboard",
-                "description": "Aggregate metrics and recent workflow activity.",
+                "description": "Aggregate metrics, workflow guidance, and recent activity.",
             },
             {
                 "name": "Datasets",

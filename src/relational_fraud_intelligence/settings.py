@@ -48,10 +48,13 @@ class AppSettings(BaseSettings):
 
     text_signal_provider: Literal["keyword", "huggingface"] = "keyword"
     reasoning_provider: Literal["local-rule-engine", "relationalai"] = "local-rule-engine"
+    explanation_provider: Literal["deterministic", "huggingface"] = "deterministic"
 
     huggingface_api_token: str | None = None
     huggingface_timeout_seconds: float = 15.0
     huggingface_zero_shot_model: str = "facebook/bart-large-mnli"
+    huggingface_explanation_model: str = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+    huggingface_explanation_max_tokens: int = 400
 
     relationalai_use_external_config: bool = False
     relationalai_duckdb_path: str = ":memory:"

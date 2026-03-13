@@ -34,6 +34,10 @@ from relational_fraud_intelligence.application.dto.cases import (
 from relational_fraud_intelligence.application.dto.dashboard import (
     GetDashboardStatsQuery,
     GetDashboardStatsResult,
+    GetWorkspaceGuideResult,
+)
+from relational_fraud_intelligence.application.dto.explanations import (
+    GetAnalysisExplanationResult,
 )
 from relational_fraud_intelligence.application.dto.investigation import (
     GetScenarioQuery,
@@ -54,6 +58,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseComment,
     CasePriority,
     CaseStatus,
+    ExplanationAudience,
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
@@ -512,6 +517,25 @@ def update_alert_status(
 
 
 @router.get(
+    "/workspace/guide",
+    response_model=GetWorkspaceGuideResult,
+    tags=["Dashboard"],
+    summary="Get the primary workflow guide",
+    description=(
+        "Returns the dataset-first workflow, role stories, deterministic scoring "
+        "guarantees, and copilot positioning used by the frontend workspace."
+    ),
+)
+def get_workspace_guide(
+    request: Request,
+    container: ContainerDep,
+) -> GetWorkspaceGuideResult:
+    request.state.audit_action = "get-workspace-guide"
+    request.state.audit_resource_type = "workspace-guide"
+    return GetWorkspaceGuideResult(guide=container.workspace_guide_service.get_guide())
+
+
+@router.get(
     "/dashboard/stats",
     response_model=GetDashboardStatsResult,
     tags=["Dashboard"],
@@ -719,6 +743,41 @@ def get_analysis_results(
     try:
         result = container.dataset_service.get_result(dataset_id)
         return {"analysis": result.model_dump(mode="json")}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/datasets/{dataset_id}/explanation",
+    response_model=GetAnalysisExplanationResult,
+    tags=["Datasets"],
+    summary="Explain a dataset analysis",
+    description=(
+        "Returns an operator-facing explanation of a completed dataset analysis. "
+        "Deterministic scoring remains the source of truth even when the optional "
+        "Hugging Face explanation provider is active."
+    ),
+)
+def get_analysis_explanation(
+    dataset_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+    audience: Annotated[ExplanationAudience, Query()] = ExplanationAudience.ANALYST,
+) -> GetAnalysisExplanationResult:
+    request.state.current_principal = principal
+    request.state.audit_action = "get-analysis-explanation"
+    request.state.audit_resource_type = "dataset"
+    request.state.audit_resource_id = dataset_id
+    try:
+        dataset = container.dataset_service.get_dataset(dataset_id)
+        analysis = container.dataset_service.get_result(dataset_id)
+        explanation = container.analysis_explanation_service.explain(
+            dataset=dataset,
+            analysis=analysis,
+            audience=audience,
+        )
+        return GetAnalysisExplanationResult(explanation=explanation)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

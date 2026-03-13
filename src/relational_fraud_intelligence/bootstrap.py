@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from relational_fraud_intelligence.application.ports.explanations import (
+    AnalysisExplanationService,
+)
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
 from relational_fraud_intelligence.application.ports.security import RateLimiter
 from relational_fraud_intelligence.application.ports.text_signals import TextSignalService
@@ -20,6 +23,14 @@ from relational_fraud_intelligence.application.services.investigation_service im
 )
 from relational_fraud_intelligence.application.services.scenario_catalog_service import (
     ScenarioCatalogService,
+)
+from relational_fraud_intelligence.application.services.workspace_guide_service import (
+    WorkspaceGuideService,
+)
+from relational_fraud_intelligence.infrastructure.explanations import (
+    DeterministicAnalysisExplanationService,
+    FallbackAnalysisExplanationService,
+    HuggingFaceAnalysisExplanationService,
 )
 from relational_fraud_intelligence.infrastructure.persistence.repository import (
     SqlAlchemyScenarioRepository,
@@ -96,6 +107,8 @@ class ApplicationContainer:
     alert_service: AlertService
     dashboard_service: DashboardService
     dataset_service: DatasetService
+    analysis_explanation_service: AnalysisExplanationService
+    workspace_guide_service: WorkspaceGuideService
 
     def is_database_ready(self) -> bool:
         return ping_database(self.session_factory)
@@ -200,6 +213,21 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         alert_repository=alert_repository,
         dataset_store=dataset_store,
     )
+    workspace_guide_service = WorkspaceGuideService()
+
+    deterministic_explanation_service = DeterministicAnalysisExplanationService()
+    analysis_explanation_service: AnalysisExplanationService
+    if app_settings.explanation_provider == "huggingface":
+        try:
+            analysis_explanation_service = FallbackAnalysisExplanationService(
+                primary=HuggingFaceAnalysisExplanationService(app_settings),
+                fallback=deterministic_explanation_service,
+                requested_provider="huggingface",
+            )
+        except ValueError:
+            analysis_explanation_service = deterministic_explanation_service
+    else:
+        analysis_explanation_service = deterministic_explanation_service
 
     return ApplicationContainer(
         settings=app_settings,
@@ -218,4 +246,6 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         alert_service=alert_service,
         dashboard_service=dashboard_service,
         dataset_service=dataset_service,
+        analysis_explanation_service=analysis_explanation_service,
+        workspace_guide_service=workspace_guide_service,
     )

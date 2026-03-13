@@ -11,6 +11,8 @@ import { Dashboard } from "@/components/dashboard";
 import {
   analyzeDataset,
   fetchAlerts,
+  fetchAnalysisExplanation,
+  fetchAnalysisResult,
   fetchAuditEvents,
   fetchCases,
   fetchCurrentOperator,
@@ -22,6 +24,7 @@ import {
 } from "@/lib/api";
 import type {
   AnalysisResponse,
+  AnalysisExplanationResponse,
   DatasetListResponse,
   AuditEvent,
   ListAlertsResponse,
@@ -30,12 +33,15 @@ import type {
   LoginResponse,
   OperatorPrincipal,
   ScenarioOverview,
+  WorkspaceGuide,
 } from "@/lib/contracts";
 
 vi.mock("@/lib/api", () => ({
   analyzeDataset: vi.fn(),
   createCase: vi.fn(),
   fetchAlerts: vi.fn(),
+  fetchAnalysisExplanation: vi.fn(),
+  fetchAnalysisResult: vi.fn(),
   fetchAuditEvents: vi.fn(),
   fetchCases: vi.fn(),
   fetchCurrentOperator: vi.fn(),
@@ -50,6 +56,8 @@ vi.mock("@/lib/api", () => ({
 
 const mockedAnalyzeDataset = vi.mocked(analyzeDataset);
 const mockedFetchAlerts = vi.mocked(fetchAlerts);
+const mockedFetchAnalysisExplanation = vi.mocked(fetchAnalysisExplanation);
+const mockedFetchAnalysisResult = vi.mocked(fetchAnalysisResult);
 const mockedFetchAuditEvents = vi.mocked(fetchAuditEvents);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedFetchCurrentOperator = vi.mocked(fetchCurrentOperator);
@@ -68,6 +76,63 @@ const backendHealth: HealthResponse = {
   rate_limit_backend: "memory",
   seeded_scenarios: 3,
   seeded_operators: 2,
+};
+
+const workspaceGuide: WorkspaceGuide = {
+  primary_workflow_title: "Primary Workflow: Upload -> Analyze -> Alert -> Case",
+  primary_workflow_summary:
+    "The main product path starts with transaction data. Analysts upload a dataset, run deterministic analysis, review alerts, and open a case when the evidence warrants it.",
+  role_stories: [
+    {
+      story_id: "frontline-analyst",
+      persona_name: "Nadia",
+      title: "Frontline Fraud Analyst",
+      platform_role: "analyst",
+      goal: "Turn suspicious uploaded data into a triaged case quickly.",
+      workflow_steps: [
+        "Upload a transaction export.",
+        "Run deterministic analysis.",
+        "Open a case from the strongest findings.",
+      ],
+      success_signal: "A high-risk dataset becomes an alert-backed case in one pass.",
+      recommended_view: "analyze",
+    },
+    {
+      story_id: "queue-owner",
+      persona_name: "Marcus",
+      title: "Queue Owner Analyst",
+      platform_role: "analyst",
+      goal: "Keep the alert queue moving.",
+      workflow_steps: [
+        "Review new alerts.",
+        "Prioritize open cases.",
+        "Resolve false positives or escalate fraud.",
+      ],
+      success_signal: "New alerts do not sit unacknowledged.",
+      recommended_view: "alerts",
+    },
+    {
+      story_id: "platform-admin",
+      persona_name: "Priya",
+      title: "Platform Administrator",
+      platform_role: "admin",
+      goal: "Verify the workflow is healthy and auditable.",
+      workflow_steps: [
+        "Check throughput and queue pressure.",
+        "Inspect audit activity.",
+        "Confirm the platform is stable.",
+      ],
+      success_signal: "The platform stays trustworthy while analysts work the queue.",
+      recommended_view: "overview",
+    },
+  ],
+  scoring_guarantees: [
+    "Risk scores are deterministic.",
+    "Alert thresholds are deterministic.",
+    "Cases stay linked to persistent workflow records.",
+  ],
+  llm_positioning_note:
+    "The copilot layer explains deterministic results. It does not change risk scores, suppress alerts, or open cases on its own.",
 };
 
 const scenarios: ScenarioOverview[] = [
@@ -237,6 +302,36 @@ const datasetAnalysisResponse: AnalysisResponse = {
   },
 };
 
+const datasetAnalysisExplanation: AnalysisExplanationResponse = {
+  explanation: {
+    dataset_id: "dataset-1",
+    dataset_name: "march-transactions.csv",
+    audience: "admin",
+    headline: "march-transactions.csv is a high-priority review candidate at 68/100.",
+    narrative:
+      "The dataset was scored with deterministic analyzers only. Review the strongest anomaly evidence before opening or updating a case.",
+    deterministic_evidence: [
+      "Risk score: 68/100 from deterministic anomaly weights and density.",
+      "Total anomalies: 3 across 128 transactions.",
+    ],
+    recommended_actions: [
+      "Review the generated alerts before they fall behind the queue.",
+      "Open or update a case so the evidence trail stays attached to the dataset.",
+    ],
+    watchouts: [
+      "The explanation layer is advisory. Deterministic scoring remains the source of truth.",
+    ],
+    provider_summary: {
+      requested_provider: "deterministic",
+      active_provider: "deterministic",
+      source_of_truth: "deterministic-statistical-analysis",
+      notes: [
+        "This brief is generated from deterministic scoring outputs.",
+      ],
+    },
+  },
+};
+
 const refreshedAuditEvents: AuditEvent[] = [
   {
     event_id: 102,
@@ -360,6 +455,8 @@ describe("Dashboard", () => {
     window.localStorage.clear();
     mockedAnalyzeDataset.mockReset();
     mockedFetchAlerts.mockReset();
+    mockedFetchAnalysisExplanation.mockReset();
+    mockedFetchAnalysisResult.mockReset();
     mockedFetchAuditEvents.mockReset();
     mockedFetchCases.mockReset();
     mockedFetchCurrentOperator.mockReset();
@@ -386,25 +483,38 @@ describe("Dashboard", () => {
         total_datasets: 0,
         total_transactions_analyzed: 0,
         total_anomalies_found: 0,
+        completed_analyses: 0,
+        high_risk_analyses: 0,
+        workflow_stages: [],
+        next_recommended_action: "Upload a dataset to start the primary workflow.",
       },
     });
     mockedFetchCases.mockResolvedValue({ cases: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchAlerts.mockResolvedValue({ alerts: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
+    mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
+    mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
   });
 
   it("renders runtime posture and requires operator sign-in", () => {
-    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Relational Fraud Intelligence" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByText("Persistent alerts")).toBeInTheDocument();
+    expect(screen.getByText("Fraud triage starts with real transaction data.")).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toHaveValue("");
     expect(screen.getByLabelText("Password")).toHaveValue("");
     expect(screen.getByText("Local bootstrap operators")).toBeInTheDocument();
+    expect(screen.getByText("Role Stories")).toBeInTheDocument();
   });
 
   it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
@@ -414,7 +524,13 @@ describe("Dashboard", () => {
       .mockResolvedValueOnce(buildInvestigationResponse(scenarios[0]))
       .mockResolvedValueOnce(buildInvestigationResponse(scenarios[1]));
 
-    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
 
     fireEvent.change(screen.getByLabelText("Username"), {
       target: { value: "analyst" },
@@ -474,7 +590,13 @@ describe("Dashboard", () => {
     mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
     mockedFetchAuditEvents.mockResolvedValue({ events: auditEvents });
 
-    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
 
     fireEvent.change(screen.getByLabelText("Username"), {
       target: { value: "admin" },
@@ -521,12 +643,16 @@ describe("Dashboard", () => {
           cases_by_status: {},
           alerts_by_severity: {},
           recent_activity: [],
-          risk_distribution: {},
-          total_datasets: 1,
-          total_transactions_analyzed: 0,
-          total_anomalies_found: 0,
-        },
-      })
+        risk_distribution: {},
+        total_datasets: 1,
+        total_transactions_analyzed: 0,
+        total_anomalies_found: 0,
+        completed_analyses: 0,
+        high_risk_analyses: 0,
+        workflow_stages: [],
+        next_recommended_action: "Run analysis on newly uploaded datasets before the queue ages.",
+      },
+    })
       .mockResolvedValueOnce({
         stats: {
           total_scenarios: 3,
@@ -543,11 +669,55 @@ describe("Dashboard", () => {
           total_datasets: 1,
           total_transactions_analyzed: 128,
           total_anomalies_found: 3,
+          completed_analyses: 1,
+          high_risk_analyses: 1,
+          workflow_stages: [
+            {
+              stage_id: "upload",
+              title: "Upload",
+              description: "Datasets waiting to enter the deterministic workflow.",
+              total_count: 1,
+              highlighted_count: 0,
+              highlighted_label: "waiting for analysis",
+            },
+            {
+              stage_id: "analyze",
+              title: "Analyze",
+              description: "Completed deterministic analyses over uploaded transaction data.",
+              total_count: 1,
+              highlighted_count: 1,
+              highlighted_label: "high-risk analyses",
+            },
+            {
+              stage_id: "alert",
+              title: "Alert",
+              description: "Alerts created from deterministic findings and triage thresholds.",
+              total_count: 1,
+              highlighted_count: 1,
+              highlighted_label: "new alerts",
+            },
+            {
+              stage_id: "case",
+              title: "Case",
+              description: "Persistent investigations opened from alerts or dataset reviews.",
+              total_count: 0,
+              highlighted_count: 0,
+              highlighted_label: "open cases",
+            },
+          ],
+          next_recommended_action:
+            "Triage the new alert queue and link the highest-risk findings to cases.",
         },
       });
     mockedAnalyzeDataset.mockResolvedValue(datasetAnalysisResponse);
 
-    render(<Dashboard backendHealth={backendHealth} bootstrapError={null} />);
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
 
     fireEvent.change(screen.getByLabelText("Username"), {
       target: { value: "admin" },
@@ -561,12 +731,21 @@ describe("Dashboard", () => {
       expect(mockedFetchDatasets).toHaveBeenCalledWith("admin-token");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Analyze Data/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Run Fraud Analysis/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Analyze Data" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Run analysis" }));
 
     await waitFor(() => {
       expect(mockedAnalyzeDataset).toHaveBeenCalledWith("admin-token", "dataset-1");
       expect(screen.getByText("Dataset analysis generated a high-risk alert candidate.")).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(mockedFetchAnalysisExplanation).toHaveBeenCalledWith(
+        "admin-token",
+        "dataset-1",
+        "admin",
+      );
+      expect(screen.getByText("Copilot Brief")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Alerts/i }));

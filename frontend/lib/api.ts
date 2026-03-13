@@ -1,5 +1,6 @@
 import type {
   AnalysisResponse,
+  AnalysisExplanationResponse,
   AuditEventsResponse,
   CreateCaseResponse,
   CurrentOperatorResponse,
@@ -13,6 +14,7 @@ import type {
   ListCasesResponse,
   LoginResponse,
   ScenarioCatalogResponse,
+  WorkspaceGuideResponse,
 } from "@/lib/contracts";
 
 const browserApiBaseUrl =
@@ -56,6 +58,10 @@ async function fetchJson<T>(
 
 export async function fetchHealthServer(): Promise<HealthResponse> {
   return fetchJson<HealthResponse>(`${serverApiBaseUrl}/health`);
+}
+
+export async function fetchWorkspaceGuideServer(): Promise<WorkspaceGuideResponse> {
+  return fetchJson<WorkspaceGuideResponse>(`${serverApiBaseUrl}/workspace/guide`);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +261,29 @@ export async function analyzeDataset(token: string, datasetId: string): Promise<
   return fetchJson<AnalysisResponse>(
     `${browserApiBaseUrl}/datasets/${datasetId}/analyze`,
     { method: "POST" },
+    token,
+  );
+}
+
+export async function fetchAnalysisResult(
+  token: string,
+  datasetId: string,
+): Promise<AnalysisResponse> {
+  return fetchJson<AnalysisResponse>(
+    `${browserApiBaseUrl}/datasets/${datasetId}/analysis`,
+    undefined,
+    token,
+  );
+}
+
+export async function fetchAnalysisExplanation(
+  token: string,
+  datasetId: string,
+  audience: "analyst" | "admin",
+): Promise<AnalysisExplanationResponse> {
+  return fetchJson<AnalysisExplanationResponse>(
+    `${browserApiBaseUrl}/datasets/${datasetId}/explanation?audience=${audience}`,
+    undefined,
     token,
   );
 }

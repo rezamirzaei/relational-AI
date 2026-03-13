@@ -86,6 +86,15 @@ def test_dashboard_stats_reflect_real_workflow_activity(
     assert result.stats.total_cases == 1
     assert result.stats.total_alerts == 1
     assert result.stats.total_transactions_analyzed == 4
+    assert result.stats.completed_analyses == 1
+    assert result.stats.high_risk_analyses == int(analysis.risk_score >= 35)
     assert result.stats.avg_risk_score > 0
     assert result.stats.recent_activity
+    assert [stage.stage_id for stage in result.stats.workflow_stages] == [
+        "upload",
+        "analyze",
+        "alert",
+        "case",
+    ]
+    assert result.stats.next_recommended_action.startswith("Triage the new alert queue")
     assert any(event.event_type == "dataset-analyzed" for event in result.stats.recent_activity)

@@ -5,6 +5,7 @@ export type CaseStatus = "open" | "investigating" | "escalated" | "resolved" | "
 export type CasePriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "new" | "acknowledged" | "investigating" | "resolved" | "false-positive";
 export type CaseDisposition = "confirmed-fraud" | "false-positive" | "inconclusive" | "referred-to-law-enforcement";
+export type ExplanationAudience = "analyst" | "admin";
 
 export type ScenarioTag =
   | "fraud"
@@ -259,6 +260,41 @@ export type ActivityEvent = {
   resource_id: string | null;
 };
 
+export type WorkflowStageSnapshot = {
+  stage_id: string;
+  title: string;
+  description: string;
+  total_count: number;
+  highlighted_count: number;
+  highlighted_label: string;
+};
+
+export type RoleStory = {
+  story_id: string;
+  persona_name: string;
+  title: string;
+  platform_role: OperatorRole;
+  goal: string;
+  workflow_steps: string[];
+  success_signal: string;
+  recommended_view: string;
+};
+
+export type WorkspaceGuide = {
+  primary_workflow_title: string;
+  primary_workflow_summary: string;
+  role_stories: RoleStory[];
+  scoring_guarantees: string[];
+  llm_positioning_note: string;
+};
+
+export type ExplanationProviderSummary = {
+  requested_provider: string;
+  active_provider: string;
+  source_of_truth: string;
+  notes: string[];
+};
+
 export type DashboardStats = {
   total_scenarios: number;
   total_cases: number;
@@ -274,10 +310,18 @@ export type DashboardStats = {
   total_datasets: number;
   total_transactions_analyzed: number;
   total_anomalies_found: number;
+  completed_analyses: number;
+  high_risk_analyses: number;
+  workflow_stages: WorkflowStageSnapshot[];
+  next_recommended_action: string;
 };
 
 export type DashboardStatsResponse = {
   stats: DashboardStats;
+};
+
+export type WorkspaceGuideResponse = {
+  guide: WorkspaceGuide;
 };
 
 // ---------------------------------------------------------------------------
@@ -351,4 +395,20 @@ export type AnalysisResultData = {
 
 export type AnalysisResponse = {
   analysis: AnalysisResultData;
+};
+
+export type AnalysisExplanation = {
+  dataset_id: string;
+  dataset_name: string;
+  audience: ExplanationAudience;
+  headline: string;
+  narrative: string;
+  deterministic_evidence: string[];
+  recommended_actions: string[];
+  watchouts: string[];
+  provider_summary: ExplanationProviderSummary;
+};
+
+export type AnalysisExplanationResponse = {
+  explanation: AnalysisExplanation;
 };

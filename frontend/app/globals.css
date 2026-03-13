@@ -1005,3 +1005,366 @@ code {
   margin-top: 16px;
 }
 
+/* ---------------------------------------------------------------------------
+   Auth, Workflow, and Copilot Surfaces
+--------------------------------------------------------------------------- */
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, rgba(16, 37, 45, 0.94), rgba(51, 92, 122, 0.94));
+  box-shadow: 0 16px 28px rgba(16, 37, 45, 0.18);
+  color: #f9f4eb;
+}
+
+.primary-button:hover,
+.secondary-button:hover,
+.small-button:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.small-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+
+.secondary-button {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--ink-strong);
+}
+
+.auth-shell,
+.guide-panel,
+.dataset-rail,
+.analysis-detail-panel {
+  padding: 24px;
+}
+
+.auth-shell {
+  margin-bottom: 20px;
+}
+
+.auth-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.auth-field {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-field span {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.auth-field input {
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(16, 37, 45, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink-strong);
+  outline: none;
+}
+
+.auth-field input:focus {
+  border-color: rgba(51, 92, 122, 0.3);
+  box-shadow: 0 0 0 4px rgba(51, 92, 122, 0.08);
+}
+
+.auth-help {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(16, 37, 45, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.auth-help p {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+}
+
+.guide-grid,
+.workflow-strip,
+.analysis-summary-grid,
+.analysis-workspace-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.guide-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workflow-strip.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workflow-stage-card,
+.story-card,
+.dataset-card,
+.llm-note,
+.inset-card {
+  border: 1px solid rgba(16, 37, 45, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.workflow-stage-card {
+  padding: 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.workflow-stage-foot,
+.story-card-top,
+.story-card-foot,
+.overview-hero,
+.overview-hero-actions,
+.dataset-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.workflow-stage-foot {
+  margin-top: 14px;
+  color: var(--ink-soft);
+}
+
+.workflow-stage-foot strong {
+  font-size: 1.3rem;
+  color: var(--ink-strong);
+}
+
+.dashboard-view-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-hero {
+  align-items: flex-start;
+}
+
+.overview-hero h2 {
+  margin: 0;
+  font-family: var(--font-display-stack);
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+  line-height: 1.1;
+}
+
+.overview-hero-actions {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 320px;
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.story-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.story-card h3 {
+  margin: 0;
+  font-family: var(--font-display-stack);
+  font-size: 1.2rem;
+}
+
+.story-persona {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+
+.story-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.story-card-foot {
+  align-items: end;
+}
+
+.story-card-foot p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.action-item.compact {
+  padding: 12px 14px;
+}
+
+.action-item.compact p {
+  margin: 0;
+}
+
+.llm-note {
+  padding: 16px 18px;
+  background:
+    radial-gradient(circle at top right, rgba(47, 123, 100, 0.12), transparent 40%),
+    rgba(255, 251, 243, 0.96);
+}
+
+.llm-note strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.llm-note p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.58;
+}
+
+.llm-note.compact {
+  padding: 14px 16px;
+}
+
+.dataset-rail,
+.analysis-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.analysis-workspace-grid {
+  grid-template-columns: 380px minmax(0, 1fr);
+}
+
+.dataset-list {
+  display: grid;
+  gap: 14px;
+}
+
+.dataset-card {
+  padding: 16px;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dataset-card:hover,
+.dataset-card.selected {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 24px 36px rgba(16, 37, 45, 0.1);
+}
+
+.dataset-select {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dataset-card-actions {
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.analysis-summary-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  align-items: start;
+}
+
+.copilot-card {
+  display: grid;
+  gap: 16px;
+}
+
+.inset-card {
+  padding: 16px;
+  box-shadow: none;
+}
+
+.insight-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.benford-bar.critical {
+  background: var(--critical);
+}
+
+.benford-bar.neutral {
+  background: var(--good);
+}
+
+@media (max-width: 1180px) {
+  .guide-grid,
+  .workflow-strip,
+  .workflow-strip.compact,
+  .analysis-workspace-grid,
+  .analysis-summary-grid,
+  .insight-grid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .auth-shell,
+  .guide-panel,
+  .dataset-rail,
+  .analysis-detail-panel {
+    padding: 18px;
+  }
+
+  .overview-hero,
+  .story-card-foot,
+  .workflow-stage-foot,
+  .dataset-card-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .overview-hero-actions {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

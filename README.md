@@ -35,7 +35,7 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 - Delivery: Docker, Docker Compose, GitHub Actions, GHCR publishing
 - Quality: Ruff, mypy, pytest, coverage, pre-commit, frontend typecheck and tests
 
-## API surface (20 endpoints)
+## API surface (22 endpoints)
 
 | Category | Endpoints |
 |----------|-----------|
@@ -44,8 +44,8 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 | Investigations | `GET /scenarios`, `GET /scenarios/{id}`, `POST /investigations` |
 | Cases | `POST /cases`, `GET /cases`, `GET /cases/{id}`, `PATCH /cases/{id}/status`, `POST /cases/{id}/comments` |
 | Alerts | `GET /alerts`, `PATCH /alerts/{id}` |
-| Dashboard | `GET /dashboard/stats` |
-| Datasets | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets`, `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis` |
+| Dashboard | `GET /workspace/guide`, `GET /dashboard/stats` |
+| Datasets | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets`, `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis`, `GET /datasets/{id}/explanation` |
 | Admin | `GET /audit-events` |
 
 Interactive docs at `http://localhost:8001/docs` (Swagger) and `http://localhost:8001/redoc` (ReDoc).
@@ -121,9 +121,10 @@ This is the deterministic, test-friendly default.
 Set:
 
 - `RFI_TEXT_SIGNAL_PROVIDER=huggingface`
+- `RFI_EXPLANATION_PROVIDER=huggingface`
 - `RFI_HUGGINGFACE_API_TOKEN=...`
 
-The backend tries zero-shot classification first and falls back to keyword heuristics if the provider fails.
+The backend tries zero-shot classification for text signals and an instruct model for operator-facing analysis explanations. If the provider fails, the system falls back to deterministic explanations and keyword heuristics without changing scores, alerts, or case thresholds.
 
 ### RelationalAI mode
 
@@ -190,6 +191,7 @@ src/relational_fraud_intelligence/
   infrastructure/rate_limit/           Memory and Redis rate limit adapters
   infrastructure/reasoners/            Rule-based and RelationalAI-ready risk reasoning
   infrastructure/security/             Password hashing, JWTs, operator bootstrap
+  infrastructure/explanations/         Deterministic and Hugging Face explanation services
   infrastructure/text/                 Keyword, Hugging Face, and fallback text services
 frontend/
   app/                                 Next.js app router and global styles
@@ -203,4 +205,5 @@ tests/                                 Backend API, security, audit, and rate-li
 
 - The default fraud logic is deterministic and explainable.
 - Provider failures are surfaced to the UI through runtime notes instead of failing the whole investigation flow.
+- The copilot layer can explain an analysis, but it never decides risk scores, suppresses alerts, or opens cases.
 - The RelationalAI adapter remains isolated so deeper semantic modeling can replace or extend the local rules without changing API contracts.

@@ -91,6 +91,20 @@ def test_analyst_cannot_list_audit_events() -> None:
     assert response.status_code == 403
 
 
+def test_workspace_guide_exposes_primary_workflow_and_roles() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/workspace/guide")
+
+    assert response.status_code == 200
+    payload = response.json()["guide"]
+    assert (
+        payload["primary_workflow_title"] == "Primary Workflow: Upload -> Analyze -> Alert -> Case"
+    )
+    assert payload["role_stories"][0]["recommended_view"] == "analyze"
+    assert payload["role_stories"][2]["platform_role"] == "admin"
+    assert "does not change risk scores" in payload["llm_positioning_note"]
+
+
 def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
@@ -163,6 +177,43 @@ def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
         assert stats["total_datasets"] == 1
         assert stats["total_alerts"] >= 1
         assert stats["total_cases"] == 1
+
+
+def test_dataset_explanation_returns_deterministic_operator_brief() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        explanation_response = client.get(
+            f"/api/v1/datasets/{dataset_id}/explanation?audience=analyst",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert explanation_response.status_code == 200
+    payload = explanation_response.json()["explanation"]
+    assert payload["dataset_id"] == dataset_id
+    assert payload["provider_summary"]["requested_provider"] == "deterministic"
+    assert payload["provider_summary"]["source_of_truth"] == "deterministic-statistical-analysis"
+    assert payload["recommended_actions"]
+    assert any("source of truth" in item.lower() for item in payload["watchouts"])
 
 
 def authenticate(client: TestClient, *, username: str, password: str) -> str:
