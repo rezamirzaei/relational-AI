@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "@/components/dashboard";
 import {
   analyzeDataset,
+  createCaseFromAlert,
   fetchAlerts,
   fetchAnalysisExplanation,
   fetchAnalysisResult,
@@ -25,9 +26,11 @@ import {
 import type {
   AnalysisResponse,
   AnalysisExplanationResponse,
+  CreateCaseFromAlertResponse,
   DatasetListResponse,
   AuditEvent,
   ListAlertsResponse,
+  ListCasesResponse,
   HealthResponse,
   InvestigationResponse,
   LoginResponse,
@@ -39,6 +42,7 @@ import type {
 vi.mock("@/lib/api", () => ({
   analyzeDataset: vi.fn(),
   createCase: vi.fn(),
+  createCaseFromAlert: vi.fn(),
   fetchAlerts: vi.fn(),
   fetchAnalysisExplanation: vi.fn(),
   fetchAnalysisResult: vi.fn(),
@@ -52,9 +56,11 @@ vi.mock("@/lib/api", () => ({
   loginOperator: vi.fn(),
   updateAlertStatus: vi.fn(),
   updateCaseStatus: vi.fn(),
+  uploadDataset: vi.fn(),
 }));
 
 const mockedAnalyzeDataset = vi.mocked(analyzeDataset);
+const mockedCreateCaseFromAlert = vi.mocked(createCaseFromAlert);
 const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchAnalysisExplanation = vi.mocked(fetchAnalysisExplanation);
 const mockedFetchAnalysisResult = vi.mocked(fetchAnalysisResult);
@@ -264,6 +270,52 @@ const generatedAlertList: ListAlertsResponse = {
   page_size: 20,
 };
 
+const linkedAlertList: ListAlertsResponse = {
+  alerts: [
+    {
+      ...generatedAlertList.alerts[0],
+      status: "investigating",
+      linked_case_id: "case-from-alert-1",
+    },
+  ],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
+const caseFromAlertResponse: CreateCaseFromAlertResponse = {
+  alert: linkedAlertList.alerts[0],
+  case: {
+    case_id: "case-from-alert-1",
+    source_type: "dataset",
+    source_id: "dataset-1",
+    scenario_id: null,
+    title: "Alert review: Velocity spike in dataset-1",
+    status: "open",
+    priority: "high",
+    assigned_analyst_id: null,
+    assigned_analyst_name: null,
+    risk_score: 68,
+    risk_level: "high",
+    summary: "Dataset analysis generated a high-risk alert candidate.",
+    disposition: null,
+    resolution_notes: null,
+    created_at: "2026-03-12T14:07:00",
+    updated_at: "2026-03-12T14:07:00",
+    resolved_at: null,
+    sla_deadline: "2026-03-13T14:07:00",
+    comment_count: 0,
+    alert_count: 0,
+  },
+};
+
+const caseFromAlertList: ListCasesResponse = {
+  cases: [caseFromAlertResponse.case],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
 const datasetAnalysisResponse: AnalysisResponse = {
   analysis: {
     analysis_id: "analysis-1",
@@ -464,6 +516,7 @@ describe("Dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockedAnalyzeDataset.mockReset();
+    mockedCreateCaseFromAlert.mockReset();
     mockedFetchAlerts.mockReset();
     mockedFetchAnalysisExplanation.mockReset();
     mockedFetchAnalysisResult.mockReset();
@@ -504,6 +557,7 @@ describe("Dashboard", () => {
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
     mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
     mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
+    mockedCreateCaseFromAlert.mockResolvedValue(caseFromAlertResponse);
   });
 
   it("renders runtime posture and requires operator sign-in", () => {
@@ -653,16 +707,17 @@ describe("Dashboard", () => {
           cases_by_status: {},
           alerts_by_severity: {},
           recent_activity: [],
-        risk_distribution: {},
-        total_datasets: 1,
-        total_transactions_analyzed: 0,
-        total_anomalies_found: 0,
-        completed_analyses: 0,
-        high_risk_analyses: 0,
-        workflow_stages: [],
-        next_recommended_action: "Run analysis on newly uploaded datasets before the queue ages.",
-      },
-    })
+          risk_distribution: {},
+          total_datasets: 1,
+          total_transactions_analyzed: 0,
+          total_anomalies_found: 0,
+          completed_analyses: 0,
+          high_risk_analyses: 0,
+          workflow_stages: [],
+          next_recommended_action:
+            "Run analysis on newly uploaded datasets before the queue ages.",
+        },
+      })
       .mockResolvedValueOnce({
         stats: {
           total_scenarios: 3,
@@ -769,6 +824,136 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(mockedFetchAuditEvents).toHaveBeenCalledTimes(2);
       expect(screen.getByText("analyze-dataset")).toBeInTheDocument();
+    });
+  });
+
+  it("creates a case directly from the alert queue", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchDatasets
+      .mockResolvedValueOnce(uploadedDatasetList)
+      .mockResolvedValueOnce(completedDatasetList);
+    mockedFetchAlerts
+      .mockResolvedValueOnce(initialAlertList)
+      .mockResolvedValueOnce(generatedAlertList)
+      .mockResolvedValueOnce(linkedAlertList);
+    mockedFetchCases
+      .mockResolvedValueOnce({ cases: [], total_count: 0, page: 1, page_size: 20 })
+      .mockResolvedValueOnce(caseFromAlertList);
+    mockedFetchDashboardStats
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 0,
+          open_cases: 0,
+          critical_cases: 0,
+          total_alerts: 0,
+          unacknowledged_alerts: 0,
+          avg_risk_score: 0,
+          cases_by_status: {},
+          alerts_by_severity: {},
+          recent_activity: [],
+          risk_distribution: {},
+          total_datasets: 1,
+          total_transactions_analyzed: 0,
+          total_anomalies_found: 0,
+          completed_analyses: 0,
+          high_risk_analyses: 0,
+          workflow_stages: [],
+          next_recommended_action:
+            "Run analysis on newly uploaded datasets before the queue ages.",
+        },
+      })
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 0,
+          open_cases: 0,
+          critical_cases: 0,
+          total_alerts: 1,
+          unacknowledged_alerts: 1,
+          avg_risk_score: 68,
+          cases_by_status: {},
+          alerts_by_severity: { high: 1 },
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 1,
+          total_transactions_analyzed: 128,
+          total_anomalies_found: 3,
+          completed_analyses: 1,
+          high_risk_analyses: 1,
+          workflow_stages: [],
+          next_recommended_action:
+            "Triage the new alert queue and link the highest-risk findings to cases.",
+        },
+      })
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 1,
+          open_cases: 1,
+          critical_cases: 0,
+          total_alerts: 1,
+          unacknowledged_alerts: 0,
+          avg_risk_score: 68,
+          cases_by_status: { open: 1 },
+          alerts_by_severity: { high: 1 },
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 1,
+          total_transactions_analyzed: 128,
+          total_anomalies_found: 3,
+          completed_analyses: 1,
+          high_risk_analyses: 1,
+          workflow_stages: [],
+          next_recommended_action:
+            "Work the open case and close the linked alert with a documented disposition.",
+        },
+      });
+    mockedAnalyzeDataset.mockResolvedValue(datasetAnalysisResponse);
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(mockedFetchDatasets).toHaveBeenCalledWith("analyst-token");
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Analyze Data" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Run analysis" }));
+
+    await waitFor(() => {
+      expect(mockedAnalyzeDataset).toHaveBeenCalledWith("analyst-token", "dataset-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Alerts/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Velocity spike in dataset-1")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+
+    await waitFor(() => {
+      expect(mockedCreateCaseFromAlert).toHaveBeenCalledWith("analyst-token", "alert-1");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
+      expect(screen.getByText("Dataset dataset-1")).toBeInTheDocument();
     });
   });
 });

@@ -258,6 +258,11 @@ export type ListAlertsResponse = {
   page_size: number;
 };
 
+export type CreateCaseFromAlertResponse = {
+  alert: FraudAlert;
+  case: FraudCase;
+};
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------

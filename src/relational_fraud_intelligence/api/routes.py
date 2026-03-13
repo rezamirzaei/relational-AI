@@ -8,6 +8,7 @@ from relational_fraud_intelligence.api.dependencies import (
     require_roles,
 )
 from relational_fraud_intelligence.application.dto.alerts import (
+    GetAlertQuery,
     ListAlertsQuery,
     ListAlertsResult,
     UpdateAlertStatusCommand,
@@ -59,6 +60,8 @@ from relational_fraud_intelligence.domain.models import (
     CasePriority,
     CaseStatus,
     ExplanationAudience,
+    FraudAlert,
+    FraudCase,
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
@@ -485,6 +488,16 @@ def add_case_comment(
 # ---------------------------------------------------------------------------
 
 
+class CreateCaseFromAlertResult(AppModel):
+    alert: FraudAlert
+    case: FraudCase
+
+
+# ---------------------------------------------------------------------------
+# Alerts
+# ---------------------------------------------------------------------------
+
+
 @router.get(
     "/alerts",
     response_model=ListAlertsResult,
@@ -537,6 +550,54 @@ def update_alert_status(
                 linked_case_id=command.linked_case_id,
             )
         )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/alerts/{alert_id}/case",
+    response_model=CreateCaseFromAlertResult,
+    tags=["Alerts"],
+    summary="Create a case from an alert",
+    description=(
+        "Creates a persistent fraud case from an alert and links the alert to "
+        "that case in a single workflow step."
+    ),
+)
+def create_case_from_alert(
+    alert_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> CreateCaseFromAlertResult:
+    request.state.current_principal = principal
+    request.state.audit_action = "create-case-from-alert"
+    request.state.audit_resource_type = "fraud-alert"
+    request.state.audit_resource_id = alert_id
+    try:
+        alert = container.alert_service.get_alert(GetAlertQuery(alert_id=alert_id)).alert
+        if alert.linked_case_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Alert '{alert_id}' is already linked to case '{alert.linked_case_id}'.",
+            )
+        if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Alert '{alert_id}' is already closed and cannot open a case.",
+            )
+
+        case_command = _build_case_command_from_alert(alert, container)
+        _validate_case_source(case_command, container)
+        created_case = container.case_service.create_case(case_command).case
+        updated_alert = container.alert_service.update_status(
+            UpdateAlertStatusCommand(
+                alert_id=alert.alert_id,
+                status=AlertStatus.INVESTIGATING,
+                linked_case_id=created_case.case_id,
+            )
+        ).alert
+        return CreateCaseFromAlertResult(alert=updated_alert, case=created_case)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -822,3 +883,49 @@ def _validate_case_source(
     container.scenario_catalog_service.get_scenario(
         GetScenarioQuery(scenario_id=command.source_id or "")
     )
+
+
+def _build_case_command_from_alert(
+    alert: FraudAlert,
+    container: ApplicationContainer,
+) -> CreateCaseCommand:
+    risk_level = alert.severity
+    risk_score = _risk_score_from_severity(risk_level)
+    summary = alert.narrative
+
+    if alert.source_type == WorkflowSourceType.DATASET:
+        try:
+            analysis = container.dataset_service.get_result(alert.source_id)
+            risk_score = analysis.risk_score
+            summary = analysis.summary
+        except LookupError:
+            pass
+
+    return CreateCaseCommand(
+        source_type=alert.source_type,
+        source_id=alert.source_id,
+        scenario_id=alert.scenario_id,
+        title=f"Alert review: {alert.title}",
+        summary=summary,
+        priority=_priority_from_risk_level(risk_level),
+        risk_score=risk_score,
+        risk_level=risk_level,
+    )
+
+
+def _priority_from_risk_level(risk_level: RiskLevel) -> CasePriority:
+    return {
+        RiskLevel.LOW: CasePriority.LOW,
+        RiskLevel.MEDIUM: CasePriority.MEDIUM,
+        RiskLevel.HIGH: CasePriority.HIGH,
+        RiskLevel.CRITICAL: CasePriority.CRITICAL,
+    }[risk_level]
+
+
+def _risk_score_from_severity(risk_level: RiskLevel) -> int:
+    return {
+        RiskLevel.LOW: 20,
+        RiskLevel.MEDIUM: 45,
+        RiskLevel.HIGH: 70,
+        RiskLevel.CRITICAL: 90,
+    }[risk_level]

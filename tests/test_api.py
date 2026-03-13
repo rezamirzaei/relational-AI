@@ -201,6 +201,82 @@ def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
         assert stats["total_cases"] == 1
 
 
+def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        alerts_response = client.get(
+            "/api/v1/alerts",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert alerts_response.status_code == 200
+        alert = next(
+            item
+            for item in alerts_response.json()["alerts"]
+            if item["source_type"] == "dataset" and item["source_id"] == dataset_id
+        )
+
+        create_case_response = client.post(
+            f"/api/v1/alerts/{alert['alert_id']}/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert create_case_response.status_code == 200
+        payload = create_case_response.json()
+        assert payload["case"]["source_type"] == "dataset"
+        assert payload["case"]["source_id"] == dataset_id
+        assert payload["case"]["title"] == f"Alert review: {alert['title']}"
+        assert payload["alert"]["status"] == "investigating"
+        assert payload["alert"]["linked_case_id"] == payload["case"]["case_id"]
+
+        list_cases_response = client.get(
+            "/api/v1/cases",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert list_cases_response.status_code == 200
+        assert any(
+            case["case_id"] == payload["case"]["case_id"]
+            for case in list_cases_response.json()["cases"]
+        )
+
+        list_alerts_response = client.get(
+            "/api/v1/alerts",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert list_alerts_response.status_code == 200
+        linked_alert = next(
+            item
+            for item in list_alerts_response.json()["alerts"]
+            if item["alert_id"] == alert["alert_id"]
+        )
+        assert linked_alert["linked_case_id"] == payload["case"]["case_id"]
+
+        duplicate_response = client.post(
+            f"/api/v1/alerts/{alert['alert_id']}/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert duplicate_response.status_code == 409
+        assert payload["case"]["case_id"] in duplicate_response.json()["detail"]
+
+
 def test_dataset_explanation_returns_deterministic_operator_brief() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"

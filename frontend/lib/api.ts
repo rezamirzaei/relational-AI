@@ -2,6 +2,7 @@ import type {
   AnalysisResponse,
   AnalysisExplanationResponse,
   AuditEventsResponse,
+  CreateCaseFromAlertResponse,
   CreateCaseResponse,
   CurrentOperatorResponse,
   DashboardStatsResponse,
@@ -202,6 +203,17 @@ export async function updateAlertStatus(
     method: "PATCH",
     body: JSON.stringify(params),
   }, token);
+}
+
+export async function createCaseFromAlert(
+  token: string,
+  alertId: string,
+): Promise<CreateCaseFromAlertResponse> {
+  return fetchJson<CreateCaseFromAlertResponse>(
+    `${browserApiBaseUrl}/alerts/${alertId}/case`,
+    { method: "POST" },
+    token,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import {
 } from "@/components/dashboard-sections";
 import {
   analyzeDataset,
+  createCaseFromAlert,
   createCase,
   fetchAlerts,
   fetchAnalysisExplanation,
@@ -376,6 +377,22 @@ export function Dashboard({
       await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
     } catch {
       // Inline analyst action, no modal path needed.
+    }
+  }
+
+  async function handleCreateCaseFromAlert(alertId: string) {
+    if (!authToken) return;
+    try {
+      await createCaseFromAlert(authToken, alertId);
+      await refreshWorkspaceSlices(authToken, {
+        alerts: true,
+        audit: true,
+        cases: true,
+        stats: true,
+      });
+      setActiveView("cases");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
     }
   }
 
@@ -1277,6 +1294,7 @@ export function Dashboard({
               alerts={alerts}
               dateFormatter={dateFormatter}
               onAcknowledgeAlert={handleAcknowledgeAlert}
+              onCreateCaseFromAlert={handleCreateCaseFromAlert}
             />
           )}
 

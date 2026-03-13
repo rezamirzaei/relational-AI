@@ -76,6 +76,7 @@ type AlertsSectionProps = {
   alerts: FraudAlert[];
   dateFormatter: Intl.DateTimeFormat;
   onAcknowledgeAlert: (alertId: string) => void;
+  onCreateCaseFromAlert: (alertId: string) => void;
 };
 
 type AuditSectionProps = {
@@ -651,6 +652,7 @@ export function AlertsSection({
   alerts,
   dateFormatter,
   onAcknowledgeAlert,
+  onCreateCaseFromAlert,
 }: AlertsSectionProps) {
   return (
     <section className="surface" style={{ padding: 24 }}>
@@ -680,6 +682,18 @@ export function AlertsSection({
                     : `Scenario ${alert.source_id}`}
                 </span>
                 <span>{dateFormatter.format(new Date(alert.created_at))}</span>
+                {alert.linked_case_id ? <span>Case {alert.linked_case_id}</span> : null}
+                {!alert.linked_case_id &&
+                alert.status !== "resolved" &&
+                alert.status !== "false-positive" ? (
+                  <button
+                    className="small-button"
+                    onClick={() => onCreateCaseFromAlert(alert.alert_id)}
+                    type="button"
+                  >
+                    Create case
+                  </button>
+                ) : null}
                 {alert.status === "new" ? (
                   <button
                     className="small-button"
