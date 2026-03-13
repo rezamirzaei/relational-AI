@@ -127,7 +127,7 @@ def _analyze_basic(scenario: FraudScenario) -> GraphAnalysisResult:
 
 def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
     """Enhanced graph analysis using networkx."""
-    import networkx as nx  # type: ignore[import-untyped]
+    import networkx as nx
 
     G = nx.Graph()
 
@@ -226,9 +226,9 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
     customer_nodes = [n for n in G.nodes() if n.startswith("customer:")]
     if len(customer_nodes) >= 2:
         try:
-            shortest_path_length = int(nx.shortest_path_length(
-                G, customer_nodes[0], customer_nodes[-1]
-            ))
+            shortest_path_length = int(
+                nx.shortest_path_length(G, customer_nodes[0], customer_nodes[-1])
+            )
         except nx.NetworkXNoPath:
             pass
 

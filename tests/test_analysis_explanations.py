@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from relational_fraud_intelligence.domain.models import (
+    AnalysisExplanation,
     AnalysisResult,
     AnomalyFlag,
     AnomalyType,
@@ -45,7 +46,14 @@ def test_fallback_explanation_service_annotates_primary_failure() -> None:
     deterministic = DeterministicAnalysisExplanationService()
 
     class BrokenExplanationService:
-        def explain(self, **_: object) -> object:
+        def explain(
+            self,
+            *,
+            dataset: Dataset,
+            analysis: AnalysisResult,
+            audience: ExplanationAudience,
+        ) -> AnalysisExplanation:
+            _ = (dataset, analysis, audience)
             raise RuntimeError("provider unavailable")
 
     service = FallbackAnalysisExplanationService(

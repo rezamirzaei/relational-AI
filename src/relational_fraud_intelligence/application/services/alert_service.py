@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -89,7 +90,7 @@ class AlertService:
         self,
         scenario_id: str,
         risk_score: int,
-        rule_hits: list[dict[str, object]],
+        rule_hits: Sequence[Mapping[str, object]],
     ) -> list[FraudAlert]:
         """Auto-generate alerts when risk score crosses thresholds."""
         return self.generate_alerts_from_findings(
@@ -104,7 +105,7 @@ class AlertService:
         self,
         dataset_id: str,
         risk_score: int,
-        findings: list[dict[str, object]],
+        findings: Sequence[Mapping[str, object]],
     ) -> list[FraudAlert]:
         return self.generate_alerts_from_findings(
             source_type=WorkflowSourceType.DATASET,
@@ -121,7 +122,7 @@ class AlertService:
         source_id: str,
         scenario_id: str | None,
         risk_score: int,
-        findings: list[dict[str, object]],
+        findings: Sequence[Mapping[str, object]],
     ) -> list[FraudAlert]:
         """Auto-generate alerts when risk score crosses thresholds."""
         generated: list[FraudAlert] = []

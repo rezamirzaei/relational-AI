@@ -15,9 +15,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseStatus,
     FraudAlert,
     FraudCase,
-    OperatorRole,
 )
-
 
 # ---------------------------------------------------------------------------
 # Health
@@ -99,11 +97,6 @@ class DatasetListResponse(AppModel):
     datasets: list[DatasetResponse]
 
 
-class AnalysisResultResponse(AppModel):
-    analysis: dict[str, object]
-
-
 class TransactionIngestBody(AppModel):
     name: str = "api-ingestion"
     transactions: list[dict[str, object]]
-

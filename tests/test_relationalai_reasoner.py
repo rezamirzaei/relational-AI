@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 from relational_fraud_intelligence.application.dto.investigation import (
     ReasonAboutRiskCommand,
     ReasonAboutRiskResult,
@@ -29,10 +31,11 @@ from relational_fraud_intelligence.domain.models import (
 )
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
     GraphInsight,
+    RelationalAIProjection,
     RelationalAIRiskReasoner,
     _score_to_level,
 )
-
+from relational_fraud_intelligence.settings import AppSettings
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -107,29 +110,24 @@ def _make_base_result(score: int = 40) -> ReasonAboutRiskResult:
     )
 
 
-def _build_reasoner() -> tuple[RelationalAIRiskReasoner, MagicMock]:
-    """Build a reasoner whose _project_scenario is mocked out (avoids relationalai SDK)."""
-    from relational_fraud_intelligence.settings import AppSettings
+class _StubProjectionReasoner(RelationalAIRiskReasoner):
+    def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
+        _ = command
+        return RelationalAIProjection(
+            projected_row_count=10,
+            projected_table_names=["transactions", "devices"],
+        )
 
+
+def _build_reasoner() -> tuple[RelationalAIRiskReasoner, MagicMock]:
+    """Build a reasoner with a deterministic projection stub."""
     settings = AppSettings(
         database_url="sqlite:///:memory:",
         jwt_secret="test-secret-key-for-unit-tests-0001",
         reasoning_provider="relationalai",
     )
     local_reasoner = MagicMock()
-    reasoner = RelationalAIRiskReasoner(settings, local_reasoner)
-
-    # Mock out _project_scenario to avoid needing the relationalai SDK
-    from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
-        RelationalAIProjection,
-    )
-
-    reasoner._project_scenario = MagicMock(
-        return_value=RelationalAIProjection(
-            projected_row_count=10,
-            projected_table_names=["transactions", "devices"],
-        )
-    )
+    reasoner = _StubProjectionReasoner(settings, local_reasoner)
     return reasoner, local_reasoner
 
 
@@ -522,17 +520,19 @@ class TestReasonIntegration:
         # Score should never exceed 100
         assert result.total_risk_score <= 100
 
-    def test_risk_level_elevation_noted_in_summary(self) -> None:
+    def test_risk_level_elevation_noted_in_summary(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         reasoner, local = _build_reasoner()
         # Start at HIGH (score 60), graph bonus could push to CRITICAL (80+)
         base = _make_base_result(score=70)
         local.reason.return_value = base
 
-        # We'll directly test by injecting insights via _run_graph_analysis
-        original_run = reasoner._run_graph_analysis
-        reasoner._run_graph_analysis = lambda cmd: [
-            GraphInsight(category="circular-flow", description="Test cycle", risk_bonus=15),
-        ]
+        def fake_run_graph_analysis(_command: ReasonAboutRiskCommand) -> list[GraphInsight]:
+            return [GraphInsight(category="circular-flow", description="Test cycle", risk_bonus=15)]
+
+        monkeypatch.setattr(reasoner, "_run_graph_analysis", fake_run_graph_analysis)
 
         cmd = ReasonAboutRiskCommand(
             scenario=_make_scenario(
@@ -546,9 +546,6 @@ class TestReasonIntegration:
         assert result.risk_level == RiskLevel.CRITICAL
         assert "elevated the risk level" in result.summary
 
-        # Restore
-        reasoner._run_graph_analysis = original_run
-
 
 class TestRunGraphAnalysis:
     def test_returns_empty_for_no_transactions(self) -> None:
@@ -560,32 +557,38 @@ class TestRunGraphAnalysis:
         insights = reasoner._run_graph_analysis(cmd)
         assert insights == []
 
-    def test_runs_all_four_queries(self) -> None:
+    def test_runs_all_four_queries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Ensure the orchestrator calls all four analysis methods."""
         reasoner, _ = _build_reasoner()
 
         called = {"circular": False, "hub": False, "community": False, "mule": False}
 
-        def mock_circular(_g):
+        def mock_circular(_graph: object) -> list[GraphInsight]:
             called["circular"] = True
             return []
 
-        def mock_hub(_g):
+        def mock_hub(_graph: object) -> list[GraphInsight]:
             called["hub"] = True
             return []
 
-        def mock_community(_g, _c):
+        def mock_community(
+            _graph: object,
+            _command: ReasonAboutRiskCommand,
+        ) -> list[GraphInsight]:
             called["community"] = True
             return []
 
-        def mock_mule(_g, _c):
+        def mock_mule(
+            _graph: object,
+            _command: ReasonAboutRiskCommand,
+        ) -> list[GraphInsight]:
             called["mule"] = True
             return []
 
-        reasoner._detect_circular_flows = staticmethod(mock_circular)
-        reasoner._detect_hub_entities = staticmethod(mock_hub)
-        reasoner._detect_suspicious_communities = staticmethod(mock_community)
-        reasoner._detect_money_mule_paths = staticmethod(mock_mule)
+        monkeypatch.setattr(reasoner, "_detect_circular_flows", mock_circular)
+        monkeypatch.setattr(reasoner, "_detect_hub_entities", mock_hub)
+        monkeypatch.setattr(reasoner, "_detect_suspicious_communities", mock_community)
+        monkeypatch.setattr(reasoner, "_detect_money_mule_paths", mock_mule)
 
         cmd = ReasonAboutRiskCommand(
             scenario=_make_scenario(
@@ -596,7 +599,3 @@ class TestRunGraphAnalysis:
         reasoner._run_graph_analysis(cmd)
 
         assert all(called.values()), f"Not all queries were called: {called}"
-
-
-
-

@@ -3,6 +3,12 @@ from __future__ import annotations
 from relational_fraud_intelligence.application.dto.alerts import CreateAlertCommand
 from relational_fraud_intelligence.application.dto.cases import CreateCaseCommand
 from relational_fraud_intelligence.application.dto.dashboard import GetDashboardStatsQuery
+from relational_fraud_intelligence.application.ports.repositories import (
+    AlertRepository,
+    CaseRepository,
+    DatasetStore,
+    ScenarioRepository,
+)
 from relational_fraud_intelligence.application.services.alert_service import AlertService
 from relational_fraud_intelligence.application.services.case_service import CaseService
 from relational_fraud_intelligence.application.services.dashboard_service import DashboardService
@@ -11,10 +17,10 @@ from relational_fraud_intelligence.domain.models import RiskLevel, WorkflowSourc
 
 
 def test_dashboard_stats_reflect_real_workflow_activity(
-    scenario_repository: object,
-    case_repository: object,
-    alert_repository: object,
-    dataset_store: object,
+    scenario_repository: ScenarioRepository,
+    case_repository: CaseRepository,
+    alert_repository: AlertRepository,
+    dataset_store: DatasetStore,
 ) -> None:
     case_service = CaseService(case_repository)
     alert_service = AlertService(alert_repository)

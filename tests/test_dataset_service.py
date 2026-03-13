@@ -8,14 +8,14 @@ import pytest
 
 from relational_fraud_intelligence.application.services.dataset_service import (
     DatasetService,
-    DatasetStore,
+    InMemoryDatasetStore,
 )
 from relational_fraud_intelligence.domain.models import DatasetStatus, RiskLevel
 
 
 @pytest.fixture()
 def service() -> DatasetService:
-    return DatasetService(DatasetStore())
+    return DatasetService(InMemoryDatasetStore())
 
 
 VALID_CSV = textwrap.dedent("""\

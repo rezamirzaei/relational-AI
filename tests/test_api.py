@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from relational_fraud_intelligence.app import create_app
@@ -20,7 +21,7 @@ def test_health_reports_database_and_rate_limit_ready() -> None:
 
 
 def test_health_reports_provider_fallback_when_huggingface_is_requested_without_token(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RFI_TEXT_SIGNAL_PROVIDER", "huggingface")
     monkeypatch.setenv("RFI_EXPLANATION_PROVIDER", "huggingface")
@@ -233,8 +234,7 @@ def test_case_status_update_uses_path_case_id() -> None:
     assert payload["status"] == "resolved"
     assert payload["disposition"] == "confirmed-fraud"
     assert (
-        payload["resolution_notes"]
-        == "Resolved from the queue without requiring a body case_id."
+        payload["resolution_notes"] == "Resolved from the queue without requiring a body case_id."
     )
     assert payload["resolved_at"] is not None
 

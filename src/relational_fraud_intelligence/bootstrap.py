@@ -195,8 +195,7 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
             text_signal_service = keyword_service
             active_text_signal_provider = "keyword"
             provider_startup_notes.append(
-                "Text signal provider requested Hugging Face but started in "
-                f"keyword mode: {exc}"
+                f"Text signal provider requested Hugging Face but started in keyword mode: {exc}"
             )
     else:
         text_signal_service = keyword_service

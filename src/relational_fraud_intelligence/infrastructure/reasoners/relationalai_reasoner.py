@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from importlib import import_module
 
 import networkx as nx
-
 from pydantic import BaseModel
 
 from relational_fraud_intelligence.application.dto.investigation import (
@@ -28,7 +27,6 @@ from relational_fraud_intelligence.application.dto.investigation import (
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
 from relational_fraud_intelligence.domain.models import RiskLevel
 from relational_fraud_intelligence.settings import AppSettings
-
 
 # ---------------------------------------------------------------------------
 # Value objects
@@ -209,7 +207,7 @@ class RelationalAIRiskReasoner:
 
         # Score by cycle length and total money flowing through
         for cycle in meaningful_cycles[:3]:  # report top 3 cycles
-            cycle_edges = list(zip(cycle, cycle[1:])) + [(cycle[-1], cycle[0])]
+            cycle_edges = list(zip(cycle, cycle[1:], strict=False)) + [(cycle[-1], cycle[0])]
             total_flow = sum(
                 money_flow.edges[e].get("weight", 0.0)
                 for e in cycle_edges
@@ -492,4 +490,3 @@ def _score_to_level(total_risk_score: int) -> RiskLevel:
     if total_risk_score >= 35:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
-

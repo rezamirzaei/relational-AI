@@ -28,7 +28,9 @@ from relational_fraud_intelligence.infrastructure.analysis.round_amounts import 
 from relational_fraud_intelligence.infrastructure.analysis.velocity import detect_velocity_spikes
 
 if TYPE_CHECKING:
-    from relational_fraud_intelligence.application.ports.repositories import DatasetStore
+    from relational_fraud_intelligence.application.ports.repositories import (
+        DatasetStore as DatasetStorePort,
+    )
 
 
 class InMemoryDatasetStore:
@@ -70,10 +72,6 @@ class InMemoryDatasetStore:
         return sum(r.total_anomalies for r in self._results.values())
 
 
-# Backwards compatibility alias
-DatasetStore = InMemoryDatasetStore
-
-
 # Required and optional CSV column names
 REQUIRED_COLUMNS = {"transaction_id", "account_id", "amount", "timestamp"}
 OPTIONAL_COLUMNS = {
@@ -104,7 +102,7 @@ def _parse_timestamp(value: str) -> datetime:
 
 
 class DatasetService:
-    def __init__(self, store: DatasetStore) -> None:
+    def __init__(self, store: DatasetStorePort) -> None:
         self._store = store
 
     def upload_csv(self, filename: str, content: str | bytes) -> Dataset:

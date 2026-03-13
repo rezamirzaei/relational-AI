@@ -23,6 +23,9 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
 
+      - name: Run backend type checks
+        run: python -m mypy src tests
+
       - name: Apply database migrations
         env:
           RFI_DATABASE_URL: sqlite+pysqlite:///./data/ci.db

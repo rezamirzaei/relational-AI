@@ -37,8 +37,7 @@ class WorkspaceGuideService:
                         "Resolve false positives or escalate confirmed fraud findings.",
                     ],
                     success_signal=(
-                        "New alerts do not sit unacknowledged and high-risk cases "
-                        "move forward."
+                        "New alerts do not sit unacknowledged and high-risk cases move forward."
                     ),
                     recommended_view="alerts",
                 ),

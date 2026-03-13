@@ -7,6 +7,11 @@ from relational_fraud_intelligence.application.dto.cases import (
     GetCaseQuery,
     ListCasesQuery,
 )
+from relational_fraud_intelligence.application.ports.repositories import (
+    AlertRepository,
+    CaseRepository,
+    DatasetStore,
+)
 from relational_fraud_intelligence.application.services.alert_service import AlertService
 from relational_fraud_intelligence.application.services.case_service import CaseService
 from relational_fraud_intelligence.application.services.dataset_service import DatasetService
@@ -18,7 +23,7 @@ from relational_fraud_intelligence.domain.models import (
 )
 
 
-def test_sql_case_repository_persists_cases_and_comments(case_repository: object) -> None:
+def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRepository) -> None:
     service = CaseService(case_repository)
     created = service.create_case(
         CreateCaseCommand(
@@ -46,7 +51,7 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: object
     assert listed.cases[0].source_id == "dataset-42"
 
 
-def test_sql_alert_repository_filters_by_source(alert_repository: object) -> None:
+def test_sql_alert_repository_filters_by_source(alert_repository: AlertRepository) -> None:
     service = AlertService(alert_repository)
     created = service.create_alert(
         CreateAlertCommand(
@@ -66,7 +71,7 @@ def test_sql_alert_repository_filters_by_source(alert_repository: object) -> Non
     assert listed.alerts[0].alert_id == created.alert.alert_id
 
 
-def test_sql_dataset_store_persists_analysis_results(dataset_store: object) -> None:
+def test_sql_dataset_store_persists_analysis_results(dataset_store: DatasetStore) -> None:
     service = DatasetService(dataset_store)
     dataset = service.ingest_transactions(
         "api-upload",

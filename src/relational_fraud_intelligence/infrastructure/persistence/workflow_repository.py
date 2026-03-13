@@ -84,9 +84,7 @@ class SqlAlchemyCaseRepository:
 
             offset = (page - 1) * page_size
             records = session.scalars(
-                query.order_by(FraudCaseRecord.updated_at.desc())
-                .offset(offset)
-                .limit(page_size)
+                query.order_by(FraudCaseRecord.updated_at.desc()).offset(offset).limit(page_size)
             ).all()
 
         return [to_domain_case(record) for record in records], total
@@ -114,19 +112,21 @@ class SqlAlchemyCaseRepository:
     def count_by_status(self) -> dict[str, int]:
         with self._session_factory() as session:
             rows = session.execute(
-                select(FraudCaseRecord.status, func.count())
-                .group_by(FraudCaseRecord.status)
+                select(FraudCaseRecord.status, func.count()).group_by(FraudCaseRecord.status)
             ).all()
         return {status: count for status, count in rows}
 
     def count_critical(self) -> int:
         with self._session_factory() as session:
-            return session.scalar(
-                select(func.count())
-                .select_from(FraudCaseRecord)
-                .where(FraudCaseRecord.priority == CasePriority.CRITICAL)
-                .where(FraudCaseRecord.status.not_in([CaseStatus.RESOLVED, CaseStatus.CLOSED]))
-            ) or 0
+            return (
+                session.scalar(
+                    select(func.count())
+                    .select_from(FraudCaseRecord)
+                    .where(FraudCaseRecord.priority == CasePriority.CRITICAL)
+                    .where(FraudCaseRecord.status.not_in([CaseStatus.RESOLVED, CaseStatus.CLOSED]))
+                )
+                or 0
+            )
 
     @staticmethod
     def _base_query() -> Select[tuple[FraudCaseRecord]]:
@@ -176,9 +176,7 @@ class SqlAlchemyAlertRepository:
 
             offset = (page - 1) * page_size
             records = session.scalars(
-                query.order_by(FraudAlertRecord.created_at.desc())
-                .offset(offset)
-                .limit(page_size)
+                query.order_by(FraudAlertRecord.created_at.desc()).offset(offset).limit(page_size)
             ).all()
 
         return [to_domain_alert(record) for record in records], total
@@ -200,17 +198,19 @@ class SqlAlchemyAlertRepository:
 
     def count_unacknowledged(self) -> int:
         with self._session_factory() as session:
-            return session.scalar(
-                select(func.count())
-                .select_from(FraudAlertRecord)
-                .where(FraudAlertRecord.status == AlertStatus.NEW)
-            ) or 0
+            return (
+                session.scalar(
+                    select(func.count())
+                    .select_from(FraudAlertRecord)
+                    .where(FraudAlertRecord.status == AlertStatus.NEW)
+                )
+                or 0
+            )
 
     def count_by_severity(self) -> dict[str, int]:
         with self._session_factory() as session:
             rows = session.execute(
-                select(FraudAlertRecord.severity, func.count())
-                .group_by(FraudAlertRecord.severity)
+                select(FraudAlertRecord.severity, func.count()).group_by(FraudAlertRecord.severity)
             ).all()
         return {severity: count for severity, count in rows}
 
@@ -294,9 +294,7 @@ class SqlAlchemyDatasetStore:
 
     def total_transactions(self) -> int:
         with self._session_factory() as session:
-            return session.scalar(
-                select(func.coalesce(func.sum(DatasetRecord.row_count), 0))
-            ) or 0
+            return session.scalar(select(func.coalesce(func.sum(DatasetRecord.row_count), 0))) or 0
 
     def total_anomalies(self) -> int:
         return sum(result.total_anomalies for result in self.list_results())
