@@ -17,6 +17,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend ./
+RUN mkdir -p public
 RUN npm run build
 
 FROM node:22-alpine AS runner
