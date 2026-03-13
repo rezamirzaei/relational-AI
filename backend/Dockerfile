@@ -7,7 +7,7 @@ ENV RFI_PROJECT_ROOT=/app
 
 WORKDIR /app
 
-COPY pyproject.toml README.md alembic.ini ./
+COPY pyproject.toml README.md LICENSE alembic.ini ./
 COPY alembic ./alembic
 COPY src ./src
 
