@@ -336,5 +336,3 @@ export function RiskGauge({ score, level, label = "Risk Score" }: RiskGaugeProps
     </div>
   );
 }
-
-

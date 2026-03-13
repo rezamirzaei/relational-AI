@@ -269,8 +269,7 @@ def test_dataset_case_detail_exposes_transactions_alerts_and_comments() -> None:
             headers={"Authorization": f"Bearer {access_token}"},
             json={
                 "body": (
-                    "Reviewed the linked transactions and the merchant concentration "
-                    "is abnormal."
+                    "Reviewed the linked transactions and the merchant concentration is abnormal."
                 )
             },
         )
