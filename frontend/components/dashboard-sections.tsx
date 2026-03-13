@@ -132,6 +132,10 @@ export function DashboardHeader({
           tone={backendHealth?.rate_limit_status === "ready" ? "good" : "warning"}
         />
         <StatusPill
+          label={`providers ${backendHealth?.provider_status ?? "unknown"}`}
+          tone={backendHealth?.provider_status === "ready" ? "good" : "warning"}
+        />
+        <StatusPill
           label={operator?.role ?? "signed-out"}
           tone={operator ? "neutral" : "warning"}
         />
@@ -185,6 +189,17 @@ export function SignedOutPanel({
             <strong>{backendHealth?.seeded_operators ?? 0}</strong>
             <p>Bootstrap accounts available for the analyst and admin roles.</p>
           </article>
+          <article className="hero-stat-card">
+            <span className="hero-label">Providers</span>
+            <strong>
+              {backendHealth?.provider_posture.active_explanation_provider ?? "unknown"}
+            </strong>
+            <p>
+              Text {backendHealth?.provider_posture.active_text_signal_provider ?? "unknown"}.
+              Risk {backendHealth?.provider_posture.active_reasoning_provider ?? "unknown"}.
+              Copilot {backendHealth?.provider_posture.active_explanation_provider ?? "unknown"}.
+            </p>
+          </article>
         </div>
       </section>
 
@@ -226,6 +241,12 @@ export function SignedOutPanel({
             <strong>Local bootstrap operators</strong>
             <p>`analyst / AnalystPassword123!`</p>
             <p>`admin / AdminPassword123!`</p>
+          </div>
+        ) : null}
+        {backendHealth?.provider_posture.notes.length ? (
+          <div className="llm-note">
+            <strong>Provider fallback notes</strong>
+            <p>{backendHealth.provider_posture.notes.join(" ")}</p>
           </div>
         ) : null}
       </section>

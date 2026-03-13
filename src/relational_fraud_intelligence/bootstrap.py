@@ -101,6 +101,13 @@ class ApplicationContainer:
     pruned_audit_events: int
     rate_limiter: RateLimiter
     active_rate_limit_backend: str
+    requested_text_signal_provider: str
+    active_text_signal_provider: str
+    requested_reasoning_provider: str
+    active_reasoning_provider: str
+    requested_explanation_provider: str
+    active_explanation_provider: str
+    provider_startup_notes: list[str]
     scenario_catalog_service: ScenarioCatalogService
     investigation_service: InvestigationService
     case_service: CaseService
@@ -174,18 +181,31 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
 
     keyword_service = KeywordTextSignalService()
     text_signal_service: TextSignalService
-    if app_settings.text_signal_provider == "huggingface":
-        text_signal_service = FallbackTextSignalService(
-            primary=HuggingFaceTextSignalService(app_settings),
-            fallback=keyword_service,
-            requested_provider="huggingface",
-        )
+    provider_startup_notes: list[str] = []
+    requested_text_signal_provider = app_settings.text_signal_provider
+    active_text_signal_provider = requested_text_signal_provider
+    if requested_text_signal_provider == "huggingface":
+        try:
+            text_signal_service = FallbackTextSignalService(
+                primary=HuggingFaceTextSignalService(app_settings),
+                fallback=keyword_service,
+                requested_provider="huggingface",
+            )
+        except ValueError as exc:
+            text_signal_service = keyword_service
+            active_text_signal_provider = "keyword"
+            provider_startup_notes.append(
+                "Text signal provider requested Hugging Face but started in "
+                f"keyword mode: {exc}"
+            )
     else:
         text_signal_service = keyword_service
 
     local_reasoner = LocalRiskReasoner()
     risk_reasoner: RiskReasoner
-    if app_settings.reasoning_provider == "relationalai":
+    requested_reasoning_provider = app_settings.reasoning_provider
+    active_reasoning_provider = requested_reasoning_provider
+    if requested_reasoning_provider == "relationalai":
         risk_reasoner = FallbackRiskReasoner(
             primary=RelationalAIRiskReasoner(app_settings, local_reasoner),
             fallback=local_reasoner,
@@ -217,15 +237,22 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
 
     deterministic_explanation_service = DeterministicAnalysisExplanationService()
     analysis_explanation_service: AnalysisExplanationService
-    if app_settings.explanation_provider == "huggingface":
+    requested_explanation_provider = app_settings.explanation_provider
+    active_explanation_provider = requested_explanation_provider
+    if requested_explanation_provider == "huggingface":
         try:
             analysis_explanation_service = FallbackAnalysisExplanationService(
                 primary=HuggingFaceAnalysisExplanationService(app_settings),
                 fallback=deterministic_explanation_service,
                 requested_provider="huggingface",
             )
-        except ValueError:
+        except ValueError as exc:
             analysis_explanation_service = deterministic_explanation_service
+            active_explanation_provider = "deterministic"
+            provider_startup_notes.append(
+                "Explanation provider requested Hugging Face but started in "
+                f"deterministic mode: {exc}"
+            )
     else:
         analysis_explanation_service = deterministic_explanation_service
 
@@ -240,6 +267,13 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         pruned_audit_events=pruned_audit_events,
         rate_limiter=rate_limiter,
         active_rate_limit_backend=active_rate_limit_backend,
+        requested_text_signal_provider=requested_text_signal_provider,
+        active_text_signal_provider=active_text_signal_provider,
+        requested_reasoning_provider=requested_reasoning_provider,
+        active_reasoning_provider=active_reasoning_provider,
+        requested_explanation_provider=requested_explanation_provider,
+        active_explanation_provider=active_explanation_provider,
+        provider_startup_notes=provider_startup_notes,
         scenario_catalog_service=scenario_catalog_service,
         investigation_service=investigation_service,
         case_service=case_service,

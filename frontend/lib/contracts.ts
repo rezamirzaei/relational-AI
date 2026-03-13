@@ -163,9 +163,19 @@ export type HealthResponse = {
   environment: string;
   database_status: "ready" | "unavailable";
   rate_limit_status: "ready" | "degraded" | "unavailable";
+  provider_status: "ready" | "degraded";
   rate_limit_backend: string;
   seeded_scenarios: number;
   seeded_operators: number;
+  provider_posture: {
+    requested_text_signal_provider: string;
+    active_text_signal_provider: string;
+    requested_reasoning_provider: string;
+    active_reasoning_provider: string;
+    requested_explanation_provider: string;
+    active_explanation_provider: string;
+    notes: string[];
+  };
 };
 
 // ---------------------------------------------------------------------------

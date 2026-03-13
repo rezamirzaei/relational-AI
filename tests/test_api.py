@@ -14,6 +14,28 @@ def test_health_reports_database_and_rate_limit_ready() -> None:
     assert payload["status"] == "ok"
     assert payload["database_status"] == "ready"
     assert payload["rate_limit_status"] == "ready"
+    assert payload["provider_status"] == "ready"
+    assert payload["provider_posture"]["active_text_signal_provider"] == "keyword"
+    assert payload["provider_posture"]["active_explanation_provider"] == "deterministic"
+
+
+def test_health_reports_provider_fallback_when_huggingface_is_requested_without_token(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RFI_TEXT_SIGNAL_PROVIDER", "huggingface")
+    monkeypatch.setenv("RFI_EXPLANATION_PROVIDER", "huggingface")
+    monkeypatch.delenv("RFI_HUGGINGFACE_API_TOKEN", raising=False)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "degraded"
+    assert payload["provider_status"] == "degraded"
+    assert payload["provider_posture"]["active_text_signal_provider"] == "keyword"
+    assert payload["provider_posture"]["active_explanation_provider"] == "deterministic"
+    assert payload["provider_posture"]["notes"]
 
 
 def test_protected_routes_require_authentication() -> None:

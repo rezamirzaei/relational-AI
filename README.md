@@ -20,6 +20,7 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 - **Case lifecycle management** with status transitions, SLA deadlines, comments, and disposition tracking.
 - **Automated alert pipeline** that generates and queues alerts from dataset analyses and scenario investigations.
 - **Dashboard statistics** with case, alert, dataset, and recent-activity metrics.
+- **Runtime provider posture** in `/health`, including startup fallback notes for text and copilot providers.
 - Redis-backed rate limiting with automatic in-memory fallback.
 - JWT operator authentication, RBAC (analyst/admin), and structured request auditing.
 - Automatic audit retention pruning at startup plus a manual `prune-audit` management command.
@@ -125,6 +126,8 @@ Set:
 - `RFI_HUGGINGFACE_API_TOKEN=...`
 
 The backend tries zero-shot classification for text signals and an instruct model for operator-facing analysis explanations. If the provider fails, the system falls back to deterministic explanations and keyword heuristics without changing scores, alerts, or case thresholds.
+
+If Hugging Face is requested but `RFI_HUGGINGFACE_API_TOKEN` is missing, the platform now starts in degraded mode, falls back to deterministic/keyword providers, and reports that posture through `/health`.
 
 ### RelationalAI mode
 

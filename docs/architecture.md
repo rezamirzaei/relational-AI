@@ -20,7 +20,9 @@ graph TB
 
     subgraph API["FastAPI Backend"]
         Auth["Auth + RBAC"]
+        WorkspaceAPI["Workspace Guide API"]
         DatasetAPI["Dataset API"]
+        ExplainAPI["Analysis Explanation API"]
         InvAPI["Reference Investigation API"]
         CaseAPI["Case API"]
         AlertAPI["Alert API"]
@@ -36,12 +38,16 @@ graph TB
         DashService["DashboardService"]
         AuthService["AuthService"]
         AuditService["AuditService"]
+        GuideService["WorkspaceGuideService"]
+        ExplainService["AnalysisExplanationService"]
     end
 
     subgraph Infrastructure["Infrastructure"]
         Stats["Benford + Outliers + Velocity + Round Amounts"]
         RuleEngine["LocalRiskReasoner\n10 reference rules"]
         GraphEngine["Graph Analyzer"]
+        Explainers["Deterministic + Hugging Face Explainers"]
+        TextSignals["Keyword + Hugging Face Text Signals"]
         SQL["SQLAlchemy Workflow Repositories"]
         Postgres["PostgreSQL / SQLite"]
         Redis["Redis Rate Limiter"]
@@ -51,7 +57,9 @@ graph TB
     API --> Application
     DatasetService --> Stats
     DatasetService --> SQL
+    ExplainService --> Explainers
     InvService --> RuleEngine
+    InvService --> TextSignals
     InvService --> GraphEngine
     CaseService --> SQL
     AlertService --> SQL
@@ -140,6 +148,7 @@ source metadata so they can point to either a dataset or a reference scenario.
 | GET | `/health` | System | Platform health check |
 | POST | `/auth/token` | Authentication | Operator login |
 | GET | `/auth/me` | Authentication | Current operator profile |
+| GET | `/workspace/guide` | Dashboard | Primary workflow and role guide |
 | GET | `/scenarios` | Investigations | List reference scenarios |
 | GET | `/scenarios/{id}` | Investigations | Scenario details |
 | POST | `/investigations` | Investigations | Run reference investigation |
@@ -148,6 +157,7 @@ source metadata so they can point to either a dataset or a reference scenario.
 | GET | `/datasets` | Datasets | List uploaded datasets |
 | POST | `/datasets/{id}/analyze` | Datasets | Analyze uploaded data |
 | GET | `/datasets/{id}/analysis` | Datasets | Fetch analysis results |
+| GET | `/datasets/{id}/explanation` | Datasets | Fetch operator-facing analysis brief |
 | POST | `/cases` | Cases | Create fraud case |
 | GET | `/cases` | Cases | List cases |
 | GET | `/cases/{id}` | Cases | Case details |
@@ -164,6 +174,7 @@ source metadata so they can point to either a dataset or a reference scenario.
 - `rfi-manage migrate` applies workflow and security migrations.
 - `rfi-manage seed` loads the reference scenario catalog if empty.
 - Redis-backed rate limiting protects authentication and API traffic.
+- `/health` exposes the active text, reasoning, and explanation provider posture.
 - Dashboard activity is built from persisted datasets, alerts, and cases rather than synthetic counters.
 
 ## RelationalAI integration

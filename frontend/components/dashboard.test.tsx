@@ -73,9 +73,19 @@ const backendHealth: HealthResponse = {
   environment: "test",
   database_status: "ready",
   rate_limit_status: "ready",
+  provider_status: "ready",
   rate_limit_backend: "memory",
   seeded_scenarios: 3,
   seeded_operators: 2,
+  provider_posture: {
+    requested_text_signal_provider: "keyword",
+    active_text_signal_provider: "keyword",
+    requested_reasoning_provider: "local-rule-engine",
+    active_reasoning_provider: "local-rule-engine",
+    requested_explanation_provider: "deterministic",
+    active_explanation_provider: "deterministic",
+    notes: [],
+  },
 };
 
 const workspaceGuide: WorkspaceGuide = {
