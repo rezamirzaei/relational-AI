@@ -57,6 +57,7 @@ from relational_fraud_intelligence.domain.models import (
     AlertStatus,
     AppModel,
     CaseComment,
+    CaseDisposition,
     CasePriority,
     CaseStatus,
     ExplanationAudience,
@@ -424,7 +425,7 @@ def get_case(
 )
 def update_case_status(
     case_id: str,
-    command: UpdateCaseStatusCommand,
+    body: "UpdateCaseStatusBody",
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
@@ -437,9 +438,9 @@ def update_case_status(
         return container.case_service.update_status(
             UpdateCaseStatusCommand(
                 case_id=case_id,
-                status=command.status,
-                disposition=command.disposition,
-                resolution_notes=command.resolution_notes,
+                status=body.status,
+                disposition=body.disposition,
+                resolution_notes=body.resolution_notes,
             )
         )
     except LookupError as exc:
@@ -452,6 +453,12 @@ class AddCommentBody(AppModel):
 
 class AddCommentResult(AppModel):
     comment: CaseComment
+
+
+class UpdateCaseStatusBody(AppModel):
+    status: CaseStatus
+    disposition: CaseDisposition | None = None
+    resolution_notes: str | None = None
 
 
 @router.post(
@@ -491,6 +498,11 @@ def add_case_comment(
 class CreateCaseFromAlertResult(AppModel):
     alert: FraudAlert
     case: FraudCase
+
+
+class UpdateAlertStatusBody(AppModel):
+    status: AlertStatus
+    linked_case_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -533,7 +545,7 @@ def list_alerts(
 )
 def update_alert_status(
     alert_id: str,
-    command: UpdateAlertStatusCommand,
+    body: UpdateAlertStatusBody,
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
@@ -546,8 +558,8 @@ def update_alert_status(
         return container.alert_service.update_status(
             UpdateAlertStatusCommand(
                 alert_id=alert_id,
-                status=command.status,
-                linked_case_id=command.linked_case_id,
+                status=body.status,
+                linked_case_id=body.linked_case_id,
             )
         )
     except LookupError as exc:

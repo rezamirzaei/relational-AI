@@ -22,6 +22,7 @@ import {
   fetchInvestigationClient,
   fetchScenarioCatalog,
   loginOperator,
+  updateCaseStatus,
 } from "@/lib/api";
 import type {
   AnalysisResponse,
@@ -72,6 +73,7 @@ const mockedFetchDashboardStats = vi.mocked(fetchDashboardStats);
 const mockedFetchInvestigationClient = vi.mocked(fetchInvestigationClient);
 const mockedFetchScenarioCatalog = vi.mocked(fetchScenarioCatalog);
 const mockedLoginOperator = vi.mocked(loginOperator);
+const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 
 const backendHealth: HealthResponse = {
   status: "ok",
@@ -316,6 +318,29 @@ const caseFromAlertList: ListCasesResponse = {
   page_size: 20,
 };
 
+const openCaseList: ListCasesResponse = {
+  cases: [caseFromAlertResponse.case],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
+const resolvedCaseList: ListCasesResponse = {
+  cases: [
+    {
+      ...caseFromAlertResponse.case,
+      status: "resolved",
+      disposition: "confirmed-fraud",
+      resolution_notes: "Confirmed during analyst review.",
+      resolved_at: "2026-03-12T15:20:00",
+      updated_at: "2026-03-12T15:20:00",
+    },
+  ],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
+};
+
 const datasetAnalysisResponse: AnalysisResponse = {
   analysis: {
     analysis_id: "analysis-1",
@@ -528,6 +553,7 @@ describe("Dashboard", () => {
     mockedFetchInvestigationClient.mockReset();
     mockedFetchScenarioCatalog.mockReset();
     mockedLoginOperator.mockReset();
+    mockedUpdateCaseStatus.mockReset();
 
     // Default implementations for new APIs
     mockedFetchDashboardStats.mockResolvedValue({
@@ -558,6 +584,7 @@ describe("Dashboard", () => {
     mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
     mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
     mockedCreateCaseFromAlert.mockResolvedValue(caseFromAlertResponse);
+    mockedUpdateCaseStatus.mockResolvedValue({});
   });
 
   it("renders runtime posture and requires operator sign-in", () => {
@@ -954,6 +981,104 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
       expect(screen.getByText("Dataset dataset-1")).toBeInTheDocument();
+    });
+  });
+
+  it("resolves a case from the cases queue", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchCases
+      .mockResolvedValueOnce(openCaseList)
+      .mockResolvedValueOnce(resolvedCaseList);
+    mockedFetchDashboardStats
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 1,
+          open_cases: 1,
+          critical_cases: 0,
+          total_alerts: 0,
+          unacknowledged_alerts: 0,
+          avg_risk_score: 68,
+          cases_by_status: { open: 1 },
+          alerts_by_severity: {},
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 0,
+          total_transactions_analyzed: 0,
+          total_anomalies_found: 0,
+          completed_analyses: 0,
+          high_risk_analyses: 0,
+          workflow_stages: [],
+          next_recommended_action: "Resolve the active case once the disposition is confirmed.",
+        },
+      })
+      .mockResolvedValueOnce({
+        stats: {
+          total_scenarios: 3,
+          total_cases: 1,
+          open_cases: 0,
+          critical_cases: 0,
+          total_alerts: 0,
+          unacknowledged_alerts: 0,
+          avg_risk_score: 68,
+          cases_by_status: { resolved: 1 },
+          alerts_by_severity: {},
+          recent_activity: [],
+          risk_distribution: { high: 1 },
+          total_datasets: 0,
+          total_transactions_analyzed: 0,
+          total_anomalies_found: 0,
+          completed_analyses: 0,
+          high_risk_analyses: 0,
+          workflow_stages: [],
+          next_recommended_action: "Review the next case in queue.",
+        },
+      });
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(mockedFetchCases).toHaveBeenCalledWith("analyst-token");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Cases/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
+
+    await waitFor(() => {
+      expect(mockedUpdateCaseStatus).toHaveBeenCalledWith(
+        "analyst-token",
+        "case-from-alert-1",
+        {
+          status: "resolved",
+          disposition: "confirmed-fraud",
+        },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Resolve" }),
+      ).not.toBeInTheDocument();
     });
   });
 });

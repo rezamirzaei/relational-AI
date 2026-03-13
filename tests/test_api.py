@@ -201,6 +201,91 @@ def test_dataset_analysis_generates_persistent_alerts_and_cases() -> None:
         assert stats["total_cases"] == 1
 
 
+def test_case_status_update_uses_path_case_id() -> None:
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+
+        create_case_response = client.post(
+            "/api/v1/cases",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "scenario_id": "travel-ato-escalation",
+                "title": "Travel escalation review",
+                "summary": "Review suspicious travel activity before customer contact.",
+            },
+        )
+        assert create_case_response.status_code == 200
+        case_id = create_case_response.json()["case"]["case_id"]
+
+        update_response = client.patch(
+            f"/api/v1/cases/{case_id}/status",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "status": "resolved",
+                "disposition": "confirmed-fraud",
+                "resolution_notes": "Resolved from the queue without requiring a body case_id.",
+            },
+        )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()["case"]
+    assert payload["case_id"] == case_id
+    assert payload["status"] == "resolved"
+    assert payload["disposition"] == "confirmed-fraud"
+    assert (
+        payload["resolution_notes"]
+        == "Resolved from the queue without requiring a body case_id."
+    )
+    assert payload["resolved_at"] is not None
+
+
+def test_alert_status_update_uses_path_alert_id() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        alerts_response = client.get(
+            "/api/v1/alerts",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert alerts_response.status_code == 200
+        alert = next(
+            item
+            for item in alerts_response.json()["alerts"]
+            if item["source_type"] == "dataset" and item["source_id"] == dataset_id
+        )
+
+        update_response = client.patch(
+            f"/api/v1/alerts/{alert['alert_id']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"status": "acknowledged"},
+        )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()["alert"]
+    assert payload["alert_id"] == alert["alert_id"]
+    assert payload["status"] == "acknowledged"
+    assert payload["acknowledged_at"] is not None
+
+
 def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
