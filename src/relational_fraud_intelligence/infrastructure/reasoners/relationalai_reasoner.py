@@ -1,12 +1,14 @@
 """RelationalAI-enhanced risk reasoner with graph-based fraud detection.
 
-Builds a directed money-flow graph and an undirected entity-relationship
-graph from scenario data, then runs structural algorithms (cycle detection,
-PageRank, community detection, shortest-path money-mule analysis) to
-surface hidden fraud patterns that rule-based heuristics miss.
+NOTE: This implementation supports a hybrid mode. It uses the RelationalAI SDK
+to project data into a relational knowledge graph (currently backed by a local
+DuckDB instance for development/demo purposes).
+However, the specific graph algorithms (PageRank, Cycle Detection, etc.) are
+currently executed using NetworkX in memory to allow for fully offline
+operation without requiring a cloud RelationalAI account.
 
-The graph findings amplify or attenuate the base risk score produced by
-the local rule engine.
+In a production deployment, these algorithms would be translated into Relational
+Knowledge Graph (Rel) relations for server-side execution.
 """
 
 from __future__ import annotations
@@ -490,5 +492,4 @@ def _score_to_level(total_risk_score: int) -> RiskLevel:
     if total_risk_score >= 35:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
-
 

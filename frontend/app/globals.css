@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* =====================================================================
    Relational Fraud Intelligence — Redesigned Theme
    Modern dark-first dashboard with sidebar navigation,
