@@ -4,6 +4,7 @@ import type {
   AuditEventsResponse,
   CreateCaseFromAnalysisResponse,
   CreateCaseFromAlertResponse,
+  CreateCaseFromInvestigationResponse,
   CreateCaseResponse,
   CurrentOperatorResponse,
   DashboardStatsResponse,
@@ -106,6 +107,17 @@ export async function fetchInvestigationClient(
       method: "POST",
       body: JSON.stringify({ scenario_id: scenarioId }),
     },
+    token,
+  );
+}
+
+export async function createCaseFromInvestigation(
+  token: string,
+  scenarioId: string,
+): Promise<CreateCaseFromInvestigationResponse> {
+  return fetchJson<CreateCaseFromInvestigationResponse>(
+    `${browserApiBaseUrl}/investigations/${scenarioId}/case`,
+    { method: "POST" },
     token,
   );
 }

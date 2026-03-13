@@ -33,3 +33,5 @@ def test_investigation_service_scores_synthetic_identity_ring_as_critical(
     assert result.investigation.total_risk_score >= 80
     assert result.investigation.risk_level == "critical"
     assert result.investigation.metrics.shared_device_count == 1
+    assert result.investigation.investigation_leads
+    assert result.investigation.investigation_leads[0].lead_type == "shared-device-ring"

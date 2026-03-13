@@ -16,6 +16,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseStatus,
     FraudAlert,
     FraudCase,
+    InvestigationCase,
 )
 
 # ---------------------------------------------------------------------------
@@ -105,5 +106,11 @@ class TransactionIngestBody(AppModel):
 
 class CreateCaseFromAnalysisResult(AppModel):
     analysis: AnalysisResult
+    case: FraudCase
+    linked_alerts: list[FraudAlert]
+
+
+class CreateCaseFromInvestigationResult(AppModel):
+    investigation: InvestigationCase
     case: FraudCase
     linked_alerts: list[FraudAlert]

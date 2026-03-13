@@ -265,6 +265,7 @@ class InvestigationCase(AppModel):
     text_signals: list[TextSignal]
     suspicious_transactions: list[TransactionRecord] = Field(default_factory=list)
     recommended_actions: list[str] = Field(default_factory=list)
+    investigation_leads: list[InvestigationLead] = Field(default_factory=list)
     graph_analysis: GraphAnalysisResult | None = None
 
 

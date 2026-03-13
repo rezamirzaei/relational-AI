@@ -73,6 +73,36 @@ def test_investigate_scenario_returns_case_payload_for_authenticated_operator() 
     payload = response.json()
     assert payload["investigation"]["scenario"]["scenario_id"] == "travel-ato-escalation"
     assert payload["investigation"]["provider_summary"]["active_text_provider"] == "keyword"
+    assert payload["investigation"]["investigation_leads"]
+
+
+def test_scenario_investigation_can_create_a_linked_case() -> None:
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+
+        investigate_response = client.post(
+            "/api/v1/investigations",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"scenario_id": "synthetic-identity-ring"},
+        )
+        assert investigate_response.status_code == 200
+
+        create_case_response = client.post(
+            "/api/v1/investigations/synthetic-identity-ring/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert create_case_response.status_code == 200
+    payload = create_case_response.json()
+    assert payload["investigation"]["scenario"]["scenario_id"] == "synthetic-identity-ring"
+    assert payload["investigation"]["investigation_leads"]
+    assert payload["case"]["source_type"] == "scenario"
+    assert payload["case"]["source_id"] == "synthetic-identity-ring"
+    assert "Primary lead:" in payload["case"]["summary"]
+    assert payload["linked_alerts"]
+    assert all(
+        alert["linked_case_id"] == payload["case"]["case_id"] for alert in payload["linked_alerts"]
+    )
 
 
 def test_admin_can_list_audit_events() -> None:

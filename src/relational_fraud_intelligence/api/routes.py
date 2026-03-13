@@ -53,6 +53,7 @@ from relational_fraud_intelligence.application.dto.routes import (
     AddCommentResult,
     CreateCaseFromAlertResult,
     CreateCaseFromAnalysisResult,
+    CreateCaseFromInvestigationResult,
     DatasetListResponse,
     DatasetResponse,
     HealthResponse,
@@ -72,6 +73,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseStatus,
     ExplanationAudience,
     FraudAlert,
+    InvestigationCase,
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
@@ -302,21 +304,87 @@ def investigate_scenario(
 
         # Auto-generate alerts from high-risk investigations
         if result.investigation.total_risk_score >= 35:
-            rule_hits: list[dict[str, object]] = [
-                {
-                    "rule_code": hit.rule_code,
-                    "title": hit.title,
-                    "narrative": hit.narrative,
-                }
-                for hit in result.investigation.top_rule_hits
-            ]
             container.alert_service.generate_alerts_from_investigation(
                 scenario_id=command.scenario_id,
                 risk_score=result.investigation.total_risk_score,
-                rule_hits=rule_hits,
+                rule_hits=_findings_from_investigation(result.investigation),
             )
 
         return result
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/investigations/{scenario_id}/case",
+    response_model=CreateCaseFromInvestigationResult,
+    tags=["Investigations"],
+    summary="Create a case from a scenario investigation",
+    description=(
+        "Runs the scenario investigation, creates a persistent fraud case from the "
+        "highest-signal scenario leads, and links any open scenario alerts to that case."
+    ),
+)
+def create_case_from_investigation(
+    scenario_id: str,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> CreateCaseFromInvestigationResult:
+    request.state.current_principal = principal
+    request.state.audit_action = "create-case-from-investigation"
+    request.state.audit_resource_type = "fraud-scenario"
+    request.state.audit_resource_id = scenario_id
+    try:
+        result = container.investigation_service.execute(
+            InvestigateScenarioCommand(scenario_id=scenario_id)
+        )
+        container.alert_service.generate_alerts_from_investigation(
+            scenario_id=scenario_id,
+            risk_score=result.investigation.total_risk_score,
+            rule_hits=_findings_from_investigation(result.investigation),
+        )
+
+        related_alerts = container.alert_service.list_alerts_for_source(
+            source_type=WorkflowSourceType.SCENARIO,
+            source_id=scenario_id,
+        )
+        existing_case_id = next(
+            (alert.linked_case_id for alert in related_alerts if alert.linked_case_id),
+            None,
+        )
+        if existing_case_id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Scenario '{scenario_id}' already has alerts linked to case "
+                    f"'{existing_case_id}'."
+                ),
+            )
+
+        case_command = _build_case_command_from_investigation(result.investigation)
+        _validate_case_source(case_command, container)
+        created_case = container.case_service.create_case(case_command).case
+
+        linked_alerts: list[FraudAlert] = []
+        for alert in related_alerts:
+            if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
+                continue
+            linked_alerts.append(
+                container.alert_service.update_status(
+                    UpdateAlertStatusCommand(
+                        alert_id=alert.alert_id,
+                        status=AlertStatus.INVESTIGATING,
+                        linked_case_id=created_case.case_id,
+                    )
+                ).alert
+            )
+
+        return CreateCaseFromInvestigationResult(
+            investigation=result.investigation,
+            case=created_case,
+            linked_alerts=linked_alerts,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -935,6 +1003,58 @@ def _build_case_command_from_alert(
         priority=_priority_from_risk_level(risk_level),
         risk_score=risk_score,
         risk_level=risk_level,
+    )
+
+
+def _findings_from_investigation(investigation: InvestigationCase) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = [
+        {
+            "rule_code": lead.lead_type,
+            "title": lead.title,
+            "narrative": f"{lead.hypothesis} {lead.narrative}".strip(),
+        }
+        for lead in investigation.investigation_leads
+    ]
+    if findings:
+        return findings
+    fallback_findings: list[dict[str, object]] = [
+        {
+            "rule_code": hit.rule_code,
+            "title": hit.title,
+            "narrative": hit.narrative,
+        }
+        for hit in investigation.top_rule_hits
+    ]
+    return fallback_findings
+
+
+def _build_case_command_from_investigation(
+    investigation: InvestigationCase,
+) -> CreateCaseCommand:
+    top_lead = investigation.investigation_leads[0] if investigation.investigation_leads else None
+    summary_parts = [investigation.summary]
+    if top_lead is not None:
+        summary_parts.append(f"Primary lead: {top_lead.title}.")
+        summary_parts.append(top_lead.hypothesis)
+        summary_parts.append(top_lead.narrative)
+        if top_lead.recommended_actions:
+            summary_parts.append("Next steps: " + " ".join(top_lead.recommended_actions[:2]))
+
+    title = (
+        f"{investigation.scenario.title}: {top_lead.title}"
+        if top_lead is not None
+        else investigation.scenario.title
+    )
+
+    return CreateCaseCommand(
+        source_type=WorkflowSourceType.SCENARIO,
+        source_id=investigation.scenario.scenario_id,
+        scenario_id=investigation.scenario.scenario_id,
+        title=title,
+        summary=" ".join(summary_parts),
+        priority=_priority_from_risk_level(investigation.risk_level),
+        risk_score=investigation.total_risk_score,
+        risk_level=investigation.risk_level,
     )
 
 

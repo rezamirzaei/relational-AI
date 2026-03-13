@@ -263,6 +263,15 @@ export function Dashboard({
 
                       <div className="metrics-grid">
                         <MetricCard
+                          label="Investigation leads"
+                          tone={
+                            activeInvestigation.investigation_leads.length > 0
+                              ? "critical"
+                              : "neutral"
+                          }
+                          value={String(activeInvestigation.investigation_leads.length)}
+                        />
+                        <MetricCard
                           label="Suspicious volume"
                           tone="critical"
                           value={currencyFormatter.format(
@@ -341,11 +350,46 @@ export function Dashboard({
 
                       <div className="action-bar">
                         <button className="primary-button" onClick={handleCreateCase} type="button">
-                          Create case from investigation
+                          Create linked case from investigation
                         </button>
                       </div>
 
                       <div className="insight-grid">
+                        <section className="content-card emphasis-card">
+                          <div className="mini-header">
+                            <span>Investigation Leads</span>
+                            <span>{activeInvestigation.investigation_leads.length}</span>
+                          </div>
+                          {activeInvestigation.investigation_leads.length > 0 ? (
+                            <div className="stack">
+                              {activeInvestigation.investigation_leads.map((lead) => (
+                                <article key={lead.lead_id} className="signal-card">
+                                  <div className="signal-card-top">
+                                    <strong>{lead.title}</strong>
+                                    <span className={`risk-chip ${lead.severity}`}>
+                                      {lead.severity}
+                                    </span>
+                                  </div>
+                                  <p>{lead.hypothesis}</p>
+                                  <p className="muted-copy">{lead.narrative}</p>
+                                  {lead.entities.length > 0 ? (
+                                    <span className="signal-meta">
+                                      {lead.entities
+                                        .slice(0, 4)
+                                        .map((entity) => entity.display_name)
+                                        .join(" · ")}
+                                    </span>
+                                  ) : null}
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="empty-state">
+                              This investigation still only exposes raw rule hits.
+                            </div>
+                          )}
+                        </section>
+
                         <section className="content-card emphasis-card">
                           <div className="mini-header">
                             <span>Recommended Actions</span>

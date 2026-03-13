@@ -12,7 +12,7 @@ import {
   analyzeDataset,
   createCaseFromAlert,
   createCaseFromAnalysis,
-  createCase,
+  createCaseFromInvestigation,
   fetchAlerts,
   fetchAnalysisExplanation,
   fetchAnalysisResult,
@@ -411,17 +411,13 @@ export function useDashboardState(
   async function handleCreateCase() {
     if (!authToken || !activeInvestigation) return;
     try {
-      await createCase(authToken, {
-        source_type: "scenario",
-        source_id: activeInvestigation.scenario.scenario_id,
-        scenario_id: activeInvestigation.scenario.scenario_id,
-        title: activeInvestigation.scenario.title,
-        summary: activeInvestigation.summary,
-        priority: activeInvestigation.risk_level,
-        risk_score: activeInvestigation.total_risk_score,
-        risk_level: activeInvestigation.risk_level,
+      await createCaseFromInvestigation(authToken, activeInvestigation.scenario.scenario_id);
+      await refreshWorkspaceSlices(authToken, {
+        alerts: true,
+        audit: true,
+        cases: true,
+        stats: true,
       });
-      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
       setActiveView("cases");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
@@ -603,4 +599,3 @@ export function useDashboardState(
 
   return [state, actions];
 }
-

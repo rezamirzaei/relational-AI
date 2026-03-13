@@ -108,6 +108,7 @@ export type InvestigationResponse = {
     text_signals: TextSignal[];
     suspicious_transactions: TransactionRecord[];
     recommended_actions: string[];
+    investigation_leads: InvestigationLead[];
     graph_analysis: GraphAnalysisResult | null;
   };
 };
@@ -207,6 +208,12 @@ export type FraudCase = {
 
 export type CreateCaseResponse = {
   case: FraudCase;
+};
+
+export type CreateCaseFromInvestigationResponse = {
+  investigation: InvestigationResponse["investigation"];
+  case: FraudCase;
+  linked_alerts: FraudAlert[];
 };
 
 export type ListCasesResponse = {

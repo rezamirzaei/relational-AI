@@ -12,6 +12,7 @@ import {
   analyzeDataset,
   createCaseFromAnalysis,
   createCaseFromAlert,
+  createCaseFromInvestigation,
   fetchAlerts,
   fetchAnalysisExplanation,
   fetchAnalysisResult,
@@ -30,6 +31,7 @@ import type {
   AnalysisExplanationResponse,
   CreateCaseFromAlertResponse,
   CreateCaseFromAnalysisResponse,
+  CreateCaseFromInvestigationResponse,
   DatasetListResponse,
   AuditEvent,
   ListAlertsResponse,
@@ -47,6 +49,7 @@ vi.mock("@/lib/api", () => ({
   createCase: vi.fn(),
   createCaseFromAnalysis: vi.fn(),
   createCaseFromAlert: vi.fn(),
+  createCaseFromInvestigation: vi.fn(),
   fetchAlerts: vi.fn(),
   fetchAnalysisExplanation: vi.fn(),
   fetchAnalysisResult: vi.fn(),
@@ -66,6 +69,7 @@ vi.mock("@/lib/api", () => ({
 const mockedAnalyzeDataset = vi.mocked(analyzeDataset);
 const mockedCreateCaseFromAnalysis = vi.mocked(createCaseFromAnalysis);
 const mockedCreateCaseFromAlert = vi.mocked(createCaseFromAlert);
+const mockedCreateCaseFromInvestigation = vi.mocked(createCaseFromInvestigation);
 const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchAnalysisExplanation = vi.mocked(fetchAnalysisExplanation);
 const mockedFetchAnalysisResult = vi.mocked(fetchAnalysisResult);
@@ -643,17 +647,109 @@ function buildInvestigationResponse(
       recommended_actions: [
         "Freeze outbound spend pending enhanced verification.",
       ],
+      investigation_leads: [
+        {
+          lead_id: "scenario-lead::shared-device-ring",
+          lead_type: "shared-device-ring",
+          title: "Potential shared-device coordination ring",
+          severity: "high",
+          hypothesis:
+            "Multiple customers are converging on the same device, which is consistent with a coordinated identity ring or linked account takeover.",
+          narrative:
+            "Multiple identities authenticated from the same device. The relationship graph amplified the cluster to 1.33x baseline risk.",
+          entities: [
+            {
+              entity_type: "customer",
+              entity_id: "cust-1",
+              display_name: "Amina Rahman",
+            },
+            {
+              entity_type: "customer",
+              entity_id: "cust-2",
+              display_name: "Noah Carter",
+            },
+          ],
+          supporting_anomaly_ids: ["shared-device-cluster"],
+          recommended_actions: [
+            "Validate whether the linked customers have a legitimate shared owner or household.",
+            "Review device binding, credential-reset history, and recent login telemetry.",
+          ],
+          evidence: {
+            supporting_amount: 28,
+          },
+        },
+      ],
       graph_analysis: {
         connected_components: 1,
         density: 0.45,
-        highest_degree_entity: { entity_type: "customer", entity_id: "cust-1", display_name: "Amina Rahman" },
+        highest_degree_entity: {
+          entity_type: "customer",
+          entity_id: "cust-1",
+          display_name: "Amina Rahman",
+        },
         highest_degree_score: 4,
         community_count: 1,
         shortest_path_length: null,
-        hub_entities: [{ entity_type: "customer", entity_id: "cust-1", display_name: "Amina Rahman" }],
+        hub_entities: [
+          {
+            entity_type: "customer",
+            entity_id: "cust-1",
+            display_name: "Amina Rahman",
+          },
+        ],
         risk_amplification_factor: 1.33,
       },
     },
+  };
+}
+
+function buildCreateCaseFromInvestigationResponse(
+  scenario: ScenarioOverview,
+): CreateCaseFromInvestigationResponse {
+  return {
+    investigation: buildInvestigationResponse(scenario).investigation,
+    case: {
+      case_id: "case-from-investigation-1",
+      source_type: "scenario",
+      source_id: scenario.scenario_id,
+      scenario_id: scenario.scenario_id,
+      title: `${scenario.title}: Potential shared-device coordination ring`,
+      status: "open",
+      priority: scenario.baseline_risk,
+      assigned_analyst_id: null,
+      assigned_analyst_name: null,
+      risk_score: scenario.baseline_risk === "critical" ? 92 : 76,
+      risk_level: scenario.baseline_risk,
+      summary:
+        "Primary lead: Potential shared-device coordination ring. Multiple customers are converging on the same device.",
+      disposition: null,
+      resolution_notes: null,
+      created_at: "2026-03-12T10:00:00",
+      updated_at: "2026-03-12T10:00:00",
+      resolved_at: null,
+      sla_deadline: "2026-03-13T10:00:00",
+      comment_count: 0,
+      alert_count: 0,
+    },
+    linked_alerts: [
+      {
+        alert_id: "scenario-alert-1",
+        source_type: "scenario",
+        source_id: scenario.scenario_id,
+        scenario_id: scenario.scenario_id,
+        rule_code: "shared-device-ring",
+        title: "Potential shared-device coordination ring",
+        severity: scenario.baseline_risk,
+        status: "investigating",
+        narrative: "Scenario lead opened as a persistent case.",
+        assigned_analyst_id: null,
+        assigned_analyst_name: null,
+        linked_case_id: "case-from-investigation-1",
+        created_at: "2026-03-12T10:00:00",
+        acknowledged_at: null,
+        resolved_at: null,
+      },
+    ],
   };
 }
 
@@ -672,6 +768,7 @@ describe("Dashboard", () => {
     mockedAnalyzeDataset.mockReset();
     mockedCreateCaseFromAnalysis.mockReset();
     mockedCreateCaseFromAlert.mockReset();
+    mockedCreateCaseFromInvestigation.mockReset();
     mockedFetchAlerts.mockReset();
     mockedFetchAnalysisExplanation.mockReset();
     mockedFetchAnalysisResult.mockReset();
@@ -718,6 +815,9 @@ describe("Dashboard", () => {
       analysis: datasetAnalysisResponse.analysis,
     });
     mockedCreateCaseFromAlert.mockResolvedValue(caseFromAlertResponse);
+    mockedCreateCaseFromInvestigation.mockResolvedValue(
+      buildCreateCaseFromInvestigationResponse(scenarios[0]),
+    );
     mockedUpdateCaseStatus.mockResolvedValue({});
   });
 
@@ -808,6 +908,74 @@ describe("Dashboard", () => {
     });
 
     expect(window.localStorage.getItem("rfi.operator-token")).toBe("analyst-token");
+  });
+
+  it("creates a linked case from the scenario investigation view", async () => {
+    const scenarioResponse = buildCreateCaseFromInvestigationResponse(scenarios[0]);
+
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchInvestigationClient.mockResolvedValue(buildInvestigationResponse(scenarios[0]));
+    mockedFetchAlerts
+      .mockResolvedValueOnce(initialAlertList)
+      .mockResolvedValueOnce({
+        alerts: scenarioResponse.linked_alerts,
+        total_count: 1,
+        page: 1,
+        page_size: 20,
+      });
+    mockedFetchCases
+      .mockResolvedValueOnce({ cases: [], total_count: 0, page: 1, page_size: 20 })
+      .mockResolvedValueOnce({
+        cases: [scenarioResponse.case],
+        total_count: 1,
+        page: 1,
+        page_size: 20,
+      });
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Reference Scenarios/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Reference Scenarios/i }));
+    fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Potential shared-device coordination ring")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create linked case from investigation" }));
+
+    await waitFor(() => {
+      expect(mockedCreateCaseFromInvestigation).toHaveBeenCalledWith(
+        "analyst-token",
+        "synthetic-identity-ring",
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Synthetic Identity Gift Card Ring: Potential shared-device coordination ring",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   it("loads the audit trail for an admin session", async () => {
