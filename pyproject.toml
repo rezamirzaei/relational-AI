@@ -7,6 +7,7 @@ name = "relational-fraud-intelligence"
 version = "1.0.0"
 description = "Production-grade fraud investigation platform with case management, alert automation, graph analysis, and explainable risk reasoning."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
     "alembic==1.16.5",
