@@ -1,5 +1,15 @@
 import "@testing-library/jest-dom/vitest";
 
+/* ResizeObserver polyfill for recharts in jsdom */
+class ResizeObserverMock {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+}
+
 class StorageMock implements Storage {
   private readonly values = new Map<string, string>();
 

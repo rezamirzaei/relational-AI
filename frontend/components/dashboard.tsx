@@ -3,17 +3,21 @@
 import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
+  BenfordChart,
+  RiskGauge,
+  VelocityChart,
+} from "@/components/charts";
+import {
   AlertsSection,
   AnalysisCopilotCard,
   AuditSection,
   CasesSection,
   DashboardHeader,
-  DashboardNav,
   MetricCard,
   OverviewSection,
   SignedOutPanel,
-  type ActiveView,
 } from "@/components/dashboard-sections";
+import { Sidebar, TopBar, type ActiveView } from "@/components/sidebar";
 import {
   analyzeDataset,
   createCaseFromAlert,
@@ -63,12 +67,6 @@ type RefreshOptions = {
 };
 
 const tokenStorageKey = "rfi.operator-token";
-const riskMeterWidth: Record<string, number> = {
-  low: 24,
-  medium: 52,
-  high: 76,
-  critical: 100,
-};
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -503,15 +501,23 @@ export function Dashboard({
     setActiveView("overview");
   }
 
-  return (
-    <main className="page-shell">
-      <DashboardHeader
-        backendHealth={backendHealth}
-        operator={operator}
-        workspaceGuide={workspaceGuide}
-      />
+  const viewTitles: Record<ActiveView, string> = {
+    overview: "Overview",
+    analyze: "Analyze Data",
+    alerts: "Fraud Alerts",
+    cases: "Fraud Cases",
+    investigate: "Reference Scenarios",
+    audit: "Audit Trail",
+  };
 
-      {!operator || !authToken ? (
+  if (!operator || !authToken) {
+    return (
+      <main className="page-shell" style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px 40px" }}>
+        <DashboardHeader
+          backendHealth={backendHealth}
+          operator={operator}
+          workspaceGuide={workspaceGuide}
+        />
         <SignedOutPanel
           backendHealth={backendHealth}
           isAuthenticating={isAuthenticating}
@@ -524,16 +530,27 @@ export function Dashboard({
           onSubmit={handleLogin}
           onUsernameChange={setUsername}
         />
-      ) : (
-        <>
-          <DashboardNav
-            activeView={activeView}
-            alerts={alerts}
-            cases={cases}
-            operator={operator}
-            onLogout={handleLogout}
-            onViewChange={setActiveView}
-          />
+      </main>
+    );
+  }
+
+  return (
+    <div className="app-layout">
+      <Sidebar
+        activeView={activeView}
+        alerts={alerts}
+        cases={cases}
+        operator={operator}
+        onLogout={handleLogout}
+        onViewChange={setActiveView}
+      />
+
+      <main className="app-main">
+        <TopBar
+          title={viewTitles[activeView]}
+          subtitle={workspaceGuide?.primary_workflow_title}
+          healthStatus={backendHealth?.database_status}
+        />
 
           {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
 
@@ -637,19 +654,11 @@ export function Dashboard({
                           <p className="summary-lead">{activeInvestigation.summary}</p>
                         </div>
                         <div className="risk-meter-shell">
-                          <div className="risk-meter-label">
-                            <span>Priority score</span>
-                            <strong>{activeInvestigation.total_risk_score}/100</strong>
-                          </div>
-                          <div className="risk-meter-track">
-                            <div
-                              className={`risk-meter-fill ${activeInvestigation.risk_level}`}
-                              style={{ width: `${riskMeterWidth[activeInvestigation.risk_level]}%` }}
-                            />
-                          </div>
-                          <span className={`risk-chip ${activeInvestigation.risk_level}`}>
-                            {activeInvestigation.risk_level}
-                          </span>
+                          <RiskGauge
+                            score={activeInvestigation.total_risk_score}
+                            level={activeInvestigation.risk_level}
+                            label="Priority Score"
+                          />
                         </div>
                       </div>
 
@@ -1124,19 +1133,11 @@ export function Dashboard({
                             <p className="summary-lead">{activeAnalysis.summary}</p>
                           </div>
                           <div className="risk-meter-shell">
-                            <div className="risk-meter-label">
-                              <span>Deterministic score</span>
-                              <strong>{activeAnalysis.risk_score}/100</strong>
-                            </div>
-                            <div className="risk-meter-track">
-                              <div
-                                className={`risk-meter-fill ${activeAnalysis.risk_level}`}
-                                style={{ width: `${riskMeterWidth[activeAnalysis.risk_level]}%` }}
-                              />
-                            </div>
-                            <span className={`risk-chip ${activeAnalysis.risk_level}`}>
-                              {activeAnalysis.risk_level}
-                            </span>
+                            <RiskGauge
+                              score={activeAnalysis.risk_score}
+                              level={activeAnalysis.risk_level}
+                              label="Deterministic Score"
+                            />
                           </div>
                         </div>
 
@@ -1189,25 +1190,7 @@ export function Dashboard({
                               Leading-digit distribution compared against Benford&apos;s expected
                               frequencies. Suspicion is deterministic and threshold-based.
                             </p>
-                            <div className="benford-chart">
-                              {activeAnalysis.benford_digits.map((digit) => (
-                                <div key={digit.digit} className="benford-bar-group">
-                                  <div className="benford-bars">
-                                    <div
-                                      className="benford-bar expected"
-                                      style={{ height: `${Math.max(digit.expected_pct * 3, 2)}px` }}
-                                      title={`Expected: ${digit.expected_pct}%`}
-                                    />
-                                    <div
-                                      className={`benford-bar ${digit.deviation > 0 ? "critical" : "neutral"}`}
-                                      style={{ height: `${Math.max(digit.actual_pct * 3, 2)}px` }}
-                                      title={`Actual: ${digit.actual_pct}%`}
-                                    />
-                                  </div>
-                                  <span>{digit.digit}</span>
-                                </div>
-                              ))}
-                            </div>
+                            <BenfordChart digits={activeAnalysis.benford_digits} />
                           </section>
 
                           <section className="content-card">
@@ -1240,7 +1223,8 @@ export function Dashboard({
                                 <span>Velocity Windows</span>
                                 <span>{activeAnalysis.velocity_spikes.length}</span>
                               </div>
-                              <div className="stack">
+                              <VelocityChart spikes={activeAnalysis.velocity_spikes} />
+                              <div className="stack" style={{ marginTop: 8 }}>
                                 {activeAnalysis.velocity_spikes.map((spike) => (
                                   <article
                                     key={`${spike.entity_type}-${spike.entity_id}-${spike.window_start}`}
@@ -1301,9 +1285,8 @@ export function Dashboard({
           {activeView === "audit" && operator.role === "admin" ? (
             <AuditSection auditEvents={auditEvents} dateFormatter={dateFormatter} />
           ) : null}
-        </>
-      )}
-    </main>
+      </main>
+    </div>
   );
 }
 

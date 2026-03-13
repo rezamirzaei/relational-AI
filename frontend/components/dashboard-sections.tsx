@@ -1,5 +1,11 @@
 import type { FormEvent } from "react";
 
+import {
+  RiskDonutChart,
+  SeverityBarChart,
+  StatusBarChart,
+} from "@/components/charts";
+import type { ActiveView } from "@/components/sidebar";
 import type {
   AnalysisExplanation,
   AuditEvent,
@@ -11,13 +17,7 @@ import type {
   WorkspaceGuide,
 } from "@/lib/contracts";
 
-export type ActiveView =
-  | "overview"
-  | "investigate"
-  | "analyze"
-  | "cases"
-  | "alerts"
-  | "audit";
+export type { ActiveView };
 
 type MetricCardProps = {
   label: string;
@@ -512,49 +512,49 @@ export function OverviewSection({
               <span>Cases by Status</span>
               <span>{dashboardStats.total_cases}</span>
             </div>
-            <div className="bar-chart">
-              {Object.entries(dashboardStats.cases_by_status).map(([status, count]) => (
-                <div key={status} className="bar-row">
-                  <span className="bar-label">{status}</span>
-                  <div className="bar-track">
-                    <div
-                      className={`bar-fill ${status === "open" || status === "investigating" ? "warning" : "good"}`}
-                      style={{
-                        width: `${Math.max(
-                          8,
-                          (count / Math.max(1, dashboardStats.total_cases)) * 100,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="bar-value">{count}</span>
-                </div>
-              ))}
-            </div>
+            <StatusBarChart data={dashboardStats.cases_by_status} />
           </section>
           <section className="content-card">
             <div className="mini-header">
               <span>Alerts by Severity</span>
               <span>{dashboardStats.total_alerts}</span>
             </div>
-            <div className="bar-chart">
-              {Object.entries(dashboardStats.alerts_by_severity).map(([severity, count]) => (
-                <div key={severity} className="bar-row">
-                  <span className="bar-label">{severity}</span>
-                  <div className="bar-track">
-                    <div
-                      className={`bar-fill ${severity}`}
-                      style={{
-                        width: `${Math.max(
-                          8,
-                          (count / Math.max(1, dashboardStats.total_alerts)) * 100,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="bar-value">{count}</span>
-                </div>
-              ))}
+            <SeverityBarChart data={dashboardStats.alerts_by_severity} />
+          </section>
+        </div>
+      ) : null}
+
+      {dashboardStats && Object.keys(dashboardStats.risk_distribution).length > 0 ? (
+        <div className="insight-grid">
+          <section className="content-card">
+            <div className="mini-header">
+              <span>Risk Distribution</span>
+              <span>All analyses</span>
+            </div>
+            <RiskDonutChart data={dashboardStats.risk_distribution} />
+          </section>
+          <section className="content-card">
+            <div className="mini-header">
+              <span>Quick Stats</span>
+              <span>Summary</span>
+            </div>
+            <div className="stack" style={{ marginTop: 8 }}>
+              <div className="transaction-row">
+                <div><strong>Avg Risk Score</strong></div>
+                <div className="transaction-meta"><strong>{dashboardStats.avg_risk_score.toFixed(1)}/100</strong></div>
+              </div>
+              <div className="transaction-row">
+                <div><strong>Critical Cases</strong></div>
+                <div className="transaction-meta"><strong>{dashboardStats.critical_cases}</strong></div>
+              </div>
+              <div className="transaction-row">
+                <div><strong>Unacknowledged Alerts</strong></div>
+                <div className="transaction-meta"><strong>{dashboardStats.unacknowledged_alerts}</strong></div>
+              </div>
+              <div className="transaction-row">
+                <div><strong>Next Action</strong></div>
+                <div className="transaction-meta"><span style={{ fontSize: "0.82rem" }}>{dashboardStats.next_recommended_action}</span></div>
+              </div>
             </div>
           </section>
         </div>
