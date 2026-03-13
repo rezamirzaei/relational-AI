@@ -48,6 +48,19 @@ from relational_fraud_intelligence.application.dto.investigation import (
     ListScenariosQuery,
     ListScenariosResult,
 )
+from relational_fraud_intelligence.application.dto.routes import (
+    AddCommentBody,
+    AddCommentResult,
+    AnalysisResultResponse,
+    CreateCaseFromAlertResult,
+    DatasetListResponse,
+    DatasetResponse,
+    HealthResponse,
+    ProviderPostureResponse,
+    TransactionIngestBody,
+    UpdateAlertStatusBody,
+    UpdateCaseStatusBody,
+)
 from relational_fraud_intelligence.application.services.auth_service import (
     AuthenticationError,
     AuthorizationError,
@@ -55,14 +68,10 @@ from relational_fraud_intelligence.application.services.auth_service import (
 from relational_fraud_intelligence.bootstrap import ApplicationContainer
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
-    AppModel,
-    CaseComment,
-    CaseDisposition,
     CasePriority,
     CaseStatus,
     ExplanationAudience,
     FraudAlert,
-    FraudCase,
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
@@ -88,28 +97,6 @@ UploadFileParam = Annotated[UploadFile, File(...)]
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
-
-
-class HealthResponse(AppModel):
-    class ProviderPostureResponse(AppModel):
-        requested_text_signal_provider: str
-        active_text_signal_provider: str
-        requested_reasoning_provider: str
-        active_reasoning_provider: str
-        requested_explanation_provider: str
-        active_explanation_provider: str
-        notes: list[str]
-
-    status: str
-    app_name: str
-    environment: str
-    database_status: str
-    rate_limit_status: str
-    provider_status: str
-    rate_limit_backend: str
-    seeded_scenarios: int
-    seeded_operators: int
-    provider_posture: ProviderPostureResponse
 
 
 @router.get(
@@ -155,7 +142,7 @@ def health(container: ContainerDep) -> HealthResponse:
         rate_limit_backend=container.active_rate_limit_backend,
         seeded_scenarios=container.seed_result.inserted_scenarios,
         seeded_operators=container.operator_bootstrap_result.created_users,
-        provider_posture=HealthResponse.ProviderPostureResponse(
+        provider_posture=ProviderPostureResponse(
             requested_text_signal_provider=container.requested_text_signal_provider,
             active_text_signal_provider=container.active_text_signal_provider,
             requested_reasoning_provider=container.requested_reasoning_provider,
@@ -447,20 +434,6 @@ def update_case_status(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-class AddCommentBody(AppModel):
-    body: str
-
-
-class AddCommentResult(AppModel):
-    comment: CaseComment
-
-
-class UpdateCaseStatusBody(AppModel):
-    status: CaseStatus
-    disposition: CaseDisposition | None = None
-    resolution_notes: str | None = None
-
-
 @router.post(
     "/cases/{case_id}/comments",
     response_model=AddCommentResult,
@@ -488,21 +461,6 @@ def add_case_comment(
         return AddCommentResult(comment=comment)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-# ---------------------------------------------------------------------------
-# Alerts
-# ---------------------------------------------------------------------------
-
-
-class CreateCaseFromAlertResult(AppModel):
-    alert: FraudAlert
-    case: FraudCase
-
-
-class UpdateAlertStatusBody(AppModel):
-    status: AlertStatus
-    linked_case_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -664,26 +622,6 @@ def get_dashboard_stats(
 # ---------------------------------------------------------------------------
 
 
-class DatasetResponse(AppModel):
-    dataset_id: str
-    name: str
-    uploaded_at: str
-    row_count: int
-    status: str
-    error_message: str | None = None
-
-
-class DatasetListResponse(AppModel):
-    datasets: list[DatasetResponse]
-
-
-class AnalysisResultResponse(AppModel):
-    analysis: dict[str, object]
-
-
-class TransactionIngestBody(AppModel):
-    name: str = "api-ingestion"
-    transactions: list[dict[str, object]]
 
 
 @router.post(

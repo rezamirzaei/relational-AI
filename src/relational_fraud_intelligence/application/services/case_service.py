@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from relational_fraud_intelligence.application.dto.cases import (
@@ -26,24 +26,8 @@ from relational_fraud_intelligence.domain.models import (
     WorkflowSourceType,
 )
 
-
-class CaseRepository(Protocol):
-    def create_case(self, case: FraudCase) -> None: ...
-    def get_case(self, case_id: str) -> FraudCase | None: ...
-    def update_case(self, case: FraudCase) -> None: ...
-    def list_cases(
-        self,
-        *,
-        status: CaseStatus | None = None,
-        priority: CasePriority | None = None,
-        assigned_analyst_id: str | None = None,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[FraudCase], int]: ...
-    def add_comment(self, comment: CaseComment) -> None: ...
-    def list_comments(self, case_id: str) -> list[CaseComment]: ...
-    def count_by_status(self) -> dict[str, int]: ...
-    def count_critical(self) -> int: ...
+if TYPE_CHECKING:
+    from relational_fraud_intelligence.application.ports.repositories import CaseRepository
 
 
 def _priority_from_risk(risk_level: RiskLevel) -> CasePriority:

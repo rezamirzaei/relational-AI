@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from relational_fraud_intelligence.domain.models import (
@@ -26,9 +27,12 @@ from relational_fraud_intelligence.infrastructure.analysis.outliers import detec
 from relational_fraud_intelligence.infrastructure.analysis.round_amounts import detect_round_amounts
 from relational_fraud_intelligence.infrastructure.analysis.velocity import detect_velocity_spikes
 
+if TYPE_CHECKING:
+    from relational_fraud_intelligence.application.ports.repositories import DatasetStore
 
-class DatasetStore:
-    """In-memory storage for uploaded datasets and transactions."""
+
+class InMemoryDatasetStore:
+    """In-memory implementation of DatasetStore for testing and local use."""
 
     def __init__(self) -> None:
         self._datasets: dict[str, Dataset] = {}
@@ -64,6 +68,10 @@ class DatasetStore:
 
     def total_anomalies(self) -> int:
         return sum(r.total_anomalies for r in self._results.values())
+
+
+# Backwards compatibility alias
+DatasetStore = InMemoryDatasetStore
 
 
 # Required and optional CSV column names

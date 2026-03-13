@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from relational_fraud_intelligence.application.dto.alerts import (
@@ -21,27 +21,8 @@ from relational_fraud_intelligence.domain.models import (
     WorkflowSourceType,
 )
 
-
-class AlertRepository(Protocol):
-    def create_alert(self, alert: FraudAlert) -> None: ...
-    def get_alert(self, alert_id: str) -> FraudAlert | None: ...
-    def update_alert(self, alert: FraudAlert) -> None: ...
-    def list_alerts(
-        self,
-        *,
-        status: AlertStatus | None = None,
-        severity: RiskLevel | None = None,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[FraudAlert], int]: ...
-    def list_alerts_for_source(
-        self,
-        *,
-        source_type: WorkflowSourceType,
-        source_id: str,
-    ) -> list[FraudAlert]: ...
-    def count_unacknowledged(self) -> int: ...
-    def count_by_severity(self) -> dict[str, int]: ...
+if TYPE_CHECKING:
+    from relational_fraud_intelligence.application.ports.repositories import AlertRepository
 
 
 class AlertService:

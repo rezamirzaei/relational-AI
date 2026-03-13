@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from relational_fraud_intelligence.application.services.dataset_service import DatasetStore
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
     AnalysisResult,
@@ -79,11 +78,18 @@ class SqlAlchemyCaseRepository:
             if assigned_analyst_id is not None:
                 query = query.where(FraudCaseRecord.assigned_analyst_id == assigned_analyst_id)
 
-            records = session.scalars(query.order_by(FraudCaseRecord.updated_at.desc())).all()
+            # Count via SQL instead of loading all rows into Python
+            count_query = select(func.count()).select_from(query.subquery())
+            total = session.scalar(count_query) or 0
 
-        total = len(records)
-        start = (page - 1) * page_size
-        return [to_domain_case(record) for record in records[start : start + page_size]], total
+            offset = (page - 1) * page_size
+            records = session.scalars(
+                query.order_by(FraudCaseRecord.updated_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            ).all()
+
+        return [to_domain_case(record) for record in records], total
 
     def add_comment(self, comment: CaseComment) -> None:
         with self._session_factory.begin() as session:
@@ -107,21 +113,20 @@ class SqlAlchemyCaseRepository:
 
     def count_by_status(self) -> dict[str, int]:
         with self._session_factory() as session:
-            records = session.scalars(self._base_query()).all()
-        counts: dict[str, int] = {}
-        for record in records:
-            counts[record.status] = counts.get(record.status, 0) + 1
-        return counts
+            rows = session.execute(
+                select(FraudCaseRecord.status, func.count())
+                .group_by(FraudCaseRecord.status)
+            ).all()
+        return {status: count for status, count in rows}
 
     def count_critical(self) -> int:
         with self._session_factory() as session:
-            records = session.scalars(self._base_query()).all()
-        return sum(
-            1
-            for record in records
-            if record.priority == CasePriority.CRITICAL
-            and record.status not in {CaseStatus.RESOLVED, CaseStatus.CLOSED}
-        )
+            return session.scalar(
+                select(func.count())
+                .select_from(FraudCaseRecord)
+                .where(FraudCaseRecord.priority == CasePriority.CRITICAL)
+                .where(FraudCaseRecord.status.not_in([CaseStatus.RESOLVED, CaseStatus.CLOSED]))
+            ) or 0
 
     @staticmethod
     def _base_query() -> Select[tuple[FraudCaseRecord]]:
@@ -164,11 +169,19 @@ class SqlAlchemyAlertRepository:
                 query = query.where(FraudAlertRecord.status == status)
             if severity is not None:
                 query = query.where(FraudAlertRecord.severity == severity)
-            records = session.scalars(query.order_by(FraudAlertRecord.created_at.desc())).all()
 
-        total = len(records)
-        start = (page - 1) * page_size
-        return [to_domain_alert(record) for record in records[start : start + page_size]], total
+            # Count via SQL instead of loading all rows into Python
+            count_query = select(func.count()).select_from(query.subquery())
+            total = session.scalar(count_query) or 0
+
+            offset = (page - 1) * page_size
+            records = session.scalars(
+                query.order_by(FraudAlertRecord.created_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            ).all()
+
+        return [to_domain_alert(record) for record in records], total
 
     def list_alerts_for_source(
         self,
@@ -187,23 +200,26 @@ class SqlAlchemyAlertRepository:
 
     def count_unacknowledged(self) -> int:
         with self._session_factory() as session:
-            records = session.scalars(self._base_query()).all()
-        return sum(1 for record in records if record.status == AlertStatus.NEW)
+            return session.scalar(
+                select(func.count())
+                .select_from(FraudAlertRecord)
+                .where(FraudAlertRecord.status == AlertStatus.NEW)
+            ) or 0
 
     def count_by_severity(self) -> dict[str, int]:
         with self._session_factory() as session:
-            records = session.scalars(self._base_query()).all()
-        counts: dict[str, int] = {}
-        for record in records:
-            counts[record.severity] = counts.get(record.severity, 0) + 1
-        return counts
+            rows = session.execute(
+                select(FraudAlertRecord.severity, func.count())
+                .group_by(FraudAlertRecord.severity)
+            ).all()
+        return {severity: count for severity, count in rows}
 
     @staticmethod
     def _base_query() -> Select[tuple[FraudAlertRecord]]:
         return select(FraudAlertRecord)
 
 
-class SqlAlchemyDatasetStore(DatasetStore):
+class SqlAlchemyDatasetStore:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 
@@ -278,8 +294,9 @@ class SqlAlchemyDatasetStore(DatasetStore):
 
     def total_transactions(self) -> int:
         with self._session_factory() as session:
-            records = session.scalars(select(DatasetRecord)).all()
-        return sum(len(record.transactions) for record in records)
+            return session.scalar(
+                select(func.coalesce(func.sum(DatasetRecord.row_count), 0))
+            ) or 0
 
     def total_anomalies(self) -> int:
         return sum(result.total_anomalies for result in self.list_results())

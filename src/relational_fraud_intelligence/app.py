@@ -19,7 +19,7 @@ from relational_fraud_intelligence.settings import AppSettings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings = AppSettings()
+    settings: AppSettings = app.state.settings
     configure_logging()
     container = build_container(settings)
     app.state.container = container
@@ -71,6 +71,9 @@ def create_app() -> FastAPI:
             {"name": "Admin", "description": "Administrative endpoints for audit and operations."},
         ],
     )
+
+    # Store settings so the lifespan handler uses the same instance
+    app.state.settings = settings
 
     app.add_middleware(
         CORSMiddleware,

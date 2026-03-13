@@ -7,10 +7,12 @@ from relational_fraud_intelligence.application.dto.dashboard import (
     GetDashboardStatsResult,
 )
 from relational_fraud_intelligence.application.dto.investigation import ListScenariosQuery
-from relational_fraud_intelligence.application.ports.repositories import ScenarioRepository
-from relational_fraud_intelligence.application.services.alert_service import AlertRepository
-from relational_fraud_intelligence.application.services.case_service import CaseRepository
-from relational_fraud_intelligence.application.services.dataset_service import DatasetStore
+from relational_fraud_intelligence.application.ports.repositories import (
+    AlertRepository,
+    CaseRepository,
+    DatasetStore,
+    ScenarioRepository,
+)
 from relational_fraud_intelligence.domain.models import (
     ActivityEvent,
     AnalysisResult,
