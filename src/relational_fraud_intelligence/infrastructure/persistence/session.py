@@ -4,12 +4,13 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 
 def build_engine(database_url: str, *, echo: bool = False) -> Engine:
-    _prepare_sqlite_directory(database_url)
+    prepare_database_url(database_url)
 
     engine_kwargs: dict[str, object] = {"echo": echo, "future": True}
     if database_url.startswith("sqlite"):
@@ -33,20 +34,17 @@ def ping_database(session_factory: sessionmaker[Session]) -> bool:
     return True
 
 
-def _prepare_sqlite_directory(database_url: str) -> None:
-    sqlite_file_prefixes = (
-        "sqlite+pysqlite:///./",
-        "sqlite:///./",
-        "sqlite+pysqlite:///",
-        "sqlite:///",
-    )
-    if not database_url.startswith(sqlite_file_prefixes):
-        return
-    if database_url.endswith(":memory:"):
+def prepare_database_url(database_url: str) -> None:
+    url = make_url(database_url)
+    if url.get_backend_name() != "sqlite":
         return
 
-    path_text = database_url.split("///", maxsplit=1)[1]
-    database_path = Path(path_text)
+    database_name = url.database
+    if database_name in {None, "", ":memory:"}:
+        return
+
+    assert database_name is not None
+    database_path = Path(database_name)
     if not database_path.is_absolute():
         database_path = Path.cwd() / database_path
     database_path.parent.mkdir(parents=True, exist_ok=True)

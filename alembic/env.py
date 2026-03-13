@@ -17,12 +17,15 @@ if str(SRC) not in sys.path:
 def _load_project_modules():
     from relational_fraud_intelligence.infrastructure.persistence import models  # noqa: F401
     from relational_fraud_intelligence.infrastructure.persistence.base import Base
+    from relational_fraud_intelligence.infrastructure.persistence.session import (
+        prepare_database_url,
+    )
     from relational_fraud_intelligence.settings import AppSettings
 
-    return Base, AppSettings
+    return Base, AppSettings, prepare_database_url
 
 
-Base, AppSettings = _load_project_modules()
+Base, AppSettings, prepare_database_url = _load_project_modules()
 
 config = context.config
 if config.config_file_name is not None:
@@ -46,6 +49,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    prepare_database_url(config.get_main_option("sqlalchemy.url"))
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

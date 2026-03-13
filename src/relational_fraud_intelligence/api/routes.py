@@ -52,6 +52,7 @@ from relational_fraud_intelligence.application.dto.investigation import (
 from relational_fraud_intelligence.application.dto.routes import (
     AddCommentBody,
     AddCommentResult,
+    AnalysisResponse,
     CreateCaseFromAlertResult,
     CreateCaseFromAnalysisResult,
     CreateCaseFromInvestigationResult,
@@ -849,6 +850,7 @@ def list_datasets(
 
 @router.post(
     "/datasets/{dataset_id}/analyze",
+    response_model=AnalysisResponse,
     tags=["Datasets"],
     summary="Run fraud analysis on a dataset",
     description=(
@@ -863,7 +865,7 @@ def analyze_dataset(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
-) -> dict[str, object]:
+) -> AnalysisResponse:
     request.state.current_principal = principal
     request.state.audit_action = "analyze-dataset"
     request.state.audit_resource_type = "dataset"
@@ -892,7 +894,7 @@ def analyze_dataset(
             risk_score=result.risk_score,
             findings=findings,
         )
-        return {"analysis": result.model_dump(mode="json")}
+        return AnalysisResponse(analysis=result)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -901,6 +903,7 @@ def analyze_dataset(
 
 @router.get(
     "/datasets/{dataset_id}/analysis",
+    response_model=AnalysisResponse,
     tags=["Datasets"],
     summary="Get analysis results for a dataset",
 )
@@ -909,14 +912,14 @@ def get_analysis_results(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
-) -> dict[str, object]:
+) -> AnalysisResponse:
     request.state.current_principal = principal
     request.state.audit_action = "get-analysis-results"
     request.state.audit_resource_type = "dataset"
     request.state.audit_resource_id = dataset_id
     try:
         result = container.dataset_service.get_result(dataset_id)
-        return {"analysis": result.model_dump(mode="json")}
+        return AnalysisResponse(analysis=result)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

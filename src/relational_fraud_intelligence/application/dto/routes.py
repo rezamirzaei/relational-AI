@@ -7,6 +7,8 @@ reusable for testing and documentation.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
     AnalysisResult,
@@ -14,6 +16,7 @@ from relational_fraud_intelligence.domain.models import (
     CaseComment,
     CaseDisposition,
     CaseStatus,
+    DatasetStatus,
     FraudAlert,
     FraudCase,
     InvestigationCase,
@@ -35,12 +38,12 @@ class ProviderPostureResponse(AppModel):
 
 
 class HealthResponse(AppModel):
-    status: str
+    status: Literal["ok", "degraded"]
     app_name: str
     environment: str
-    database_status: str
-    rate_limit_status: str
-    provider_status: str
+    database_status: Literal["ready", "unavailable"]
+    rate_limit_status: Literal["ready", "degraded", "unavailable"]
+    provider_status: Literal["ready", "degraded"]
     rate_limit_backend: str
     seeded_scenarios: int
     seeded_operators: int
@@ -91,7 +94,7 @@ class DatasetResponse(AppModel):
     name: str
     uploaded_at: str
     row_count: int
-    status: str
+    status: DatasetStatus
     error_message: str | None = None
 
 
@@ -102,6 +105,10 @@ class DatasetListResponse(AppModel):
 class TransactionIngestBody(AppModel):
     name: str = "api-ingestion"
     transactions: list[dict[str, object]]
+
+
+class AnalysisResponse(AppModel):
+    analysis: AnalysisResult
 
 
 class CreateCaseFromAnalysisResult(AppModel):

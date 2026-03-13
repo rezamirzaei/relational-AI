@@ -8,7 +8,7 @@
     "start": "next start --port 3001",
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",
