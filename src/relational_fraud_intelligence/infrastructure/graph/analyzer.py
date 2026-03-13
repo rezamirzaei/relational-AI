@@ -152,6 +152,7 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
             f"customer:{txn.customer_id}",
             f"merchant:{txn.merchant_id}",
             relation="transacts-with",
+            weight=txn.amount,
         )
 
     if G.number_of_nodes() == 0:
@@ -177,10 +178,22 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
     except Exception:
         community_count = components
 
-    # Hub entities (top 5 by degree)
-    sorted_nodes = sorted(G.nodes(), key=lambda n: G.degree(n), reverse=True)
+    # Betweenness centrality — find bridge entities
+    try:
+        betweenness = nx.betweenness_centrality(G)
+    except Exception:
+        betweenness = {}
+
+    # Hub entities: combine degree + betweenness to find truly important nodes
+    node_scores: dict[str, float] = {}
+    for node in G.nodes():
+        deg_score = degree_centrality.get(node, 0)
+        bet_score = betweenness.get(node, 0)
+        node_scores[node] = deg_score * 0.6 + bet_score * 0.4
+
+    sorted_nodes = sorted(node_scores.items(), key=lambda kv: kv[1], reverse=True)
     hub_entities: list[EntityReference] = []
-    for node in sorted_nodes[:5]:
+    for node, _score in sorted_nodes[:5]:
         node_parts = node.split(":", 1)
         if node_parts[0] in entity_type_map:
             label = G.nodes[node].get("label", node_parts[1])
@@ -192,8 +205,35 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
                 )
             )
 
-    amplification = 1.0 + (density * 0.5) + (len(hub_entities) * 0.1)
-    amplification = round(min(amplification, 2.0), 2)
+    # Circular flow detection on a directed subgraph of money flows
+    circular_flow_bonus = 0.0
+    try:
+        DG = nx.DiGraph()
+        for txn in scenario.transactions:
+            DG.add_edge(
+                f"account:{txn.account_id}",
+                f"merchant:{txn.merchant_id}",
+                weight=txn.amount,
+            )
+        cycles = list(nx.simple_cycles(DG))
+        if cycles:
+            circular_flow_bonus = min(0.3, len(cycles) * 0.1)
+    except Exception:
+        pass
+
+    # Shortest path between first and last customer (if multiple) — mule chain proxy
+    shortest_path_length: int | None = None
+    customer_nodes = [n for n in G.nodes() if n.startswith("customer:")]
+    if len(customer_nodes) >= 2:
+        try:
+            shortest_path_length = int(nx.shortest_path_length(
+                G, customer_nodes[0], customer_nodes[-1]
+            ))
+        except nx.NetworkXNoPath:
+            pass
+
+    amplification = 1.0 + (density * 0.5) + (len(hub_entities) * 0.1) + circular_flow_bonus
+    amplification = round(min(amplification, 2.5), 2)
 
     return GraphAnalysisResult(
         connected_components=components,
@@ -206,5 +246,6 @@ def _analyze_with_networkx(scenario: FraudScenario) -> GraphAnalysisResult:
         highest_degree_score=highest_degree,
         community_count=community_count,
         hub_entities=hub_entities,
+        shortest_path_length=shortest_path_length,
         risk_amplification_factor=amplification,
     )
