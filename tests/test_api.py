@@ -1,6 +1,8 @@
 from pathlib import Path
+from typing import cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from relational_fraud_intelligence.app import create_app
@@ -99,6 +101,7 @@ def test_scenario_investigation_can_create_a_linked_case() -> None:
     assert payload["case"]["source_type"] == "scenario"
     assert payload["case"]["source_id"] == "synthetic-identity-ring"
     assert "Primary lead:" in payload["case"]["summary"]
+    assert payload["case"]["alert_count"] == len(payload["linked_alerts"])
     assert payload["linked_alerts"]
     assert all(
         alert["linked_case_id"] == payload["case"]["case_id"] for alert in payload["linked_alerts"]
@@ -206,6 +209,7 @@ def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> 
         assert created_case["source_id"] == dataset_id
         assert created_case["risk_score"] == analysis["risk_score"]
         assert "Primary lead:" in created_case["summary"]
+        assert created_case["alert_count"] == len(create_case_payload["linked_alerts"])
         assert create_case_payload["linked_alerts"]
         assert all(
             alert["linked_case_id"] == created_case["case_id"]
@@ -323,6 +327,92 @@ def test_scenario_case_detail_exposes_transactions_notes_and_comments() -> None:
     assert payload["comments"][0]["body"] == "Device overlap and note history justify escalation."
 
 
+def test_scenario_case_detail_uses_persisted_snapshot() -> None:
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+
+        create_case_response = client.post(
+            "/api/v1/investigations/synthetic-identity-ring/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert create_case_response.status_code == 200
+        case_id = create_case_response.json()["case"]["case_id"]
+
+        app = cast(FastAPI, client.app)
+        container = app.state.container
+
+        def fail_live_scenario_lookup(*args: object, **kwargs: object) -> object:
+            raise AssertionError("scenario case detail should use its persisted snapshot")
+
+        container.scenario_catalog_service.get_scenario = fail_live_scenario_lookup
+        container.investigation_service.execute = fail_live_scenario_lookup
+
+        detail_response = client.get(
+            f"/api/v1/cases/{case_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["case"]["case_id"] == case_id
+    assert payload["investigation"]["scenario"]["scenario_id"] == "synthetic-identity-ring"
+    assert payload["scenario_transactions"]
+    assert payload["investigator_notes"]
+
+
+def test_dataset_case_detail_uses_persisted_snapshot() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        create_case_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert create_case_response.status_code == 200
+        case_id = create_case_response.json()["case"]["case_id"]
+
+        app = cast(FastAPI, client.app)
+        container = app.state.container
+
+        def fail_live_dataset_lookup(*args: object, **kwargs: object) -> object:
+            raise AssertionError("dataset case detail should use its persisted snapshot")
+
+        container.dataset_service.get_dataset = fail_live_dataset_lookup
+        container.dataset_service.get_result = fail_live_dataset_lookup
+        container.dataset_service.get_transactions = fail_live_dataset_lookup
+
+        detail_response = client.get(
+            f"/api/v1/cases/{case_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["case"]["case_id"] == case_id
+    assert payload["dataset"]["dataset_id"] == dataset_id
+    assert payload["analysis"]["dataset_id"] == dataset_id
+    assert payload["dataset_transactions"]
+
+
 def test_case_status_update_uses_path_case_id() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
@@ -407,6 +497,50 @@ def test_alert_status_update_uses_path_alert_id() -> None:
     assert payload["acknowledged_at"] is not None
 
 
+def test_alert_status_update_rejects_unknown_linked_case() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        alerts_response = client.get(
+            "/api/v1/alerts",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert alerts_response.status_code == 200
+        alert = next(
+            item
+            for item in alerts_response.json()["alerts"]
+            if item["source_type"] == "dataset" and item["source_id"] == dataset_id
+        )
+
+        update_response = client.patch(
+            f"/api/v1/alerts/{alert['alert_id']}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"status": "investigating", "linked_case_id": "missing-case-id"},
+        )
+
+    assert update_response.status_code == 404
+    assert "missing-case-id" in update_response.json()["detail"]
+
+
 def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
@@ -450,6 +584,7 @@ def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
         assert payload["case"]["source_type"] == "dataset"
         assert payload["case"]["source_id"] == dataset_id
         assert payload["case"]["title"] == f"Alert review: {alert['title']}"
+        assert payload["case"]["alert_count"] >= 1
         assert payload["alert"]["status"] == "investigating"
         assert payload["alert"]["linked_case_id"] == payload["case"]["case_id"]
 

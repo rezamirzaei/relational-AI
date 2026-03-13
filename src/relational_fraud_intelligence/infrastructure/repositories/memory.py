@@ -131,3 +131,6 @@ class InMemoryAlertRepository:
             for alert in self._alerts.values()
             if alert.source_type == source_type and alert.source_id == source_id
         ]
+
+    def count_linked_to_case(self, case_id: str) -> int:
+        return sum(1 for alert in self._alerts.values() if alert.linked_case_id == case_id)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from relational_fraud_intelligence.application.dto.alerts import CreateAlertCommand, ListAlertsQuery
 from relational_fraud_intelligence.application.dto.cases import (
     AddCaseCommentCommand,
@@ -17,6 +19,8 @@ from relational_fraud_intelligence.application.services.case_service import Case
 from relational_fraud_intelligence.application.services.dataset_service import DatasetService
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
+    CaseEvidenceSnapshot,
+    Dataset,
     DatasetStatus,
     RiskLevel,
     WorkflowSourceType,
@@ -25,6 +29,15 @@ from relational_fraud_intelligence.domain.models import (
 
 def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRepository) -> None:
     service = CaseService(case_repository)
+    evidence_snapshot = CaseEvidenceSnapshot(
+        dataset=Dataset(
+            dataset_id="dataset-42",
+            name="dataset-42.csv",
+            uploaded_at=datetime.now(UTC),
+            row_count=12,
+            status=DatasetStatus.COMPLETED,
+        )
+    )
     created = service.create_case(
         CreateCaseCommand(
             source_type=WorkflowSourceType.DATASET,
@@ -33,7 +46,8 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRe
             summary="Round-amount activity needs review.",
             risk_score=70,
             risk_level=RiskLevel.HIGH,
-        )
+        ),
+        evidence_snapshot=evidence_snapshot,
     )
 
     service.add_comment(
@@ -47,6 +61,9 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRe
 
     assert fetched.case.source_type == WorkflowSourceType.DATASET
     assert fetched.case.comment_count == 1
+    assert fetched.case.evidence_snapshot is not None
+    assert fetched.case.evidence_snapshot.dataset is not None
+    assert fetched.case.evidence_snapshot.dataset.dataset_id == "dataset-42"
     assert listed.total_count == 1
     assert listed.cases[0].source_id == "dataset-42"
 

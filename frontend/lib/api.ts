@@ -323,11 +323,3 @@ export async function fetchAnalysisExplanation(
     token,
   );
 }
-
-export async function fetchAnalysisResults(token: string, datasetId: string): Promise<AnalysisResponse> {
-  return fetchJson<AnalysisResponse>(
-    `${browserApiBaseUrl}/datasets/${datasetId}/analysis`,
-    undefined,
-    token,
-  );
-}

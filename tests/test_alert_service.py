@@ -85,6 +85,34 @@ def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
     assert result.alert.resolved_at is not None
 
 
+def test_reopening_alert_clears_terminal_timestamp(alert_service: AlertService) -> None:
+    created = alert_service.create_alert(
+        CreateAlertCommand(
+            scenario_id="s1",
+            rule_code="cross-border-mismatch",
+            title="Cross-border mismatch",
+            severity=RiskLevel.MEDIUM,
+            narrative="Merchant geography differs.",
+        )
+    )
+
+    alert_service.update_status(
+        UpdateAlertStatusCommand(
+            alert_id=created.alert.alert_id,
+            status=AlertStatus.FALSE_POSITIVE,
+        )
+    )
+    reopened = alert_service.update_status(
+        UpdateAlertStatusCommand(
+            alert_id=created.alert.alert_id,
+            status=AlertStatus.INVESTIGATING,
+        )
+    )
+
+    assert reopened.alert.status == AlertStatus.INVESTIGATING
+    assert reopened.alert.resolved_at is None
+
+
 def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
     alert_service.create_alert(
         CreateAlertCommand(

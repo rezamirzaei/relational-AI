@@ -269,6 +269,7 @@ class FraudCaseRecord(Base):
     comment_count: Mapped[int] = mapped_column(Integer, default=0)
     alert_count: Mapped[int] = mapped_column(Integer, default=0)
     comments: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    evidence_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
 
 class FraudAlertRecord(Base):

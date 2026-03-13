@@ -6,6 +6,7 @@ from relational_fraud_intelligence.domain.models import (
     AccountProfile,
     AnalysisResult,
     CaseComment,
+    CaseEvidenceSnapshot,
     CustomerProfile,
     Dataset,
     DeviceProfile,
@@ -276,6 +277,7 @@ def to_case_record(case: FraudCase, comments: list[CaseComment]) -> FraudCaseRec
         comment_count=case.comment_count,
         alert_count=case.alert_count,
         comments=[comment.model_dump(mode="json") for comment in comments],
+        evidence_snapshot=to_json_case_snapshot(case.evidence_snapshot),
     )
 
 
@@ -302,6 +304,7 @@ def to_domain_case(record: FraudCaseRecord) -> FraudCase:
             "sla_deadline": record.sla_deadline,
             "comment_count": record.comment_count,
             "alert_count": record.alert_count,
+            "evidence_snapshot": to_domain_case_snapshot(record.evidence_snapshot),
         }
     )
 
@@ -394,3 +397,15 @@ def to_domain_analysis(payload: dict[str, object] | None) -> AnalysisResult | No
     if payload is None:
         return None
     return AnalysisResult.model_validate(payload)
+
+
+def to_json_case_snapshot(snapshot: CaseEvidenceSnapshot | None) -> dict[str, object] | None:
+    if snapshot is None:
+        return None
+    return snapshot.model_dump(mode="json")
+
+
+def to_domain_case_snapshot(payload: dict[str, object] | None) -> CaseEvidenceSnapshot | None:
+    if payload is None:
+        return None
+    return CaseEvidenceSnapshot.model_validate(payload)

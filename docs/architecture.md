@@ -72,6 +72,7 @@ graph TB
 
 - The real product flow starts from uploaded transaction data.
 - Alerts, cases, and datasets are persisted through SQLAlchemy repositories.
+- Cases capture immutable evidence snapshots at creation time so historical reviews do not drift when rules or providers change.
 - Reference scenarios exist for validation, tests, and rule calibration, not as the primary user workflow.
 - Provider failures are surfaced as runtime notes instead of collapsing the whole flow.
 - Authentication, rate limiting, and audit logging are part of the application boundary, not bolt-ons.
@@ -139,7 +140,8 @@ Relational storage with SQLAlchemy + Alembic:
 - `fraud_cases`
 
 Datasets persist uploaded rows and analysis payloads. Alerts and cases persist
-source metadata so they can point to either a dataset or a reference scenario.
+source metadata, and cases additionally persist source evidence snapshots so
+historical details remain stable for datasets and reference scenarios alike.
 
 ## API surface
 
@@ -152,11 +154,13 @@ source metadata so they can point to either a dataset or a reference scenario.
 | GET | `/scenarios` | Investigations | List reference scenarios |
 | GET | `/scenarios/{id}` | Investigations | Scenario details |
 | POST | `/investigations` | Investigations | Run reference investigation |
+| POST | `/investigations/{id}/case` | Investigations | Create and persist a case from a scenario investigation |
 | POST | `/datasets/upload` | Datasets | Upload a transaction CSV |
 | POST | `/datasets/ingest` | Datasets | Ingest transactions via API |
 | GET | `/datasets` | Datasets | List uploaded datasets |
 | POST | `/datasets/{id}/analyze` | Datasets | Analyze uploaded data |
 | GET | `/datasets/{id}/analysis` | Datasets | Fetch analysis results |
+| POST | `/datasets/{id}/case` | Datasets | Create and persist a case from a completed analysis |
 | GET | `/datasets/{id}/explanation` | Datasets | Fetch operator-facing analysis brief |
 | POST | `/cases` | Cases | Create fraud case |
 | GET | `/cases` | Cases | List cases |
@@ -165,6 +169,7 @@ source metadata so they can point to either a dataset or a reference scenario.
 | POST | `/cases/{id}/comments` | Cases | Add case comment |
 | GET | `/alerts` | Alerts | List alerts |
 | PATCH | `/alerts/{id}` | Alerts | Update alert status |
+| POST | `/alerts/{id}/case` | Alerts | Create and persist a case from an alert source |
 | GET | `/dashboard/stats` | Dashboard | Aggregate workflow metrics |
 | GET | `/audit-events` | Admin | Audit trail |
 

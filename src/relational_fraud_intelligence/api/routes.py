@@ -70,15 +70,22 @@ from relational_fraud_intelligence.application.services.auth_service import (
 from relational_fraud_intelligence.bootstrap import ApplicationContainer
 from relational_fraud_intelligence.domain.models import (
     AlertStatus,
+    AnalysisResult,
+    CaseComment,
+    CaseEvidenceSnapshot,
     CasePriority,
     CaseStatus,
     Dataset,
     ExplanationAudience,
     FraudAlert,
+    FraudCase,
     InvestigationCase,
+    InvestigatorNote,
     OperatorPrincipal,
     OperatorRole,
     RiskLevel,
+    TransactionRecord,
+    UploadedTransaction,
     WorkflowSourceType,
 )
 
@@ -341,46 +348,27 @@ def create_case_from_investigation(
         result = container.investigation_service.execute(
             InvestigateScenarioCommand(scenario_id=scenario_id)
         )
-        container.alert_service.generate_alerts_from_investigation(
+        scenario = container.scenario_catalog_service.get_scenario(
+            GetScenarioQuery(scenario_id=scenario_id)
+        ).scenario
+        related_alerts = container.alert_service.generate_alerts_from_investigation(
             scenario_id=scenario_id,
             risk_score=result.investigation.total_risk_score,
             rule_hits=_findings_from_investigation(result.investigation),
         )
-
-        related_alerts = container.alert_service.list_alerts_for_source(
-            source_type=WorkflowSourceType.SCENARIO,
-            source_id=scenario_id,
+        evidence_snapshot = _build_scenario_case_snapshot(
+            investigation=result.investigation,
+            scenario_transactions=scenario.transactions,
+            investigator_notes=scenario.investigator_notes,
         )
-        existing_case_id = next(
-            (alert.linked_case_id for alert in related_alerts if alert.linked_case_id),
-            None,
-        )
-        if existing_case_id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Scenario '{scenario_id}' already has alerts linked to case "
-                    f"'{existing_case_id}'."
-                ),
-            )
-
         case_command = _build_case_command_from_investigation(result.investigation)
         _validate_case_source(case_command, container)
-        created_case = container.case_service.create_case(case_command).case
-
-        linked_alerts: list[FraudAlert] = []
-        for alert in related_alerts:
-            if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
-                continue
-            linked_alerts.append(
-                container.alert_service.update_status(
-                    UpdateAlertStatusCommand(
-                        alert_id=alert.alert_id,
-                        status=AlertStatus.INVESTIGATING,
-                        linked_case_id=created_case.case_id,
-                    )
-                ).alert
-            )
+        created_case, linked_alerts = _create_case_with_source_links(
+            command=case_command,
+            container=container,
+            evidence_snapshot=evidence_snapshot,
+            related_alerts=related_alerts,
+        )
 
         return CreateCaseFromInvestigationResult(
             investigation=result.investigation,
@@ -416,7 +404,12 @@ def create_case(
     request.state.audit_resource_type = "fraud-case"
     try:
         _validate_case_source(command, container)
-        return container.case_service.create_case(command)
+        created_case, _ = _create_case_with_source_links(
+            command=command,
+            container=container,
+            evidence_snapshot=_build_case_evidence_snapshot(command, container),
+        )
+        return CreateCaseResult(case=created_case)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -471,6 +464,13 @@ def get_case(
             source_type=case.source_type,
             source_id=case.source_id,
         )
+        snapshot_result = _case_detail_from_snapshot(
+            case=case,
+            comments=comments,
+            related_alerts=related_alerts,
+        )
+        if snapshot_result is not None:
+            return snapshot_result
 
         if case.source_type == WorkflowSourceType.DATASET:
             dataset = container.dataset_service.get_dataset(case.source_id)
@@ -621,13 +621,22 @@ def update_alert_status(
     request.state.audit_resource_type = "fraud-alert"
     request.state.audit_resource_id = alert_id
     try:
-        return container.alert_service.update_status(
+        current_alert = container.alert_service.get_alert(GetAlertQuery(alert_id=alert_id)).alert
+        if body.linked_case_id is not None:
+            container.case_service.get_case(GetCaseQuery(case_id=body.linked_case_id))
+        result = container.alert_service.update_status(
             UpdateAlertStatusCommand(
                 alert_id=alert_id,
                 status=body.status,
                 linked_case_id=body.linked_case_id,
             )
         )
+        _sync_case_alert_counts(
+            container,
+            current_alert.linked_case_id,
+            result.alert.linked_case_id,
+        )
+        return result
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -665,16 +674,23 @@ def create_case_from_alert(
                 detail=f"Alert '{alert_id}' is already closed and cannot open a case.",
             )
 
+        related_alerts = container.alert_service.list_alerts_for_source(
+            source_type=alert.source_type,
+            source_id=alert.source_id,
+        )
         case_command = _build_case_command_from_alert(alert, container)
         _validate_case_source(case_command, container)
-        created_case = container.case_service.create_case(case_command).case
-        updated_alert = container.alert_service.update_status(
-            UpdateAlertStatusCommand(
-                alert_id=alert.alert_id,
-                status=AlertStatus.INVESTIGATING,
-                linked_case_id=created_case.case_id,
-            )
-        ).alert
+        created_case, linked_alerts = _create_case_with_source_links(
+            command=case_command,
+            container=container,
+            evidence_snapshot=_build_case_evidence_snapshot(case_command, container),
+            related_alerts=related_alerts,
+        )
+        updated_alert = next(
+            linked_alert
+            for linked_alert in linked_alerts
+            if linked_alert.alert_id == alert.alert_id
+        )
         return CreateCaseFromAlertResult(alert=updated_alert, case=created_case)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -929,38 +945,20 @@ def create_case_from_analysis(
         analysis = container.dataset_service.get_result(dataset_id)
         case_command = _build_case_command_from_analysis(dataset_id, container)
         _validate_case_source(case_command, container)
-
         related_alerts = container.alert_service.list_alerts_for_source(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset_id,
         )
-        existing_case_id = next(
-            (alert.linked_case_id for alert in related_alerts if alert.linked_case_id),
-            None,
+        created_case, linked_alerts = _create_case_with_source_links(
+            command=case_command,
+            container=container,
+            evidence_snapshot=_build_dataset_case_snapshot(
+                dataset=container.dataset_service.get_dataset(dataset_id),
+                analysis=analysis,
+                dataset_transactions=container.dataset_service.get_transactions(dataset_id),
+            ),
+            related_alerts=related_alerts,
         )
-        if existing_case_id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Dataset '{dataset_id}' already has alerts linked to case "
-                    f"'{existing_case_id}'."
-                ),
-            )
-
-        created_case = container.case_service.create_case(case_command).case
-        linked_alerts: list[FraudAlert] = []
-        for alert in related_alerts:
-            if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
-                continue
-            linked_alerts.append(
-                container.alert_service.update_status(
-                    UpdateAlertStatusCommand(
-                        alert_id=alert.alert_id,
-                        status=AlertStatus.INVESTIGATING,
-                        linked_case_id=created_case.case_id,
-                    )
-                ).alert
-            )
 
         return CreateCaseFromAnalysisResult(
             analysis=analysis,
@@ -1163,3 +1161,178 @@ def _risk_score_from_severity(risk_level: RiskLevel) -> int:
         RiskLevel.HIGH: 70,
         RiskLevel.CRITICAL: 90,
     }[risk_level]
+
+
+def _case_detail_from_snapshot(
+    *,
+    case: FraudCase,
+    comments: list[CaseComment],
+    related_alerts: list[FraudAlert],
+) -> GetCaseResult | None:
+    snapshot = case.evidence_snapshot
+    if snapshot is None:
+        return None
+
+    if case.source_type == WorkflowSourceType.DATASET:
+        if snapshot.dataset is None:
+            return None
+        return GetCaseResult(
+            case=case,
+            comments=comments,
+            related_alerts=related_alerts,
+            analysis=snapshot.analysis,
+            dataset=_to_case_dataset_detail(snapshot.dataset),
+            dataset_transactions=snapshot.dataset_transactions,
+        )
+
+    if (
+        snapshot.investigation is None
+        and not snapshot.scenario_transactions
+        and not snapshot.investigator_notes
+    ):
+        return None
+
+    return GetCaseResult(
+        case=case,
+        comments=comments,
+        related_alerts=related_alerts,
+        investigation=snapshot.investigation,
+        scenario_transactions=snapshot.scenario_transactions,
+        investigator_notes=snapshot.investigator_notes,
+    )
+
+
+def _build_case_evidence_snapshot(
+    command: CreateCaseCommand,
+    container: ApplicationContainer,
+) -> CaseEvidenceSnapshot:
+    if command.source_type == WorkflowSourceType.DATASET:
+        dataset = container.dataset_service.get_dataset(command.source_id or "")
+        try:
+            analysis = container.dataset_service.get_result(dataset.dataset_id)
+        except LookupError:
+            analysis = None
+        return _build_dataset_case_snapshot(
+            dataset=dataset,
+            analysis=analysis,
+            dataset_transactions=container.dataset_service.get_transactions(dataset.dataset_id),
+        )
+
+    scenario_id = command.scenario_id or command.source_id or ""
+    scenario = container.scenario_catalog_service.get_scenario(
+        GetScenarioQuery(scenario_id=scenario_id)
+    ).scenario
+    investigation = container.investigation_service.execute(
+        InvestigateScenarioCommand(scenario_id=scenario_id)
+    ).investigation
+    return _build_scenario_case_snapshot(
+        investigation=investigation,
+        scenario_transactions=scenario.transactions,
+        investigator_notes=scenario.investigator_notes,
+    )
+
+
+def _build_dataset_case_snapshot(
+    *,
+    dataset: Dataset,
+    analysis: AnalysisResult | None,
+    dataset_transactions: list[UploadedTransaction],
+) -> CaseEvidenceSnapshot:
+    return CaseEvidenceSnapshot(
+        analysis=analysis,
+        dataset=dataset,
+        dataset_transactions=dataset_transactions,
+    )
+
+
+def _build_scenario_case_snapshot(
+    *,
+    investigation: InvestigationCase | None,
+    scenario_transactions: list[TransactionRecord],
+    investigator_notes: list[InvestigatorNote],
+) -> CaseEvidenceSnapshot:
+    return CaseEvidenceSnapshot(
+        investigation=investigation,
+        scenario_transactions=scenario_transactions,
+        investigator_notes=investigator_notes,
+    )
+
+
+def _create_case_with_source_links(
+    *,
+    command: CreateCaseCommand,
+    container: ApplicationContainer,
+    evidence_snapshot: CaseEvidenceSnapshot,
+    related_alerts: list[FraudAlert] | None = None,
+) -> tuple[FraudCase, list[FraudAlert]]:
+    source_alerts = related_alerts or container.alert_service.list_alerts_for_source(
+        source_type=command.source_type,
+        source_id=command.source_id or "",
+    )
+    existing_case_id = _existing_linked_case_id(source_alerts)
+    if existing_case_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{_source_label(command.source_type)} '{command.source_id}' already has alerts "
+                f"linked to case '{existing_case_id}'."
+            ),
+        )
+
+    created_case = container.case_service.create_case(
+        command,
+        evidence_snapshot=evidence_snapshot,
+    ).case
+    linked_alerts = _link_source_alerts(container, source_alerts, created_case.case_id)
+    synced_case = container.case_service.sync_alert_count(
+        created_case.case_id,
+        container.alert_service.count_linked_to_case(created_case.case_id),
+    )
+    return synced_case, linked_alerts
+
+
+def _link_source_alerts(
+    container: ApplicationContainer,
+    alerts: list[FraudAlert],
+    case_id: str,
+) -> list[FraudAlert]:
+    linked_alerts: list[FraudAlert] = []
+    for alert in alerts:
+        if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
+            continue
+        linked_alerts.append(
+            container.alert_service.update_status(
+                UpdateAlertStatusCommand(
+                    alert_id=alert.alert_id,
+                    status=AlertStatus.INVESTIGATING,
+                    linked_case_id=case_id,
+                )
+            ).alert
+        )
+    return linked_alerts
+
+
+def _existing_linked_case_id(alerts: list[FraudAlert]) -> str | None:
+    return next((alert.linked_case_id for alert in alerts if alert.linked_case_id), None)
+
+
+def _source_label(source_type: WorkflowSourceType) -> str:
+    return "Dataset" if source_type == WorkflowSourceType.DATASET else "Scenario"
+
+
+def _sync_case_alert_counts(
+    container: ApplicationContainer,
+    *case_ids: str | None,
+) -> None:
+    seen_case_ids: set[str] = set()
+    for case_id in case_ids:
+        if case_id is None or case_id in seen_case_ids:
+            continue
+        seen_case_ids.add(case_id)
+        try:
+            container.case_service.sync_alert_count(
+                case_id,
+                container.alert_service.count_linked_to_case(case_id),
+            )
+        except LookupError:
+            continue

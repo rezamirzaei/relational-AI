@@ -305,6 +305,7 @@ class FraudCase(AppModel):
     sla_deadline: datetime | None = None
     comment_count: int = Field(ge=0, default=0)
     alert_count: int = Field(ge=0, default=0)
+    evidence_snapshot: CaseEvidenceSnapshot | None = Field(default=None, exclude=True)
 
 
 class CaseComment(AppModel):
@@ -550,6 +551,17 @@ class AnalysisResult(AppModel):
 
     # Summary
     summary: str = ""
+
+
+class CaseEvidenceSnapshot(AppModel):
+    """Immutable source evidence captured when a case is created."""
+
+    investigation: InvestigationCase | None = None
+    analysis: AnalysisResult | None = None
+    dataset: Dataset | None = None
+    scenario_transactions: list[TransactionRecord] = Field(default_factory=list)
+    dataset_transactions: list[UploadedTransaction] = Field(default_factory=list)
+    investigator_notes: list[InvestigatorNote] = Field(default_factory=list)
 
 
 class OperatorPrincipal(AppModel):

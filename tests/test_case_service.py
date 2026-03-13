@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from relational_fraud_intelligence.application.dto.cases import (
@@ -15,8 +17,11 @@ from relational_fraud_intelligence.application.dto.cases import (
 from relational_fraud_intelligence.application.services.case_service import CaseService
 from relational_fraud_intelligence.domain.models import (
     CaseDisposition,
+    CaseEvidenceSnapshot,
     CasePriority,
     CaseStatus,
+    Dataset,
+    DatasetStatus,
     RiskLevel,
     WorkflowSourceType,
 )
@@ -74,6 +79,36 @@ def test_update_case_status_to_resolved_sets_resolved_at(case_service: CaseServi
     assert result.case.disposition == CaseDisposition.CONFIRMED_FRAUD
     assert result.case.resolved_at is not None
     assert result.case.resolution_notes == "Device cluster confirmed as coordinated fraud ring."
+
+
+def test_reopening_case_clears_terminal_resolution_state(case_service: CaseService) -> None:
+    create_result = case_service.create_case(
+        CreateCaseCommand(
+            scenario_id="test-scenario",
+            title="Test case",
+            summary="Test summary",
+        ),
+        risk_score=60,
+        risk_level=RiskLevel.HIGH,
+    )
+    case_id = create_result.case.case_id
+
+    case_service.update_status(
+        UpdateCaseStatusCommand(
+            case_id=case_id,
+            status=CaseStatus.RESOLVED,
+            disposition=CaseDisposition.CONFIRMED_FRAUD,
+            resolution_notes="Closed during the first review pass.",
+        )
+    )
+    reopened = case_service.update_status(
+        UpdateCaseStatusCommand(case_id=case_id, status=CaseStatus.INVESTIGATING)
+    )
+
+    assert reopened.case.status == CaseStatus.INVESTIGATING
+    assert reopened.case.resolved_at is None
+    assert reopened.case.disposition is None
+    assert reopened.case.resolution_notes is None
 
 
 def test_assign_case_transitions_to_investigating(case_service: CaseService) -> None:
@@ -157,3 +192,26 @@ def test_create_case_can_use_dataset_source(case_service: CaseService) -> None:
     assert result.case.scenario_id is None
     assert result.case.risk_score == 74
     assert result.case.priority == CasePriority.HIGH
+
+
+def test_create_case_can_store_evidence_snapshot(case_service: CaseService) -> None:
+    dataset = Dataset(
+        dataset_id="dataset-123",
+        name="march.csv",
+        uploaded_at=datetime.now(UTC),
+        row_count=8,
+        status=DatasetStatus.COMPLETED,
+    )
+    result = case_service.create_case(
+        CreateCaseCommand(
+            source_type=WorkflowSourceType.DATASET,
+            source_id=dataset.dataset_id,
+            title="Dataset case",
+            summary="Velocity spikes detected in uploaded data.",
+        ),
+        evidence_snapshot=CaseEvidenceSnapshot(dataset=dataset),
+    )
+
+    assert result.case.evidence_snapshot is not None
+    assert result.case.evidence_snapshot.dataset is not None
+    assert result.case.evidence_snapshot.dataset.dataset_id == "dataset-123"

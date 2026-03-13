@@ -214,6 +214,17 @@ class SqlAlchemyAlertRepository:
             ).all()
         return {severity: count for severity, count in rows}
 
+    def count_linked_to_case(self, case_id: str) -> int:
+        with self._session_factory() as session:
+            return (
+                session.scalar(
+                    select(func.count())
+                    .select_from(FraudAlertRecord)
+                    .where(FraudAlertRecord.linked_case_id == case_id)
+                )
+                or 0
+            )
+
     @staticmethod
     def _base_query() -> Select[tuple[FraudAlertRecord]]:
         return select(FraudAlertRecord)
@@ -320,6 +331,7 @@ def _copy_case_record(target: FraudCaseRecord, source: FraudCaseRecord) -> None:
     target.sla_deadline = source.sla_deadline
     target.comment_count = source.comment_count
     target.alert_count = source.alert_count
+    target.evidence_snapshot = source.evidence_snapshot
 
 
 def _copy_alert_record(target: FraudAlertRecord, source: FraudAlertRecord) -> None:

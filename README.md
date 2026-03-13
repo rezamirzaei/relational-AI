@@ -15,6 +15,7 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 ## Core capabilities
 
 - **Persistent workflow state** for datasets, alerts, and cases backed by SQLAlchemy.
+- **Immutable case evidence snapshots** so scenario and dataset cases remain audit-stable even if source logic evolves later.
 - **Statistical fraud analysis** with Benford's Law, outlier detection, velocity analysis, and round-amount detection.
 - **Reference investigation engine** with deterministic fraud rules, graph analysis, and evidence linking.
 - **Case lifecycle management** with status transitions, SLA deadlines, comments, and disposition tracking.
@@ -36,17 +37,17 @@ Relational Fraud Intelligence is centered on a **dataset-first fraud triage work
 - Delivery: Docker, Docker Compose, GitHub Actions, GHCR publishing
 - Quality: Ruff, mypy, pytest, coverage, pre-commit, frontend typecheck and tests
 
-## API surface (22 endpoints)
+## API surface (25 endpoints)
 
 | Category | Endpoints |
 |----------|-----------|
 | System | `GET /health` |
 | Auth | `POST /auth/token`, `GET /auth/me` |
-| Investigations | `GET /scenarios`, `GET /scenarios/{id}`, `POST /investigations` |
+| Investigations | `GET /scenarios`, `GET /scenarios/{id}`, `POST /investigations`, `POST /investigations/{id}/case` |
 | Cases | `POST /cases`, `GET /cases`, `GET /cases/{id}`, `PATCH /cases/{id}/status`, `POST /cases/{id}/comments` |
-| Alerts | `GET /alerts`, `PATCH /alerts/{id}` |
+| Alerts | `GET /alerts`, `PATCH /alerts/{id}`, `POST /alerts/{id}/case` |
 | Dashboard | `GET /workspace/guide`, `GET /dashboard/stats` |
-| Datasets | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets`, `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis`, `GET /datasets/{id}/explanation` |
+| Datasets | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets`, `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis`, `POST /datasets/{id}/case`, `GET /datasets/{id}/explanation` |
 | Admin | `GET /audit-events` |
 
 Interactive docs at `http://localhost:8001/docs` (Swagger) and `http://localhost:8001/redoc` (ReDoc).
@@ -104,6 +105,7 @@ The compose baseline starts Postgres, Redis, the FastAPI backend, and the Next.j
 - Bootstrap operator passwords must be at least 12 characters.
 - Login and API traffic are rate-limited independently.
 - Every request receives an `X-Request-ID` and is written to the audit trail with actor, action, path, and status code.
+- Cases persist the source evidence snapshot used at creation time so later rule or provider changes do not rewrite historical case context.
 - Audit retention is controlled by `RFI_AUDIT_LOG_RETENTION_DAYS`.
 - `rfi-manage create-operator` creates named operators for managed environments.
 - `rfi-manage prune-audit` deletes expired audit events on demand.

@@ -58,9 +58,16 @@ class AlertService:
         alert.status = command.status
         if command.linked_case_id is not None:
             alert.linked_case_id = command.linked_case_id
-        if command.status == AlertStatus.ACKNOWLEDGED:
-            alert.acknowledged_at = now
-        if command.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
+        if command.status == AlertStatus.NEW:
+            alert.acknowledged_at = None
+            alert.resolved_at = None
+        elif command.status == AlertStatus.ACKNOWLEDGED:
+            if alert.acknowledged_at is None:
+                alert.acknowledged_at = now
+            alert.resolved_at = None
+        elif command.status == AlertStatus.INVESTIGATING:
+            alert.resolved_at = None
+        elif command.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
             alert.resolved_at = now
 
         self._repo.update_alert(alert)
@@ -93,6 +100,9 @@ class AlertService:
         source_id: str,
     ) -> list[FraudAlert]:
         return self._repo.list_alerts_for_source(source_type=source_type, source_id=source_id)
+
+    def count_linked_to_case(self, case_id: str) -> int:
+        return self._repo.count_linked_to_case(case_id)
 
     def generate_alerts_from_investigation(
         self,

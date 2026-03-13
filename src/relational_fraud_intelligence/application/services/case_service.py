@@ -19,6 +19,7 @@ from relational_fraud_intelligence.application.dto.cases import (
 )
 from relational_fraud_intelligence.domain.models import (
     CaseComment,
+    CaseEvidenceSnapshot,
     CasePriority,
     CaseStatus,
     FraudCase,
@@ -49,6 +50,7 @@ class CaseService:
         *,
         risk_score: int = 50,
         risk_level: RiskLevel = RiskLevel.MEDIUM,
+        evidence_snapshot: CaseEvidenceSnapshot | None = None,
     ) -> CreateCaseResult:
         effective_risk_score = command.risk_score if command.risk_score is not None else risk_score
         effective_risk_level = command.risk_level if command.risk_level is not None else risk_level
@@ -73,6 +75,7 @@ class CaseService:
             + timedelta(
                 hours=24 if effective_risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} else 72
             ),
+            evidence_snapshot=evidence_snapshot,
         )
         self._repo.create_case(case)
         return CreateCaseResult(case=case)
@@ -85,12 +88,16 @@ class CaseService:
         now = datetime.now(UTC)
         case.status = command.status
         case.updated_at = now
-        if command.disposition is not None:
-            case.disposition = command.disposition
-        if command.resolution_notes is not None:
-            case.resolution_notes = command.resolution_notes
         if command.status in {CaseStatus.RESOLVED, CaseStatus.CLOSED}:
+            if command.disposition is not None:
+                case.disposition = command.disposition
+            if command.resolution_notes is not None:
+                case.resolution_notes = command.resolution_notes
             case.resolved_at = now
+        else:
+            case.disposition = None
+            case.resolution_notes = None
+            case.resolved_at = None
 
         self._repo.update_case(case)
         return UpdateCaseStatusResult(case=case)
@@ -166,3 +173,13 @@ class CaseService:
             page=query.page,
             page_size=query.page_size,
         )
+
+    def sync_alert_count(self, case_id: str, count: int) -> FraudCase:
+        case = self._repo.get_case(case_id)
+        if case is None:
+            raise LookupError(f"Case '{case_id}' not found.")
+
+        case.alert_count = count
+        case.updated_at = datetime.now(UTC)
+        self._repo.update_case(case)
+        return case
