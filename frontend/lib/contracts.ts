@@ -223,10 +223,6 @@ export type ListCasesResponse = {
   page_size: number;
 };
 
-export type GetCaseResponse = {
-  case: FraudCase;
-};
-
 export type CaseComment = {
   comment_id: string;
   case_id: string;
@@ -234,6 +230,49 @@ export type CaseComment = {
   author_name: string;
   body: string;
   created_at: string;
+};
+
+export type InvestigatorNote = {
+  note_id: string;
+  subject_customer_id: string;
+  author: string;
+  created_at: string;
+  body: string;
+};
+
+export type UploadedTransaction = {
+  row_index: number;
+  transaction_id: string;
+  account_id: string;
+  amount: number;
+  timestamp: string;
+  merchant: string;
+  category: string;
+  device_fingerprint: string;
+  ip_country: string;
+  channel: string;
+  is_fraud_label: boolean | null;
+};
+
+export type CaseDatasetDetail = {
+  dataset_id: string;
+  name: string;
+  uploaded_at: string;
+  row_count: number;
+  status: DatasetStatus;
+  error_message: string | null;
+};
+
+export type GetCaseResponse = {
+  case: FraudCase;
+  comments: CaseComment[];
+  related_alerts: FraudAlert[];
+  investigation: InvestigationResponse["investigation"] | null;
+  analysis: AnalysisResultData | null;
+  dataset: CaseDatasetDetail | null;
+  scenario_transactions: TransactionRecord[];
+  dataset_transactions: UploadedTransaction[];
+  investigator_notes: InvestigatorNote[];
 };
 
 // ---------------------------------------------------------------------------

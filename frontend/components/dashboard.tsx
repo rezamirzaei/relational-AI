@@ -67,6 +67,11 @@ export function Dashboard({
     searchQuery,
     deferredSignals,
     cases,
+    selectedCaseId,
+    activeCaseDetail,
+    isLoadingCaseDetail,
+    caseDetailError,
+    isSubmittingCaseComment,
     alerts,
     auditEvents,
     dashboardStats,
@@ -92,6 +97,8 @@ export function Dashboard({
     handleScenarioSelection,
     handleCreateCase,
     handleAcknowledgeAlert,
+    handleCaseSelection,
+    handleAddCaseComment,
     handleResolveCase,
     handleCreateCaseFromAlert,
     handleUploadDataset,
@@ -1067,7 +1074,14 @@ export function Dashboard({
           {activeView === "cases" && (
             <CasesSection
               cases={cases}
+              selectedCaseId={selectedCaseId}
+              activeCaseDetail={activeCaseDetail}
+              isLoadingCaseDetail={isLoadingCaseDetail}
+              caseDetailError={caseDetailError}
+              isSubmittingCaseComment={isSubmittingCaseComment}
               dateFormatter={dateFormatter}
+              onSelectCase={handleCaseSelection}
+              onAddCaseComment={handleAddCaseComment}
               onResolveCase={handleResolveCase}
             />
           )}

@@ -230,6 +230,99 @@ def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> 
         assert stats["total_cases"] == 1
 
 
+def test_dataset_case_detail_exposes_transactions_alerts_and_comments() -> None:
+    sample_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        with sample_path.open("rb") as handle:
+            upload_response = client.post(
+                "/api/v1/datasets/upload",
+                headers={"Authorization": f"Bearer {access_token}"},
+                files={"file": ("sample_transactions.csv", handle, "text/csv")},
+            )
+
+        assert upload_response.status_code == 200
+        dataset_id = upload_response.json()["dataset_id"]
+
+        analyze_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/analyze",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert analyze_response.status_code == 200
+
+        create_case_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert create_case_response.status_code == 200
+        case_id = create_case_response.json()["case"]["case_id"]
+
+        comment_response = client.post(
+            f"/api/v1/cases/{case_id}/comments",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "body": (
+                    "Reviewed the linked transactions and the merchant concentration "
+                    "is abnormal."
+                )
+            },
+        )
+        assert comment_response.status_code == 200
+
+        detail_response = client.get(
+            f"/api/v1/cases/{case_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["case"]["case_id"] == case_id
+    assert payload["dataset"]["dataset_id"] == dataset_id
+    assert payload["analysis"]["dataset_id"] == dataset_id
+    assert payload["related_alerts"]
+    assert any(alert["linked_case_id"] == case_id for alert in payload["related_alerts"])
+    assert len(payload["dataset_transactions"]) == payload["dataset"]["row_count"]
+    assert payload["dataset_transactions"][0]["transaction_id"]
+    assert payload["comments"][0]["body"].startswith("Reviewed the linked transactions")
+
+
+def test_scenario_case_detail_exposes_transactions_notes_and_comments() -> None:
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+
+        create_case_response = client.post(
+            "/api/v1/investigations/synthetic-identity-ring/case",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert create_case_response.status_code == 200
+        case_id = create_case_response.json()["case"]["case_id"]
+
+        comment_response = client.post(
+            f"/api/v1/cases/{case_id}/comments",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"body": "Device overlap and note history justify escalation."},
+        )
+        assert comment_response.status_code == 200
+
+        detail_response = client.get(
+            f"/api/v1/cases/{case_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["case"]["case_id"] == case_id
+    assert payload["investigation"]["scenario"]["scenario_id"] == "synthetic-identity-ring"
+    assert payload["investigation"]["investigation_leads"]
+    assert payload["scenario_transactions"]
+    assert payload["investigator_notes"]
+    assert payload["related_alerts"]
+    assert payload["comments"][0]["body"] == "Device overlap and note history justify escalation."
+
+
 def test_case_status_update_uses_path_case_id() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")

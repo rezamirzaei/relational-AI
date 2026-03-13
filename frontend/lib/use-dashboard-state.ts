@@ -9,6 +9,7 @@
 import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
+  addCaseComment,
   analyzeDataset,
   createCaseFromAlert,
   createCaseFromAnalysis,
@@ -17,6 +18,7 @@ import {
   fetchAnalysisExplanation,
   fetchAnalysisResult,
   fetchAuditEvents,
+  fetchCase,
   fetchCases,
   fetchCurrentOperator,
   fetchDashboardStats,
@@ -36,6 +38,7 @@ import type {
   DatasetInfo,
   FraudAlert,
   FraudCase,
+  GetCaseResponse,
   HealthResponse,
   InvestigationResponse,
   OperatorPrincipal,
@@ -83,6 +86,11 @@ export type DashboardState = {
 
   // Cases & Alerts
   cases: FraudCase[];
+  selectedCaseId: string | null;
+  activeCaseDetail: GetCaseResponse | null;
+  isLoadingCaseDetail: boolean;
+  caseDetailError: string | null;
+  isSubmittingCaseComment: boolean;
   alerts: FraudAlert[];
   auditEvents: AuditEvent[];
 
@@ -113,6 +121,8 @@ export type DashboardActions = {
   handleScenarioSelection: (scenarioId: string) => Promise<void>;
   handleCreateCase: () => Promise<void>;
   handleAcknowledgeAlert: (alertId: string) => Promise<void>;
+  handleCaseSelection: (caseId: string) => Promise<void>;
+  handleAddCaseComment: (caseId: string, body: string) => Promise<void>;
   handleResolveCase: (caseId: string) => Promise<void>;
   handleCreateCaseFromAlert: (alertId: string) => Promise<void>;
   handleUploadDataset: (file: File) => Promise<void>;
@@ -146,6 +156,11 @@ export function useDashboardState(
   const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [cases, setCases] = useState<FraudCase[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [activeCaseDetail, setActiveCaseDetail] = useState<GetCaseResponse | null>(null);
+  const [isLoadingCaseDetail, setIsLoadingCaseDetail] = useState(false);
+  const [caseDetailError, setCaseDetailError] = useState<string | null>(null);
+  const [isSubmittingCaseComment, setIsSubmittingCaseComment] = useState(false);
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
@@ -194,6 +209,12 @@ export function useDashboardState(
     if (!savedToken) return;
     void hydrateOperatorSession(savedToken);
   }, []);
+
+  useEffect(() => {
+    if (!authToken || activeView !== "cases" || !selectedCaseId || isLoadingCaseDetail) return;
+    if (activeCaseDetail?.case.case_id === selectedCaseId) return;
+    void loadCaseDetail(authToken, selectedCaseId);
+  }, [activeCaseDetail?.case.case_id, activeView, authToken, isLoadingCaseDetail, selectedCaseId]);
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -245,6 +266,9 @@ export function useDashboardState(
     setAuditEvents(nextAuditEvents);
     setDashboardStats(nextStats);
     setCases(nextCases);
+    setSelectedCaseId(nextCases[0]?.case_id ?? null);
+    setActiveCaseDetail(null);
+    setCaseDetailError(null);
     setAlerts(nextAlerts);
     setDatasets(nextDatasets);
     setSelectedDatasetId(preferredDataset?.dataset_id ?? null);
@@ -281,7 +305,20 @@ export function useDashboardState(
 
     if (alertsResult.status === "fulfilled" && alertsResult.value) setAlerts(alertsResult.value.alerts);
     if (auditResult.status === "fulfilled" && auditResult.value) setAuditEvents(auditResult.value.events);
-    if (casesResult.status === "fulfilled" && casesResult.value) setCases(casesResult.value.cases);
+    if (casesResult.status === "fulfilled" && casesResult.value) {
+      const nextCases = casesResult.value.cases;
+      setCases(nextCases);
+      setSelectedCaseId((currentCaseId) => {
+        if (currentCaseId && nextCases.some((item) => item.case_id === currentCaseId)) {
+          return currentCaseId;
+        }
+        return nextCases[0]?.case_id ?? null;
+      });
+      if (nextCases.length === 0) {
+        setActiveCaseDetail(null);
+        setCaseDetailError(null);
+      }
+    }
     if (datasetsResult.status === "fulfilled" && datasetsResult.value) setDatasets(datasetsResult.value.datasets);
     if (statsResult.status === "fulfilled" && statsResult.value) setDashboardStats(statsResult.value.stats);
   }
@@ -293,6 +330,22 @@ export function useDashboardState(
       await refreshWorkspaceSlices(token, { alerts: true, audit: true, stats: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not load investigation.");
+    }
+  }
+
+  async function loadCaseDetail(token: string, caseId: string) {
+    setSelectedCaseId(caseId);
+    setIsLoadingCaseDetail(true);
+    setCaseDetailError(null);
+    setErrorMessage(null);
+
+    try {
+      setActiveCaseDetail(await fetchCase(token, caseId));
+    } catch (error) {
+      setActiveCaseDetail(null);
+      setCaseDetailError(error instanceof Error ? error.message : "Could not load case details.");
+    } finally {
+      setIsLoadingCaseDetail(false);
     }
   }
 
@@ -355,6 +408,11 @@ export function useDashboardState(
     setInvestigation(null);
     setAuditEvents([]);
     setCases([]);
+    setSelectedCaseId(null);
+    setActiveCaseDetail(null);
+    setIsLoadingCaseDetail(false);
+    setCaseDetailError(null);
+    setIsSubmittingCaseComment(false);
     setAlerts([]);
     setDashboardStats(null);
     setDatasets([]);
@@ -411,7 +469,10 @@ export function useDashboardState(
   async function handleCreateCase() {
     if (!authToken || !activeInvestigation) return;
     try {
-      await createCaseFromInvestigation(authToken, activeInvestigation.scenario.scenario_id);
+      const result = await createCaseFromInvestigation(
+        authToken,
+        activeInvestigation.scenario.scenario_id,
+      );
       await refreshWorkspaceSlices(authToken, {
         alerts: true,
         audit: true,
@@ -419,6 +480,7 @@ export function useDashboardState(
         stats: true,
       });
       setActiveView("cases");
+      await loadCaseDetail(authToken, result.case.case_id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
     }
@@ -434,6 +496,39 @@ export function useDashboardState(
     }
   }
 
+  async function handleCaseSelection(caseId: string) {
+    if (!authToken) return;
+    setActiveView("cases");
+    if (activeCaseDetail?.case.case_id === caseId) {
+      setSelectedCaseId(caseId);
+      return;
+    }
+    await loadCaseDetail(authToken, caseId);
+  }
+
+  async function handleAddCaseComment(caseId: string, body: string) {
+    if (!authToken) return;
+    const trimmedBody = body.trim();
+    if (!trimmedBody) return;
+
+    setIsSubmittingCaseComment(true);
+    setCaseDetailError(null);
+    setErrorMessage(null);
+
+    try {
+      await addCaseComment(authToken, caseId, trimmedBody);
+      await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
+      await loadCaseDetail(authToken, caseId);
+    } catch (error) {
+      setCaseDetailError(
+        error instanceof Error ? error.message : "Could not add a comment to this case.",
+      );
+      throw error;
+    } finally {
+      setIsSubmittingCaseComment(false);
+    }
+  }
+
   async function handleResolveCase(caseId: string) {
     if (!authToken) return;
     try {
@@ -442,6 +537,9 @@ export function useDashboardState(
         disposition: "confirmed-fraud",
       });
       await refreshWorkspaceSlices(authToken, { audit: true, cases: true, stats: true });
+      if (selectedCaseId === caseId || activeCaseDetail?.case.case_id === caseId) {
+        await loadCaseDetail(authToken, caseId);
+      }
     } catch {
       // Inline analyst action
     }
@@ -450,7 +548,7 @@ export function useDashboardState(
   async function handleCreateCaseFromAlert(alertId: string) {
     if (!authToken) return;
     try {
-      await createCaseFromAlert(authToken, alertId);
+      const result = await createCaseFromAlert(authToken, alertId);
       await refreshWorkspaceSlices(authToken, {
         alerts: true,
         audit: true,
@@ -458,6 +556,7 @@ export function useDashboardState(
         stats: true,
       });
       setActiveView("cases");
+      await loadCaseDetail(authToken, result.case.case_id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
     }
@@ -525,7 +624,7 @@ export function useDashboardState(
   async function handleCreateCaseFromAnalysis() {
     if (!authToken || !activeAnalysis) return;
     try {
-      await createCaseFromAnalysis(authToken, activeAnalysis.dataset_id);
+      const result = await createCaseFromAnalysis(authToken, activeAnalysis.dataset_id);
       await refreshWorkspaceSlices(authToken, {
         alerts: true,
         audit: true,
@@ -533,6 +632,7 @@ export function useDashboardState(
         stats: true,
       });
       setActiveView("cases");
+      await loadCaseDetail(authToken, result.case.case_id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create case.");
     }
@@ -563,6 +663,11 @@ export function useDashboardState(
     searchQuery,
     deferredSignals,
     cases,
+    selectedCaseId,
+    activeCaseDetail,
+    isLoadingCaseDetail,
+    caseDetailError,
+    isSubmittingCaseComment,
     alerts,
     auditEvents,
     dashboardStats,
@@ -589,6 +694,8 @@ export function useDashboardState(
     handleScenarioSelection,
     handleCreateCase,
     handleAcknowledgeAlert,
+    handleCaseSelection,
+    handleAddCaseComment,
     handleResolveCase,
     handleCreateCaseFromAlert,
     handleUploadDataset,

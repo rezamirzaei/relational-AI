@@ -3,12 +3,20 @@ from __future__ import annotations
 from pydantic import Field, model_validator
 
 from relational_fraud_intelligence.domain.models import (
+    AnalysisResult,
     AppModel,
+    CaseComment,
     CaseDisposition,
     CasePriority,
     CaseStatus,
+    DatasetStatus,
+    FraudAlert,
     FraudCase,
+    InvestigationCase,
+    InvestigatorNote,
     RiskLevel,
+    TransactionRecord,
+    UploadedTransaction,
     WorkflowSourceType,
 )
 
@@ -86,5 +94,22 @@ class GetCaseQuery(AppModel):
     case_id: str
 
 
+class CaseDatasetDetail(AppModel):
+    dataset_id: str
+    name: str
+    uploaded_at: str
+    row_count: int = Field(ge=0)
+    status: DatasetStatus
+    error_message: str | None = None
+
+
 class GetCaseResult(AppModel):
     case: FraudCase
+    comments: list[CaseComment] = Field(default_factory=list)
+    related_alerts: list[FraudAlert] = Field(default_factory=list)
+    investigation: InvestigationCase | None = None
+    analysis: AnalysisResult | None = None
+    dataset: CaseDatasetDetail | None = None
+    scenario_transactions: list[TransactionRecord] = Field(default_factory=list)
+    dataset_transactions: list[UploadedTransaction] = Field(default_factory=list)
+    investigator_notes: list[InvestigatorNote] = Field(default_factory=list)

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Dashboard } from "@/components/dashboard";
 import {
+  addCaseComment,
   analyzeDataset,
   createCaseFromAnalysis,
   createCaseFromAlert,
@@ -17,6 +18,7 @@ import {
   fetchAnalysisExplanation,
   fetchAnalysisResult,
   fetchAuditEvents,
+  fetchCase,
   fetchCases,
   fetchCurrentOperator,
   fetchDashboardStats,
@@ -34,6 +36,7 @@ import type {
   CreateCaseFromInvestigationResponse,
   DatasetListResponse,
   AuditEvent,
+  GetCaseResponse,
   ListAlertsResponse,
   ListCasesResponse,
   HealthResponse,
@@ -45,6 +48,7 @@ import type {
 } from "@/lib/contracts";
 
 vi.mock("@/lib/api", () => ({
+  addCaseComment: vi.fn(),
   analyzeDataset: vi.fn(),
   createCase: vi.fn(),
   createCaseFromAnalysis: vi.fn(),
@@ -54,6 +58,7 @@ vi.mock("@/lib/api", () => ({
   fetchAnalysisExplanation: vi.fn(),
   fetchAnalysisResult: vi.fn(),
   fetchAuditEvents: vi.fn(),
+  fetchCase: vi.fn(),
   fetchCases: vi.fn(),
   fetchCurrentOperator: vi.fn(),
   fetchDashboardStats: vi.fn(),
@@ -66,6 +71,7 @@ vi.mock("@/lib/api", () => ({
   uploadDataset: vi.fn(),
 }));
 
+const mockedAddCaseComment = vi.mocked(addCaseComment);
 const mockedAnalyzeDataset = vi.mocked(analyzeDataset);
 const mockedCreateCaseFromAnalysis = vi.mocked(createCaseFromAnalysis);
 const mockedCreateCaseFromAlert = vi.mocked(createCaseFromAlert);
@@ -74,6 +80,7 @@ const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchAnalysisExplanation = vi.mocked(fetchAnalysisExplanation);
 const mockedFetchAnalysisResult = vi.mocked(fetchAnalysisResult);
 const mockedFetchAuditEvents = vi.mocked(fetchAuditEvents);
+const mockedFetchCase = vi.mocked(fetchCase);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedFetchCurrentOperator = vi.mocked(fetchCurrentOperator);
 const mockedFetchDatasets = vi.mocked(fetchDatasets);
@@ -552,6 +559,62 @@ const datasetAnalysisExplanation: AnalysisExplanationResponse = {
   },
 };
 
+const caseDetailFromAlertResponse: GetCaseResponse = {
+  case: caseFromAlertResponse.case,
+  comments: [],
+  related_alerts: linkedAlertList.alerts,
+  investigation: null,
+  analysis: datasetAnalysisResponse.analysis,
+  dataset: {
+    dataset_id: "dataset-1",
+    name: "march-transactions.csv",
+    uploaded_at: "2026-03-12T14:00:00",
+    row_count: 128,
+    status: "completed",
+    error_message: null,
+  },
+  scenario_transactions: [],
+  dataset_transactions: [
+    {
+      row_index: 0,
+      transaction_id: "txn-1001",
+      account_id: "acct-77",
+      amount: 12400,
+      timestamp: "2026-03-12T13:12:00",
+      merchant: "Global Travel Hub",
+      category: "travel",
+      device_fingerprint: "fp-ring-shared-01",
+      ip_country: "GB",
+      channel: "wallet",
+      is_fraud_label: null,
+    },
+  ],
+  investigator_notes: [],
+};
+
+const caseDetailWithCommentResponse: GetCaseResponse = {
+  ...caseDetailFromAlertResponse,
+  case: {
+    ...caseFromAlertResponse.case,
+    comment_count: 1,
+  },
+  comments: [
+    {
+      comment_id: "comment-1",
+      case_id: "case-from-alert-1",
+      author_id: "operator-analyst",
+      author_name: "Fraud Analyst",
+      body: "Reviewed the linked transactions and escalated the merchant/device overlap.",
+      created_at: "2026-03-12T14:21:00",
+    },
+  ],
+};
+
+const resolvedCaseDetailResponse: GetCaseResponse = {
+  ...caseDetailFromAlertResponse,
+  case: resolvedCaseList.cases[0],
+};
+
 const refreshedAuditEvents: AuditEvent[] = [
   {
     event_id: 102,
@@ -765,6 +828,7 @@ function buildLoginResponse(principal: OperatorPrincipal): LoginResponse {
 describe("Dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    mockedAddCaseComment.mockReset();
     mockedAnalyzeDataset.mockReset();
     mockedCreateCaseFromAnalysis.mockReset();
     mockedCreateCaseFromAlert.mockReset();
@@ -773,6 +837,7 @@ describe("Dashboard", () => {
     mockedFetchAnalysisExplanation.mockReset();
     mockedFetchAnalysisResult.mockReset();
     mockedFetchAuditEvents.mockReset();
+    mockedFetchCase.mockReset();
     mockedFetchCases.mockReset();
     mockedFetchCurrentOperator.mockReset();
     mockedFetchDatasets.mockReset();
@@ -810,6 +875,7 @@ describe("Dashboard", () => {
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
     mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
     mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
+    mockedFetchCase.mockResolvedValue(caseDetailFromAlertResponse);
     mockedCreateCaseFromAnalysis.mockResolvedValue({
       ...caseFromAnalysisResponse,
       analysis: datasetAnalysisResponse.analysis,
@@ -818,6 +884,7 @@ describe("Dashboard", () => {
     mockedCreateCaseFromInvestigation.mockResolvedValue(
       buildCreateCaseFromInvestigationResponse(scenarios[0]),
     );
+    mockedAddCaseComment.mockResolvedValue({});
     mockedUpdateCaseStatus.mockResolvedValue({});
   });
 
@@ -1282,8 +1349,8 @@ describe("Dashboard", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
-      expect(screen.getByText("Dataset dataset-1")).toBeInTheDocument();
+      expect(screen.getAllByText("Alert review: Velocity spike in dataset-1").length).toBeGreaterThan(0);
+      expect(screen.getByText("All Transactions")).toBeInTheDocument();
     });
   });
 
@@ -1377,12 +1444,82 @@ describe("Dashboard", () => {
     });
   });
 
+  it("loads case detail with transactions and posts an analyst comment", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+    mockedFetchCases
+      .mockResolvedValueOnce(openCaseList)
+      .mockResolvedValueOnce({
+        cases: [{ ...caseFromAlertResponse.case, comment_count: 1 }],
+        total_count: 1,
+        page: 1,
+        page_size: 20,
+      });
+    mockedFetchCase
+      .mockResolvedValueOnce(caseDetailFromAlertResponse)
+      .mockResolvedValueOnce(caseDetailWithCommentResponse);
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(mockedFetchCases).toHaveBeenCalledWith("analyst-token");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Cases/i }));
+
+    await waitFor(() => {
+      expect(mockedFetchCase).toHaveBeenCalledWith("analyst-token", "case-from-alert-1");
+      expect(screen.getByText("All Transactions")).toBeInTheDocument();
+      expect(screen.getByText(/Global Travel Hub/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("Add case comment"), {
+      target: {
+        value: "Reviewed the linked transactions and escalated the merchant/device overlap.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post comment" }));
+
+    await waitFor(() => {
+      expect(mockedAddCaseComment).toHaveBeenCalledWith(
+        "analyst-token",
+        "case-from-alert-1",
+        "Reviewed the linked transactions and escalated the merchant/device overlap.",
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Reviewed the linked transactions and escalated the merchant/device overlap.",
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("resolves a case from the cases queue", async () => {
     mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
     mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
     mockedFetchCases
       .mockResolvedValueOnce(openCaseList)
       .mockResolvedValueOnce(resolvedCaseList);
+    mockedFetchCase
+      .mockResolvedValueOnce(caseDetailFromAlertResponse)
+      .mockResolvedValueOnce(resolvedCaseDetailResponse);
     mockedFetchDashboardStats
       .mockResolvedValueOnce({
         stats: {
@@ -1455,7 +1592,7 @@ describe("Dashboard", () => {
       expect(screen.getByText("Alert review: Velocity spike in dataset-1")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resolve case" }));
 
     await waitFor(() => {
       expect(mockedUpdateCaseStatus).toHaveBeenCalledWith(
@@ -1470,7 +1607,7 @@ describe("Dashboard", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Resolve" }),
+        screen.queryByRole("button", { name: "Resolve case" }),
       ).not.toBeInTheDocument();
     });
   });

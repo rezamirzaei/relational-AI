@@ -23,6 +23,7 @@ from relational_fraud_intelligence.application.dto.auth import (
 )
 from relational_fraud_intelligence.application.dto.cases import (
     AddCaseCommentCommand,
+    CaseDatasetDetail,
     CreateCaseCommand,
     CreateCaseResult,
     GetCaseQuery,
@@ -71,6 +72,7 @@ from relational_fraud_intelligence.domain.models import (
     AlertStatus,
     CasePriority,
     CaseStatus,
+    Dataset,
     ExplanationAudience,
     FraudAlert,
     InvestigationCase,
@@ -463,7 +465,45 @@ def get_case(
     request.state.audit_resource_type = "fraud-case"
     request.state.audit_resource_id = case_id
     try:
-        return container.case_service.get_case(GetCaseQuery(case_id=case_id))
+        case = container.case_service.get_case(GetCaseQuery(case_id=case_id)).case
+        comments = container.case_service.list_comments(case_id)
+        related_alerts = container.alert_service.list_alerts_for_source(
+            source_type=case.source_type,
+            source_id=case.source_id,
+        )
+
+        if case.source_type == WorkflowSourceType.DATASET:
+            dataset = container.dataset_service.get_dataset(case.source_id)
+            try:
+                analysis = container.dataset_service.get_result(case.source_id)
+            except LookupError:
+                analysis = None
+
+            return GetCaseResult(
+                case=case,
+                comments=comments,
+                related_alerts=related_alerts,
+                analysis=analysis,
+                dataset=_to_case_dataset_detail(dataset),
+                dataset_transactions=container.dataset_service.get_transactions(case.source_id),
+            )
+
+        scenario_id = case.scenario_id or case.source_id
+        scenario = container.scenario_catalog_service.get_scenario(
+            GetScenarioQuery(scenario_id=scenario_id)
+        ).scenario
+        investigation = container.investigation_service.execute(
+            InvestigateScenarioCommand(scenario_id=scenario_id)
+        ).investigation
+
+        return GetCaseResult(
+            case=case,
+            comments=comments,
+            related_alerts=related_alerts,
+            investigation=investigation,
+            scenario_transactions=scenario.transactions,
+            investigator_notes=scenario.investigator_notes,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1093,6 +1133,17 @@ def _build_case_command_from_analysis(
         priority=_priority_from_risk_level(analysis.risk_level),
         risk_score=analysis.risk_score,
         risk_level=analysis.risk_level,
+    )
+
+
+def _to_case_dataset_detail(dataset: Dataset) -> CaseDatasetDetail:
+    return CaseDatasetDetail(
+        dataset_id=dataset.dataset_id,
+        name=dataset.name,
+        uploaded_at=dataset.uploaded_at.isoformat(),
+        row_count=dataset.row_count,
+        status=dataset.status,
+        error_message=dataset.error_message,
     )
 
 

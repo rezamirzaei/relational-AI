@@ -140,6 +140,12 @@ class CaseService:
 
         return comment
 
+    def list_comments(self, case_id: str) -> list[CaseComment]:
+        case = self._repo.get_case(case_id)
+        if case is None:
+            raise LookupError(f"Case '{case_id}' not found.")
+        return self._repo.list_comments(case_id)
+
     def get_case(self, query: GetCaseQuery) -> GetCaseResult:
         case = self._repo.get_case(query.case_id)
         if case is None:

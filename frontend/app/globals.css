@@ -483,15 +483,30 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
 /* ------------------------------------------------------------------ */
 /* Cases & Alerts                                                      */
 /* ------------------------------------------------------------------ */
+.case-workspace-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; }
+.case-rail, .case-detail-panel { padding: 20px; display: grid; align-content: start; gap: 14px; }
 .case-card, .alert-card {
   padding: 16px 18px; border: 1px solid var(--border); border-radius: 14px;
   background: var(--bg-card); transition: border-color 0.15s, transform 0.15s;
 }
 .case-card:hover, .alert-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.case-card-button { width: 100%; text-align: left; cursor: pointer; color: inherit; }
+.case-card-button.selected { border-color: var(--border-accent); box-shadow: var(--shadow-md); background: var(--accent-bg); }
 .case-card h3, .alert-card h3 { margin: 8px 0 4px; font-family: var(--font-display-stack); font-size: 1.05rem; }
 .case-card-header, .alert-card-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .case-card-footer { display: flex; align-items: center; gap: 14px; margin-top: 10px; font-size: 0.82rem; color: var(--ink-muted); flex-wrap: wrap; }
 .case-date { font-size: 0.78rem; color: var(--ink-muted); }
+.case-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.case-transaction-list, .case-comment-list { display: grid; gap: 10px; max-height: 380px; overflow: auto; padding-right: 4px; }
+.case-comment-form { display: grid; gap: 12px; margin-top: 14px; }
+.case-comment-input {
+  width: 100%; min-height: 120px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--bg-inset); color: var(--ink);
+  font: inherit; resize: vertical;
+}
+.case-comment-input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: 2px; }
+.empty-state.compact { padding: 20px; }
+.alert-card.compact { padding: 14px 16px; }
 
 /* ------------------------------------------------------------------ */
 /* Analysis Workspace                                                  */
@@ -589,7 +604,8 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
 /* ------------------------------------------------------------------ */
 @media (max-width: 1280px) {
   .hero-panel, .workspace-grid, .insight-grid, .content-grid, .metrics-grid,
-  .guide-grid, .analysis-workspace-grid, .analysis-summary-grid, .insight-grid.compact { grid-template-columns: 1fr; }
+  .guide-grid, .analysis-workspace-grid, .analysis-summary-grid, .insight-grid.compact,
+  .case-workspace-grid, .case-detail-grid { grid-template-columns: 1fr; }
   .workflow-strip, .workflow-strip.compact { grid-template-columns: repeat(2, 1fr); }
   .auth-form { grid-template-columns: 1fr; }
 }

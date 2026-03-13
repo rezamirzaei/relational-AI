@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import {
   RiskDonutChart,
@@ -12,6 +12,7 @@ import type {
   DashboardStats,
   FraudAlert,
   FraudCase,
+  GetCaseResponse,
   HealthResponse,
   OperatorPrincipal,
   WorkspaceGuide,
@@ -68,7 +69,14 @@ type OverviewSectionProps = {
 
 type CasesSectionProps = {
   cases: FraudCase[];
+  selectedCaseId: string | null;
+  activeCaseDetail: GetCaseResponse | null;
+  isLoadingCaseDetail: boolean;
+  caseDetailError: string | null;
+  isSubmittingCaseComment: boolean;
   dateFormatter: Intl.DateTimeFormat;
+  onSelectCase: (caseId: string) => void;
+  onAddCaseComment: (caseId: string, body: string) => Promise<void>;
   onResolveCase: (caseId: string) => void;
 };
 
@@ -95,6 +103,12 @@ const activityDateFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit",
   minute: "2-digit",
   month: "short",
+});
+
+const caseCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  currency: "USD",
+  maximumFractionDigits: 0,
+  style: "currency",
 });
 
 export function MetricCard({ label, tone, value }: MetricCardProps) {
@@ -587,63 +601,390 @@ export function OverviewSection({
 
 export function CasesSection({
   cases,
+  selectedCaseId,
+  activeCaseDetail,
+  isLoadingCaseDetail,
+  caseDetailError,
+  isSubmittingCaseComment,
   dateFormatter,
+  onSelectCase,
+  onAddCaseComment,
   onResolveCase,
 }: CasesSectionProps) {
+  const [commentDraft, setCommentDraft] = useState("");
+  const activeCase =
+    activeCaseDetail?.case.case_id === selectedCaseId ? activeCaseDetail : null;
+  const investigationLeads =
+    activeCase?.case.source_type === "dataset"
+      ? activeCase.analysis?.investigation_leads ?? []
+      : activeCase?.investigation?.investigation_leads ?? [];
+  const activeTransactions =
+    activeCase?.case.source_type === "dataset"
+      ? activeCase.dataset_transactions
+      : activeCase?.scenario_transactions ?? [];
+
+  useEffect(() => {
+    setCommentDraft("");
+  }, [selectedCaseId]);
+
+  async function handleCommentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeCase) return;
+
+    const body = commentDraft.trim();
+    if (!body) return;
+
+    try {
+      await onAddCaseComment(activeCase.case.case_id, body);
+      setCommentDraft("");
+    } catch {
+      // The dashboard hook owns the visible error state.
+    }
+  }
+
   return (
-    <section className="surface" style={{ padding: 24 }}>
-      <div className="section-header">
-        <span>Fraud Cases</span>
-        <span>{cases.length} total</span>
-      </div>
-      {cases.length === 0 ? (
-        <div className="empty-state">
-          No cases yet. Create one from a high-risk dataset analysis or a reference investigation.
+    <section className="case-workspace-grid">
+      <aside className="surface case-rail">
+        <div className="section-header">
+          <span>Fraud Cases</span>
+          <span>{cases.length} total</span>
         </div>
-      ) : (
-        <div className="stack">
-          {cases.map((fraudCase) => (
-            <article key={fraudCase.case_id} className="case-card">
-              <div className="case-card-header">
-                <div>
-                  <span className={`risk-chip ${fraudCase.risk_level}`}>
-                    {fraudCase.priority}
-                  </span>
-                  <span className={`status-chip ${fraudCase.status}`}>
-                    {fraudCase.status}
-                  </span>
+        {cases.length === 0 ? (
+          <div className="empty-state">
+            No cases yet. Create one from a high-risk dataset analysis or a reference investigation.
+          </div>
+        ) : (
+          <div className="stack">
+            {cases.map((fraudCase) => {
+              const isSelected = fraudCase.case_id === selectedCaseId;
+              return (
+                <button
+                  key={fraudCase.case_id}
+                  className={`case-card case-card-button ${isSelected ? "selected" : ""}`}
+                  onClick={() => void onSelectCase(fraudCase.case_id)}
+                  type="button"
+                >
+                  <div className="case-card-header">
+                    <div>
+                      <span className={`risk-chip ${fraudCase.risk_level}`}>
+                        {fraudCase.priority}
+                      </span>
+                      <span className={`status-chip ${fraudCase.status}`}>
+                        {fraudCase.status}
+                      </span>
+                    </div>
+                    <span className="case-date">
+                      {dateFormatter.format(new Date(fraudCase.created_at))}
+                    </span>
+                  </div>
+                  <h3>{fraudCase.title}</h3>
+                  <p className="muted-copy">{fraudCase.summary}</p>
+                  <div className="case-card-footer">
+                    <span>
+                      {fraudCase.source_type === "dataset"
+                        ? `Dataset ${fraudCase.source_id}`
+                        : `Scenario ${fraudCase.source_id}`}
+                    </span>
+                    <span>Risk: {fraudCase.risk_score}/100</span>
+                    <span>{fraudCase.comment_count} comments</span>
+                    {fraudCase.sla_deadline ? (
+                      <span>SLA: {dateFormatter.format(new Date(fraudCase.sla_deadline))}</span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </aside>
+
+      <section className="surface case-detail-panel">
+        {cases.length === 0 ? (
+          <div className="empty-state">
+            Select a dataset or scenario workflow and open a case to review evidence here.
+          </div>
+        ) : isLoadingCaseDetail ? (
+          <div className="empty-state">Loading case evidence and transaction history...</div>
+        ) : caseDetailError ? (
+          <div className="error-banner">{caseDetailError}</div>
+        ) : !activeCase ? (
+          <div className="empty-state">
+            Select a case to inspect its transactions, linked alerts, and analyst notes.
+          </div>
+        ) : (
+          <>
+            <div className="section-header">
+              <span>Case Detail</span>
+              <span>{activeCase.case.case_id.slice(0, 8)}</span>
+            </div>
+
+            <div className="headline-row">
+              <div className="headline-copy">
+                <p className="eyebrow">
+                  {activeCase.case.source_type === "dataset" ? "Dataset case" : "Scenario case"}
+                </p>
+                <h2>{activeCase.case.title}</h2>
+                <p className="summary-lead">{activeCase.case.summary}</p>
+              </div>
+              <div className="action-stack compact">
+                <article className="action-item compact">
+                  <span className="action-marker" />
+                  <p>
+                    Risk score {activeCase.case.risk_score}/100 at {activeCase.case.risk_level}
+                    {" "}
+                    priority.
+                  </p>
+                </article>
+                <article className="action-item compact">
+                  <span className="action-marker" />
+                  <p>
+                    {activeTransactions.length} transactions, {activeCase.related_alerts.length}
+                    {" "}
+                    linked alerts, {activeCase.comments.length} comments.
+                  </p>
+                </article>
+                {activeCase.case.sla_deadline ? (
+                  <article className="action-item compact">
+                    <span className="action-marker" />
+                    <p>SLA deadline {dateFormatter.format(new Date(activeCase.case.sla_deadline))}.</p>
+                  </article>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="case-detail-grid">
+              <section className="content-card">
+                <div className="mini-header">
+                  <span>Evidence Summary</span>
+                  <span>{investigationLeads.length} leads</span>
                 </div>
-                <span className="case-date">
-                  {dateFormatter.format(new Date(fraudCase.created_at))}
-                </span>
+                <div className="stack">
+                  {activeCase.case.source_type === "dataset" && activeCase.dataset ? (
+                    <article className="transaction-row">
+                      <div>
+                        <strong>{activeCase.dataset.name}</strong>
+                        <p>
+                          Dataset {activeCase.dataset.dataset_id} with {activeCase.dataset.row_count}
+                          {" "}
+                          rows in {activeCase.dataset.status} status.
+                        </p>
+                      </div>
+                      <div className="transaction-meta">
+                        <strong>
+                          {activeCase.analysis?.total_anomalies ?? 0} anomalies
+                        </strong>
+                        <span>
+                          Uploaded {dateFormatter.format(new Date(activeCase.dataset.uploaded_at))}
+                        </span>
+                      </div>
+                    </article>
+                  ) : null}
+
+                  {activeCase.case.source_type === "scenario" && activeCase.investigation ? (
+                    <article className="transaction-row">
+                      <div>
+                        <strong>{activeCase.investigation.scenario.title}</strong>
+                        <p>{activeCase.investigation.summary}</p>
+                      </div>
+                      <div className="transaction-meta">
+                        <strong>
+                          {activeCase.investigation.metrics.suspicious_transaction_count}
+                          {" "}
+                          suspicious
+                        </strong>
+                        <span>{activeCase.investigator_notes.length} investigator notes</span>
+                      </div>
+                    </article>
+                  ) : null}
+
+                  {investigationLeads.length > 0 ? (
+                    investigationLeads.slice(0, 3).map((lead) => (
+                      <article key={lead.lead_id} className="signal-card">
+                        <div className="case-card-header">
+                          <span className={`risk-chip ${lead.severity}`}>{lead.severity}</span>
+                          <span className="tag-pill">{lead.lead_type}</span>
+                        </div>
+                        <h3>{lead.title}</h3>
+                        <p>{lead.hypothesis}</p>
+                        <p className="muted-copy">{lead.narrative}</p>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="empty-state compact">
+                      No synthesized investigation leads are attached to this case yet.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="content-card">
+                <div className="mini-header">
+                  <span>Related Alerts</span>
+                  <span>{activeCase.related_alerts.length}</span>
+                </div>
+                <div className="stack">
+                  {activeCase.related_alerts.length > 0 ? (
+                    activeCase.related_alerts.map((alert) => (
+                      <article key={alert.alert_id} className="alert-card compact">
+                        <div className="alert-card-header">
+                          <span className={`risk-chip ${alert.severity}`}>{alert.severity}</span>
+                          <span className={`status-chip ${alert.status}`}>{alert.status}</span>
+                          <span className="tag-pill">{alert.rule_code}</span>
+                        </div>
+                        <h3>{alert.title}</h3>
+                        <p className="muted-copy">{alert.narrative}</p>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="empty-state compact">No alerts are linked to this case.</div>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <section className="content-card">
+              <div className="mini-header">
+                <span>All Transactions</span>
+                <span>{activeTransactions.length}</span>
               </div>
-              <h3>{fraudCase.title}</h3>
-              <p className="muted-copy">{fraudCase.summary}</p>
-              <div className="case-card-footer">
-                <span>
-                  {fraudCase.source_type === "dataset"
-                    ? `Dataset ${fraudCase.source_id}`
-                    : `Scenario ${fraudCase.source_id}`}
-                </span>
-                <span>Risk: {fraudCase.risk_score}/100</span>
-                <span>{fraudCase.comment_count} comments</span>
-                {fraudCase.sla_deadline ? (
-                  <span>SLA: {dateFormatter.format(new Date(fraudCase.sla_deadline))}</span>
-                ) : null}
-                {fraudCase.status !== "resolved" && fraudCase.status !== "closed" ? (
+              <div className="case-transaction-list">
+                {activeTransactions.length > 0 ? (
+                  activeCase.case.source_type === "dataset" ? (
+                    activeCase.dataset_transactions.map((transaction) => (
+                      <article key={transaction.transaction_id} className="transaction-row">
+                        <div>
+                          <strong>{transaction.transaction_id}</strong>
+                          <p>
+                            Account {transaction.account_id}
+                            {transaction.merchant ? ` · ${transaction.merchant}` : ""}
+                            {transaction.category ? ` · ${transaction.category}` : ""}
+                          </p>
+                          <p>
+                            {transaction.device_fingerprint
+                              ? `Device ${transaction.device_fingerprint}`
+                              : "No device fingerprint"}
+                            {transaction.ip_country ? ` · ${transaction.ip_country}` : ""}
+                            {transaction.channel ? ` · ${transaction.channel}` : ""}
+                          </p>
+                        </div>
+                        <div className="transaction-meta">
+                          <strong>{caseCurrencyFormatter.format(transaction.amount)}</strong>
+                          <span>{dateFormatter.format(new Date(transaction.timestamp))}</span>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    activeCase.scenario_transactions.map((transaction) => (
+                      <article key={transaction.transaction_id} className="transaction-row">
+                        <div>
+                          <strong>{transaction.transaction_id}</strong>
+                          <p>
+                            Customer {transaction.customer_id} · Account {transaction.account_id}
+                            {" "}
+                            · Device {transaction.device_id}
+                          </p>
+                          <p>
+                            Merchant {transaction.merchant_id} · {transaction.channel}
+                            {" "}
+                            · {transaction.status}
+                          </p>
+                        </div>
+                        <div className="transaction-meta">
+                          <strong>{caseCurrencyFormatter.format(transaction.amount)}</strong>
+                          <span>{dateFormatter.format(new Date(transaction.occurred_at))}</span>
+                        </div>
+                      </article>
+                    ))
+                  )
+                ) : (
+                  <div className="empty-state compact">No transactions are attached to this case.</div>
+                )}
+              </div>
+            </section>
+
+            {activeCase.case.source_type === "scenario" ? (
+              <section className="content-card">
+                <div className="mini-header">
+                  <span>Investigator Notes</span>
+                  <span>{activeCase.investigator_notes.length}</span>
+                </div>
+                <div className="stack">
+                  {activeCase.investigator_notes.length > 0 ? (
+                    activeCase.investigator_notes.map((note) => (
+                      <article key={note.note_id} className="action-item">
+                        <span className="action-marker" />
+                        <p>
+                          <strong>{note.author}</strong> on{" "}
+                          {dateFormatter.format(new Date(note.created_at))}: {note.body}
+                        </p>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="empty-state compact">No investigator notes are attached.</div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="content-card">
+              <div className="mini-header">
+                <span>Comments</span>
+                <span>{activeCase.comments.length}</span>
+              </div>
+              <div className="case-comment-list">
+                {activeCase.comments.length > 0 ? (
+                  activeCase.comments.map((comment) => (
+                    <article key={comment.comment_id} className="provider-note">
+                      <div className="case-card-header">
+                        <strong>{comment.author_name}</strong>
+                        <span className="case-date">
+                          {dateFormatter.format(new Date(comment.created_at))}
+                        </span>
+                      </div>
+                      <p>{comment.body}</p>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state compact">
+                    No analyst comments yet. Add one to document the investigation trail.
+                  </div>
+                )}
+              </div>
+              <form className="case-comment-form" onSubmit={handleCommentSubmit}>
+                <label className="auth-field">
+                  <span>Add analyst note</span>
+                  <textarea
+                    aria-label="Add case comment"
+                    className="case-comment-input"
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    placeholder="Summarize what you found in the transactions, alerts, or notes."
+                    rows={4}
+                    value={commentDraft}
+                  />
+                </label>
+                <div className="case-card-footer">
+                  {activeCase.case.status !== "resolved" && activeCase.case.status !== "closed" ? (
+                    <button
+                      className="small-button"
+                      onClick={() => onResolveCase(activeCase.case.case_id)}
+                      type="button"
+                    >
+                      Resolve case
+                    </button>
+                  ) : null}
                   <button
-                    className="small-button"
-                    onClick={() => onResolveCase(fraudCase.case_id)}
-                    type="button"
+                    className="primary-button"
+                    disabled={isSubmittingCaseComment || commentDraft.trim().length === 0}
+                    type="submit"
                   >
-                    Resolve
+                    {isSubmittingCaseComment ? "Posting..." : "Post comment"}
                   </button>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+                </div>
+              </form>
+            </section>
+          </>
+        )}
+      </section>
     </section>
   );
 }
