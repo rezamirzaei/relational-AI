@@ -175,13 +175,13 @@ export function Dashboard({
               <section className="content-card overview-hero">
                 <div>
                   <p className="eyebrow">Reference scenarios</p>
-                  <h2>Use seeded investigations to validate the rule engine and train operators.</h2>
+                  <h2>Validate the rule engine and practice investigations with seeded data.</h2>
                 </div>
                 <div className="llm-note compact">
-                  <strong>Secondary workflow</strong>
+                  <strong>How it works</strong>
                   <p>
-                    These scenarios are for validation, regression checks, and analyst practice.
-                    The primary product path still starts from uploaded datasets.
+                    These scenarios use pre-loaded transaction data to test rules, check analysis
+                    accuracy, and help new analysts learn the workflow.
                   </p>
                 </div>
               </section>
@@ -249,7 +249,7 @@ export function Dashboard({
                     <>
                       <div className="section-header">
                         <span>Active Investigation</span>
-                        <span>{isPending ? "Refreshing evidence..." : "Reference analyst view"}</span>
+                        <span>{isPending ? "Loading..." : "Investigation results"}</span>
                       </div>
 
                       <div className="headline-row">
@@ -297,7 +297,7 @@ export function Dashboard({
                         />
                         <MetricCard
                           label="Linked customers"
-                          tone="good"
+                          tone="warning"
                           value={String(activeInvestigation.metrics.linked_customer_count)}
                         />
                       </div>
@@ -392,7 +392,7 @@ export function Dashboard({
                             </div>
                           ) : (
                             <div className="empty-state">
-                              This investigation still only exposes raw rule hits.
+                              No investigation leads were generated. Review the rule hits below for details.
                             </div>
                           )}
                         </section>
@@ -400,7 +400,7 @@ export function Dashboard({
                         <section className="content-card emphasis-card">
                           <div className="mini-header">
                             <span>Recommended Actions</span>
-                            <span>Queue this now</span>
+                            <span>Next steps</span>
                           </div>
                           <div className="action-stack">
                             {activeInvestigation.recommended_actions.map((action) => (
@@ -413,17 +413,17 @@ export function Dashboard({
                         </section>
                         <section className="content-card">
                           <div className="mini-header">
-                            <span>Runtime Posture</span>
+                            <span>System Status</span>
                             <span>Platform</span>
                           </div>
                           <div className="provider-grid">
-                            <span>Reasoning</span>
+                            <span>Analysis engine</span>
                             <strong>{activeInvestigation.provider_summary.active_reasoning_provider}</strong>
-                            <span>Text</span>
+                            <span>Text analysis</span>
                             <strong>{activeInvestigation.provider_summary.active_text_provider}</strong>
                             <span>Database</span>
                             <strong>{backendHealth?.database_status ?? "unavailable"}</strong>
-                            <span>Rate limit</span>
+                            <span>Rate limiting</span>
                             <strong>{backendHealth?.rate_limit_backend ?? "unavailable"}</strong>
                           </div>
                           <div className="stack">
@@ -557,17 +557,17 @@ export function Dashboard({
                   <p className="eyebrow">
                     {workspaceGuide?.primary_workflow_title ?? "Primary Workflow"}
                   </p>
-                  <h2>Turn uploaded transaction data into behavioral risk insights.</h2>
+                  <h2>Turn uploaded transaction data into actionable risk insights.</h2>
                   <p className="muted-copy">
-                    Upload data, infer entity behavior and relationship structure, review the
-                    generated alerts, and create a case only when the evidence warrants it.
+                    Upload a CSV file, run statistical and behavioral analysis, review the
+                    generated alerts, and create a case when the evidence supports it.
                   </p>
                 </div>
                 <div className="llm-note compact">
-                  <strong>Copilot boundary</strong>
+                  <strong>AI disclaimer</strong>
                   <p>
                     {workspaceGuide?.llm_positioning_note ??
-                      "The explanation layer rewrites scored findings. It does not change scores or thresholds."}
+                      "AI-generated summaries explain scored findings. They do not change scores or thresholds."}
                   </p>
                 </div>
               </section>
@@ -623,7 +623,7 @@ export function Dashboard({
 
                   {datasets.length === 0 ? (
                     <div className="empty-state">
-                      No datasets yet. Upload one to start the primary workflow.
+                      No datasets yet. Upload a CSV file to get started.
                     </div>
                   ) : (
                     <div className="dataset-list">
@@ -731,15 +731,14 @@ export function Dashboard({
                         <strong>{selectedDataset.name}</strong>
                       </p>
                       <p className="muted-copy">
-                        This dataset failed processing. Review the dataset error and upload a corrected
-                        file.
+                        Analysis failed. Check the error details and try uploading a corrected file.
                       </p>
                     </div>
                   ) : null}
 
                   {selectedDataset?.status === "analyzing" ? (
                     <div className="empty-state">
-                      Statistical and behavioral analysis is currently running for this dataset.
+                      Analysis is running. This may take a moment...
                     </div>
                   ) : null}
 
@@ -747,7 +746,7 @@ export function Dashboard({
                   isLoadingAnalysisDetail &&
                   !activeAnalysisMatchesSelection ? (
                     <div className="empty-state">
-                      Loading the completed analysis and copilot brief for this dataset.
+                      Loading analysis results...
                     </div>
                   ) : null}
 
@@ -759,7 +758,7 @@ export function Dashboard({
 
                   {!selectedDataset ? (
                     <div className="empty-state">
-                      Select a dataset from the queue to inspect its workflow status.
+                      Select a dataset from the queue to view its analysis.
                     </div>
                   ) : null}
 
@@ -861,8 +860,8 @@ export function Dashboard({
                               <span>{activeAnalysis.investigation_leads.length}</span>
                             </div>
                             <p className="muted-copy" style={{ margin: "8px 0" }}>
-                              Dataset-derived hypotheses that group raw findings into case-ready
-                              review paths.
+                              Hypotheses generated from the analysis findings, grouped into
+                              actionable review paths.
                             </p>
                             {activeAnalysis.investigation_leads.length > 0 ? (
                               <div className="stack">
@@ -894,8 +893,8 @@ export function Dashboard({
                               </div>
                             ) : (
                               <div className="empty-state">
-                                This dataset did not produce a case-level lead beyond the raw anomaly
-                                list.
+                                No investigation leads were generated. Review the anomalies below
+                                for details.
                               </div>
                             )}
                           </section>
@@ -908,8 +907,8 @@ export function Dashboard({
                               </span>
                             </div>
                             <p className="muted-copy" style={{ margin: "8px 0" }}>
-                              Leading-digit distribution compared against Benford&apos;s expected
-                              frequencies. This is one scoring lens, not the whole story.
+                              Leading-digit distribution compared against expected frequencies.
+                              Significant deviations may indicate manipulated data.
                             </p>
                             <BenfordChart digits={activeAnalysis.benford_digits} />
                           </section>

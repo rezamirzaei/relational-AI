@@ -17,7 +17,7 @@ const bodyFont = Space_Grotesk({
 export const metadata: Metadata = {
   title: "Relational Fraud Intelligence",
   description:
-    "Fraud investigation command center with case management, automated alerts, graph analysis, and explainable risk reasoning.",
+    "Fraud investigation platform with case management, automated alerts, graph analysis, and AI-assisted risk assessment.",
 };
 
 type RootLayoutProps = {

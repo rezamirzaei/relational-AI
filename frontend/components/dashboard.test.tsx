@@ -902,10 +902,10 @@ describe("Dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByText("Fraud triage starts with real transaction data.")).toBeInTheDocument();
+    expect(screen.getByText("Start by uploading your transaction data.")).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toHaveValue("");
     expect(screen.getByLabelText("Password")).toHaveValue("");
-    expect(screen.getByText("Local bootstrap operators")).toBeInTheDocument();
+    expect(screen.getByText("Demo credentials")).toBeInTheDocument();
     expect(screen.getByText("Role Stories")).toBeInTheDocument();
   });
 
@@ -1207,7 +1207,7 @@ describe("Dashboard", () => {
         "dataset-1",
         "admin",
       );
-      expect(screen.getByText("Copilot Brief")).toBeInTheDocument();
+      expect(screen.getByText("AI Summary")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Alerts/i }));

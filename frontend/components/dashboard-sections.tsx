@@ -50,15 +50,6 @@ type SignedOutPanelProps = {
   onUsernameChange: (value: string) => void;
 };
 
-type DashboardNavProps = {
-  activeView: ActiveView;
-  alerts: FraudAlert[];
-  cases: FraudCase[];
-  operator: OperatorPrincipal;
-  onLogout: () => void;
-  onViewChange: (view: ActiveView) => void;
-};
-
 type OverviewSectionProps = {
   dashboardStats: DashboardStats | null;
   datasetsCount: number;
@@ -133,7 +124,7 @@ export function DashboardHeader({
     <header className="ops-header">
       <div>
         <div className="eyebrow">
-          {workspaceGuide?.primary_workflow_title ?? "Dataset Fraud Triage Workspace"}
+          {workspaceGuide?.primary_workflow_title ?? "Fraud Investigation Workspace"}
         </div>
         <h1>Relational Fraud Intelligence</h1>
       </div>
@@ -175,11 +166,11 @@ export function SignedOutPanel({
     <>
       <section className="hero-panel">
         <div className="hero-copy-block">
-          <p className="eyebrow">{workspaceGuide?.primary_workflow_title ?? "Primary Workflow"}</p>
-          <h2>Fraud triage starts with real transaction data.</h2>
+          <p className="eyebrow">{workspaceGuide?.primary_workflow_title ?? "Getting Started"}</p>
+          <h2>Start by uploading your transaction data.</h2>
           <p className="hero-copy">
             {workspaceGuide?.primary_workflow_summary ??
-              "Upload transaction data, run statistical and behavioral analysis, turn the strongest findings into investigation leads, and open cases only when the evidence supports it."}
+              "Upload transaction data, run statistical and behavioral analysis, review automatically generated alerts, and open cases when the evidence supports it."}
           </p>
           <div className="hero-ribbon">
             <span>Upload</span>
@@ -192,27 +183,25 @@ export function SignedOutPanel({
           <article className="hero-stat-card">
             <span className="hero-label">Environment</span>
             <strong>{backendHealth?.environment ?? "offline"}</strong>
-            <p>Runtime health exposed by the backend.</p>
+            <p>Current system environment.</p>
           </article>
           <article className="hero-stat-card">
             <span className="hero-label">Scenarios</span>
             <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-            <p>Reference scenarios reserved for validation and training.</p>
+            <p>Pre-loaded scenarios for testing and training.</p>
           </article>
           <article className="hero-stat-card">
             <span className="hero-label">Operators</span>
             <strong>{backendHealth?.seeded_operators ?? 0}</strong>
-            <p>Bootstrap accounts available for the analyst and admin roles.</p>
+            <p>Available user accounts.</p>
           </article>
           <article className="hero-stat-card">
-            <span className="hero-label">Providers</span>
+            <span className="hero-label">AI Engine</span>
             <strong>
               {backendHealth?.provider_posture.active_explanation_provider ?? "unknown"}
             </strong>
             <p>
-              Text {backendHealth?.provider_posture.active_text_signal_provider ?? "unknown"}.
-              Risk {backendHealth?.provider_posture.active_reasoning_provider ?? "unknown"}.
-              Copilot {backendHealth?.provider_posture.active_explanation_provider ?? "unknown"}.
+              Active analysis and explanation engine.
             </p>
           </article>
         </div>
@@ -253,14 +242,14 @@ export function SignedOutPanel({
         {loginError ? <div className="error-banner">{loginError}</div> : null}
         {showBootstrapCredentials ? (
           <div className="auth-help">
-            <strong>Local bootstrap operators</strong>
-            <p>`analyst / AnalystPassword123!`</p>
-            <p>`admin / AdminPassword123!`</p>
+            <strong>Demo credentials</strong>
+            <p>analyst / AnalystPassword123!</p>
+            <p>admin / AdminPassword123!</p>
           </div>
         ) : null}
         {backendHealth?.provider_posture.notes.length ? (
           <div className="llm-note">
-            <strong>Provider fallback notes</strong>
+            <strong>System notes</strong>
             <p>{backendHealth.provider_posture.notes.join(" ")}</p>
           </div>
         ) : null}
@@ -297,8 +286,8 @@ export function SignedOutPanel({
 
           <section className="surface guide-panel">
             <div className="mini-header">
-              <span>Scoring Guardrails</span>
-              <span>Deterministic</span>
+              <span>How Scoring Works</span>
+              <span>Rules-based</span>
             </div>
             <div className="action-stack">
               {workspaceGuide.scoring_guarantees.map((guarantee) => (
@@ -309,62 +298,13 @@ export function SignedOutPanel({
               ))}
             </div>
             <div className="llm-note">
-              <strong>Copilot boundary</strong>
+              <strong>AI disclaimer</strong>
               <p>{workspaceGuide.llm_positioning_note}</p>
             </div>
           </section>
         </section>
       ) : null}
     </>
-  );
-}
-
-export function DashboardNav({
-  activeView,
-  alerts,
-  cases,
-  operator,
-  onLogout,
-  onViewChange,
-}: DashboardNavProps) {
-  const newAlertsCount = alerts.filter((alert) => alert.status === "new").length;
-  const activeCasesCount = cases.filter(
-    (fraudCase) => fraudCase.status === "open" || fraudCase.status === "investigating",
-  ).length;
-  const views: ActiveView[] =
-    operator.role === "admin"
-      ? ["analyze", "alerts", "cases", "overview", "investigate", "audit"]
-      : ["analyze", "alerts", "cases", "overview", "investigate"];
-
-  return (
-    <nav className="nav-bar">
-      <div className="nav-left">
-        {views.map((view) => (
-          <button
-            key={view}
-            className={`nav-tab ${activeView === view ? "active" : ""}`}
-            onClick={() => onViewChange(view)}
-            type="button"
-          >
-            {viewLabel(view)}
-            {view === "alerts" && newAlertsCount > 0 ? (
-              <span className="nav-badge">{newAlertsCount}</span>
-            ) : null}
-            {view === "cases" && activeCasesCount > 0 ? (
-              <span className="nav-badge">{activeCasesCount}</span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-      <div className="nav-right">
-        <span className="operator-info">
-          {operator.display_name} ({operator.role})
-        </span>
-        <button className="secondary-button" onClick={onLogout} type="button">
-          Sign out
-        </button>
-      </div>
-    </nav>
   );
 }
 
@@ -388,7 +328,7 @@ export function OverviewSection({
               <strong>Next action</strong>
               <p>
                 {dashboardStats?.next_recommended_action ??
-                  "Upload a dataset and move it through the analysis-to-case workflow."}
+                  "Upload a dataset to begin analyzing transactions."}
               </p>
             </div>
             <button className="primary-button" onClick={() => onViewChange("analyze")} type="button">
@@ -500,8 +440,8 @@ export function OverviewSection({
 
           <section className="content-card">
             <div className="mini-header">
-              <span>Scoring Guardrails</span>
-              <span>Copilot safe</span>
+              <span>How Scoring Works</span>
+              <span>Verified</span>
             </div>
             <div className="action-stack">
               {workspaceGuide.scoring_guarantees.map((guarantee) => (
@@ -512,7 +452,7 @@ export function OverviewSection({
               ))}
             </div>
             <div className="llm-note">
-              <strong>LLM boundary</strong>
+              <strong>AI disclaimer</strong>
               <p>{workspaceGuide.llm_positioning_note}</p>
             </div>
           </section>
@@ -651,7 +591,7 @@ export function CasesSection({
         </div>
         {cases.length === 0 ? (
           <div className="empty-state">
-            No cases yet. Create one from a high-risk dataset analysis or a reference investigation.
+            No cases yet. Create one from a high-risk analysis or investigation.
           </div>
         ) : (
           <div className="stack">
@@ -701,7 +641,7 @@ export function CasesSection({
       <section className="surface case-detail-panel">
         {cases.length === 0 ? (
           <div className="empty-state">
-            Select a dataset or scenario workflow and open a case to review evidence here.
+            Upload and analyze data to start building cases from your findings.
           </div>
         ) : isLoadingCaseDetail ? (
           <div className="empty-state">Loading case evidence and transaction history...</div>
@@ -709,7 +649,7 @@ export function CasesSection({
           <div className="error-banner">{caseDetailError}</div>
         ) : !activeCase ? (
           <div className="empty-state">
-            Select a case to inspect its transactions, linked alerts, and analyst notes.
+            Select a case to view its transactions, alerts, and notes.
           </div>
         ) : (
           <>
@@ -811,7 +751,7 @@ export function CasesSection({
                     ))
                   ) : (
                     <div className="empty-state compact">
-                      No synthesized investigation leads are attached to this case yet.
+                      No investigation leads have been generated for this case yet.
                     </div>
                   )}
                 </div>
@@ -946,7 +886,7 @@ export function CasesSection({
                   ))
                 ) : (
                   <div className="empty-state compact">
-                    No analyst comments yet. Add one to document the investigation trail.
+                    No comments yet. Add one to document your findings.
                   </div>
                 )}
               </div>
@@ -957,7 +897,7 @@ export function CasesSection({
                     aria-label="Add case comment"
                     className="case-comment-input"
                     onChange={(event) => setCommentDraft(event.target.value)}
-                    placeholder="Summarize what you found in the transactions, alerts, or notes."
+                    placeholder="Describe what you found..."
                     rows={4}
                     value={commentDraft}
                   />
@@ -1003,7 +943,7 @@ export function AlertsSection({
       </div>
       {alerts.length === 0 ? (
         <div className="empty-state">
-          No alerts yet. High-risk dataset analyses create them automatically.
+          No alerts yet. Alerts are generated automatically when high-risk patterns are detected.
         </div>
       ) : (
         <div className="stack">
@@ -1089,11 +1029,11 @@ export function AnalysisCopilotCard({
     return (
       <section className="content-card copilot-card">
         <div className="mini-header">
-          <span>Copilot Brief</span>
+          <span>AI Summary</span>
           <span>Loading</span>
         </div>
         <p className="muted-copy">
-          Building an operator-facing explanation from the scored dataset findings.
+          Generating an analysis summary from the scored findings...
         </p>
       </section>
     );
@@ -1103,7 +1043,7 @@ export function AnalysisCopilotCard({
     return (
       <section className="content-card copilot-card">
         <div className="mini-header">
-          <span>Copilot Brief</span>
+          <span>AI Summary</span>
           <span>Error</span>
         </div>
         <div className="error-banner">{loadError}</div>
@@ -1115,11 +1055,11 @@ export function AnalysisCopilotCard({
     return (
       <section className="content-card copilot-card">
         <div className="mini-header">
-          <span>Copilot Brief</span>
+          <span>AI Summary</span>
           <span>Ready</span>
         </div>
         <p className="muted-copy">
-          Select or analyze a completed dataset to generate an explanation brief.
+          Select or analyze a completed dataset to generate a summary.
         </p>
       </section>
     );
@@ -1128,7 +1068,7 @@ export function AnalysisCopilotCard({
   return (
     <section className="content-card copilot-card">
       <div className="mini-header">
-        <span>Copilot Brief</span>
+        <span>AI Summary</span>
         <span>{explanation.audience}</span>
       </div>
       <div className="stack">
@@ -1140,7 +1080,7 @@ export function AnalysisCopilotCard({
         <div className="insight-grid compact">
           <section className="content-card inset-card">
             <div className="mini-header">
-              <span>Scored Evidence</span>
+              <span>Key Evidence</span>
               <span>{explanation.deterministic_evidence.length}</span>
             </div>
             <div className="action-stack">
@@ -1171,7 +1111,7 @@ export function AnalysisCopilotCard({
 
         <section className="content-card inset-card">
           <div className="mini-header">
-            <span>Guardrails</span>
+            <span>Watch-outs</span>
             <span>{explanation.provider_summary.source_of_truth}</span>
           </div>
           <div className="action-stack">
