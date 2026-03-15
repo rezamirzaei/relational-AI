@@ -1,9 +1,12 @@
 name: CD
 
 on:
+  # Only publish after CI passes on main or a version tag
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   push:
-    branches:
-      - main
     tags:
       - "v*"
 
@@ -14,6 +17,10 @@ permissions:
 jobs:
   publish-images:
     runs-on: ubuntu-latest
+    # Skip if triggered by workflow_run and CI did not succeed
+    if: >-
+      github.event_name == 'push'
+      || (github.event.workflow_run.conclusion == 'success')
     steps:
       - uses: actions/checkout@v4
 
