@@ -1,10 +1,26 @@
+from argparse import Namespace
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import relational_fraud_intelligence.manage as manage
-from relational_fraud_intelligence.manage import _build_parser, _discover_project_root
+from relational_fraud_intelligence.manage import (
+    CreateOperatorArgs,
+    PruneAuditArgs,
+    SeedArgs,
+    _build_command_args,
+    _build_parser,
+    _discover_project_root,
+)
+
+
+@dataclass(slots=True)
+class FakeSettings:
+    database_url: str = "sqlite+pysqlite:///./data/test.db"
+    database_echo: bool = False
+    audit_log_retention_days: int = 45
 
 
 async def test_discover_project_root_uses_current_working_directory(
@@ -46,9 +62,9 @@ async def test_discover_project_root_rejects_invalid_environment_override(
 
 
 async def test_main_dispatches_migrate_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_args = SimpleNamespace(command="migrate", revision="head")
+    fake_args = Namespace(command="migrate", revision="head")
     fake_parser = SimpleNamespace(parse_args=lambda: fake_args)
-    fake_settings = SimpleNamespace(database_url="sqlite+pysqlite:///./data/test.db")
+    fake_settings = FakeSettings()
     fake_config = object()
     called: dict[str, object] = {}
 
@@ -95,11 +111,9 @@ async def test_build_parser_supports_expected_commands() -> None:
 async def test_main_dispatches_seed_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    fake_args = SimpleNamespace(command="seed")
-    fake_settings = SimpleNamespace(
-        database_url="sqlite+pysqlite:///./data/test.db",
-        database_echo=False,
-    )
+    fake_args = _build_command_args(Namespace(command="seed"))
+    assert isinstance(fake_args, SeedArgs)
+    fake_settings = FakeSettings()
     fake_engine = SimpleNamespace(disposed=False)
     captured: dict[str, object] = {}
 
@@ -152,17 +166,17 @@ async def test_main_dispatches_create_operator_command(
     created: bool,
     expected_output: str,
 ) -> None:
-    fake_args = SimpleNamespace(
-        command="create-operator",
-        username="analyst",
-        display_name="Fraud Analyst",
-        role="analyst",
-        password="super-secret-password",
+    fake_args = _build_command_args(
+        Namespace(
+            command="create-operator",
+            username="analyst",
+            display_name="Fraud Analyst",
+            role="analyst",
+            password="super-secret-password",
+        )
     )
-    fake_settings = SimpleNamespace(
-        database_url="sqlite+pysqlite:///./data/test.db",
-        database_echo=False,
-    )
+    assert isinstance(fake_args, CreateOperatorArgs)
+    fake_settings = FakeSettings()
     fake_engine = SimpleNamespace(disposed=False)
     repository_calls: list[dict[str, object]] = []
 
@@ -210,12 +224,9 @@ async def test_main_dispatches_create_operator_command(
 async def test_main_dispatches_prune_audit_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    fake_args = SimpleNamespace(command="prune-audit", retention_days=None)
-    fake_settings = SimpleNamespace(
-        database_url="sqlite+pysqlite:///./data/test.db",
-        database_echo=False,
-        audit_log_retention_days=45,
-    )
+    fake_args = _build_command_args(Namespace(command="prune-audit", retention_days=None))
+    assert isinstance(fake_args, PruneAuditArgs)
+    fake_settings = FakeSettings(audit_log_retention_days=45)
     fake_engine = SimpleNamespace(disposed=False)
     service_calls: list[int] = []
 
@@ -248,25 +259,7 @@ async def test_main_dispatches_prune_audit_command(
 
 
 async def test_main_rejects_unsupported_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_args = SimpleNamespace(command="unknown")
-    fake_settings = SimpleNamespace(
-        database_url="sqlite+pysqlite:///./data/test.db",
-        database_echo=False,
-    )
-    fake_engine = SimpleNamespace(disposed=False)
-
-    async def async_dispose() -> None:
-        fake_engine.disposed = True
-
-    fake_engine.dispose = async_dispose
-
-    monkeypatch.setattr(manage, "AppSettings", lambda: fake_settings)
-    monkeypatch.setattr(manage, "build_engine", lambda database_url, echo: fake_engine)
-    monkeypatch.setattr(manage, "build_session_factory", lambda engine: "session-factory")
-    monkeypatch.setattr(manage, "build_seed_scenarios", lambda: [])
-    monkeypatch.setattr(manage, "DatabaseInitializer", lambda **kwargs: SimpleNamespace())
-
+    fake_parser = SimpleNamespace(parse_args=lambda: Namespace(command="unknown"))
+    monkeypatch.setattr(manage, "_build_parser", lambda: fake_parser)
     with pytest.raises(ValueError, match="Unsupported command 'unknown'"):
-        await manage._async_main(fake_args, fake_settings)
-
-    assert fake_engine.disposed is True
+        manage.main()

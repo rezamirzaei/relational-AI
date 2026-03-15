@@ -29,6 +29,7 @@ from relational_fraud_intelligence.domain.models import (
     TransactionRecord,
     TransactionStatus,
 )
+from relational_fraud_intelligence.infrastructure.reasoners import relationalai_reasoner
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
     GraphInsight,
     RelationalAIProjection,
@@ -152,6 +153,41 @@ class TestScoreToLevel:
     def test_critical(self) -> None:
         assert _score_to_level(80) == RiskLevel.CRITICAL
         assert _score_to_level(100) == RiskLevel.CRITICAL
+
+
+class TestProjectionFallback:
+    def test_returns_local_projection_when_sdk_is_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        reasoner, _ = _build_reasoner()
+        command = ReasonAboutRiskCommand(
+            scenario=_make_scenario(
+                devices=[
+                    DeviceProfile(
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1"],
+                        trust_score=0.8,
+                    ),
+                ],
+                transactions=[
+                    _make_txn("t1", "c1", "a1", "d1", "m1", 100.0),
+                    _make_txn("t2", "c1", "a1", "d1", "m1", 200.0, minutes_offset=1),
+                ],
+            ),
+            text_signals=[],
+        )
+
+        def _missing_module(name: str) -> object:
+            raise ModuleNotFoundError(name)
+
+        monkeypatch.setattr(relationalai_reasoner, "import_module", _missing_module)
+
+        projection = RelationalAIRiskReasoner._project_scenario(reasoner, command)
+
+        assert projection.projected_row_count == 3
+        assert projection.projected_table_names == ["transactions", "devices"]
 
 
 # ---------------------------------------------------------------------------

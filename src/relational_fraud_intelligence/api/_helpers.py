@@ -404,9 +404,3 @@ def _existing_linked_case_id(alerts: list[FraudAlert]) -> str | None:
 
 def _source_label(source_type: WorkflowSourceType) -> str:
     return "Dataset" if source_type == WorkflowSourceType.DATASET else "Scenario"
-
-
-
-
-
-

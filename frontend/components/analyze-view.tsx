@@ -493,5 +493,3 @@ export function AnalyzeView({
     </section>
   );
 }
-
-

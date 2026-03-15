@@ -144,10 +144,7 @@ async def create_case_from_alert(
             evidence_snapshot=await build_case_evidence_snapshot(case_command, container),
             related_alerts=related_alerts,
         )
-        updated_alert = next(
-            la for la in linked_alerts if la.alert_id == alert.alert_id
-        )
+        updated_alert = next(la for la in linked_alerts if la.alert_id == alert.alert_id)
         return CreateCaseFromAlertResult(alert=updated_alert, case=created_case)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-

@@ -37,4 +37,3 @@ class UploadedTransaction(AppModel):
     ip_country: str = ""
     channel: str = ""
     is_fraud_label: bool | None = None  # ground-truth label if available
-

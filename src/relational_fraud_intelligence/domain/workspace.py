@@ -44,4 +44,3 @@ class AnalysisExplanation(AppModel):
     recommended_actions: list[str] = Field(default_factory=list)
     watchouts: list[str] = Field(default_factory=list)
     provider_summary: ExplanationProviderSummary
-

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.application.dto.investigation import (
     GetScenarioQuery,
@@ -24,8 +23,8 @@ async def test_repository_lists_seeded_scenarios(
 
 
 async def test_database_initializer_is_idempotent(
-    session_factory: sessionmaker[Session],
-    engine: Engine,
+    session_factory: async_sessionmaker[AsyncSession],
+    engine: AsyncEngine,
 ) -> None:
     initializer = DatabaseInitializer(
         engine=engine,

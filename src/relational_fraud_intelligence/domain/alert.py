@@ -48,5 +48,3 @@ class FraudAlert(AppModel):
     def is_terminal(self) -> bool:
         """Return True if the alert is in a terminal state."""
         return self.status in (AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE)
-
-

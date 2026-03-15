@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.application.dto.investigation import InvestigateScenarioCommand
 from relational_fraud_intelligence.application.services.case_assembler import (
@@ -19,7 +19,7 @@ from relational_fraud_intelligence.infrastructure.text.keyword_text_signal_servi
 
 
 async def test_investigation_service_scores_synthetic_identity_ring_as_critical(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     service = InvestigationService(
         scenario_repository=SqlAlchemyScenarioRepository(session_factory),

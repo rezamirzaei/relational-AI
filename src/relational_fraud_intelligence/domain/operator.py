@@ -34,4 +34,3 @@ class AuditEvent(AppModel):
     ip_address: str | None = None
     user_agent: str | None = None
     details: dict[str, str] = Field(default_factory=dict)
-

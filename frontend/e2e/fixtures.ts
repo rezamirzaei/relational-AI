@@ -244,4 +244,3 @@ export async function mockAuthenticatedAPI(page: Page): Promise<void> {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(datasetsResponse) }),
   );
 }
-

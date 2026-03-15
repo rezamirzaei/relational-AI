@@ -100,6 +100,3 @@ class CaseEvidenceSnapshot(AppModel):
     scenario_transactions: list[TransactionRecord] = Field(default_factory=list)
     dataset_transactions: list[UploadedTransaction] = Field(default_factory=list)
     investigator_notes: list[InvestigatorNote] = Field(default_factory=list)
-
-
-

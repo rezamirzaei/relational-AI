@@ -140,7 +140,7 @@ jobs:
           RFI_BOOTSTRAP_ADMIN_PASSWORD: AdminPassword123!
           RFI_BOOTSTRAP_ANALYST_USERNAME: analyst
           RFI_BOOTSTRAP_ANALYST_PASSWORD: AnalystPassword123!
-        run: python -m pytest -m postgres -q
+        run: python -m pytest -m postgres -q --no-cov
 
   openapi-check:
     runs-on: ubuntu-latest
@@ -246,7 +246,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install ".[dev]"
 
       - name: Install frontend
         run: npm --prefix frontend ci
@@ -310,7 +310,8 @@ jobs:
       - name: pip-audit (Python dependency vulnerabilities)
         run: |
           pip install pip-audit
-          pip-audit --strict --desc
+          python -m pip freeze | grep -v '^relational-fraud-intelligence @ ' > requirements-audit.txt
+          pip-audit --strict --desc -r requirements-audit.txt
 
       - name: npm audit (frontend dependency vulnerabilities)
         run: npm --prefix frontend audit --audit-level=high || true

@@ -92,7 +92,8 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
-        request: Request, exc: RequestValidationError,
+        request: Request,
+        exc: RequestValidationError,
     ) -> JSONResponse:
         body = ErrorResponse(
             error_code=ErrorCode.VALIDATION_ERROR,
@@ -103,7 +104,8 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def http_error_handler(
-        request: Request, exc: HTTPException,
+        request: Request,
+        exc: HTTPException,
     ) -> JSONResponse:
         code = _STATUS_TO_ERROR_CODE.get(exc.status_code, ErrorCode.INTERNAL_ERROR)
         # Allow routes to override the error_code via exc.detail dict
@@ -122,7 +124,8 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(
-        request: Request, exc: Exception,
+        request: Request,
+        exc: Exception,
     ) -> JSONResponse:
         _logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         body = ErrorResponse(

@@ -40,4 +40,3 @@ test.describe("Authentication flow", () => {
     expect(request.headers()["authorization"]).toBe("Bearer e2e-test-token");
   });
 });
-

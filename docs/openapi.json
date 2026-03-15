@@ -710,6 +710,65 @@
         "title": "CaseDisposition",
         "type": "string"
       },
+      "CaseEvidenceSnapshot": {
+        "additionalProperties": false,
+        "description": "Immutable source evidence captured when a case is created.",
+        "properties": {
+          "analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Dataset"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataset_transactions": {
+            "items": {
+              "$ref": "#/components/schemas/UploadedTransaction"
+            },
+            "title": "Dataset Transactions",
+            "type": "array"
+          },
+          "investigation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvestigationCase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "investigator_notes": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigatorNote"
+            },
+            "title": "Investigator Notes",
+            "type": "array"
+          },
+          "scenario_transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionRecord"
+            },
+            "title": "Scenario Transactions",
+            "type": "array"
+          }
+        },
+        "title": "CaseEvidenceSnapshot",
+        "type": "object"
+      },
       "CasePriority": {
         "enum": [
           "low",
@@ -1082,6 +1141,53 @@
         "title": "DashboardStats",
         "type": "object"
       },
+      "Dataset": {
+        "additionalProperties": false,
+        "description": "A batch of uploaded transactions that can be analyzed.",
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "row_count": {
+            "minimum": 0.0,
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DatasetStatus",
+            "default": "uploaded"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "name",
+          "uploaded_at",
+          "row_count"
+        ],
+        "title": "Dataset",
+        "type": "object"
+      },
       "DatasetListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1091,6 +1197,21 @@
             },
             "title": "Datasets",
             "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 20,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -1270,7 +1391,7 @@
       },
       "FraudAlert": {
         "additionalProperties": false,
-        "description": "An auto-generated or manually created alert that may lead to a case.",
+        "description": "An auto-generated or manually created alert that may lead to a case.\n\nDomain invariants:\n- An alert must have severity \u2265 MEDIUM to be auto-escalated to a case.\n- Once resolved, an alert cannot be re-opened (terminal state).\n- ``linked_case_id`` may only be set when status is INVESTIGATING or later.",
         "properties": {
           "acknowledged_at": {
             "anyOf": [
@@ -1391,7 +1512,7 @@
       },
       "FraudCase": {
         "additionalProperties": false,
-        "description": "A persistent fraud investigation case with lifecycle management.",
+        "description": "A persistent fraud investigation case with lifecycle management.\n\nDomain invariants:\n- A case cannot move backwards in its lifecycle\n  (OPEN \u2192 INVESTIGATING \u2192 ESCALATED \u2192 RESOLVED \u2192 CLOSED).\n- ``disposition`` is required when transitioning to RESOLVED.\n- ``resolved_at`` is set automatically when status becomes RESOLVED.",
         "properties": {
           "alert_count": {
             "default": 0,
@@ -2532,6 +2653,26 @@
           "active_text_provider"
         ],
         "title": "ProviderSummary",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "additionalProperties": false,
+        "description": "Lightweight readiness probe response for orchestrators.",
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "database"
+        ],
+        "title": "ReadinessResponse",
         "type": "object"
       },
       "RiskLevel": {
@@ -3864,6 +4005,31 @@
     "/api/v1/datasets": {
       "get": {
         "operationId": "list_datasets_api_v1_datasets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3874,6 +4040,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -4295,6 +4471,28 @@
         "summary": "Create a case from a scenario investigation",
         "tags": [
           "Investigations"
+        ]
+      }
+    },
+    "/api/v1/readyz": {
+      "get": {
+        "description": "Lightweight check for orchestrators (Kubernetes, Docker Compose). Returns 200 if the database is reachable, 503 otherwise.",
+        "operationId": "readiness_api_v1_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "System"
         ]
       }
     },

@@ -49,4 +49,3 @@ class DashboardStats(AppModel):
     high_risk_analyses: int = Field(ge=0, default=0)
     workflow_stages: list[WorkflowStageSnapshot] = Field(default_factory=list)
     next_recommended_action: str = ""
-

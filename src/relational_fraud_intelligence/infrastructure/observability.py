@@ -82,4 +82,3 @@ def setup_observability(app: FastAPI, settings: AppSettings) -> None:
     metrics_app = make_asgi_app()
     app.mount("/metrics", metrics_app)
     logger.info("Prometheus metrics endpoint mounted at /metrics.")
-

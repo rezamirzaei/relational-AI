@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, Protocol, assert_never
 
 from alembic.config import Config
 
@@ -23,18 +25,54 @@ from relational_fraud_intelligence.infrastructure.seed.scenarios import build_se
 from relational_fraud_intelligence.settings import AppSettings
 
 
+@dataclass(frozen=True, slots=True)
+class MigrateArgs:
+    command: Literal["migrate"]
+    revision: str
+
+
+@dataclass(frozen=True, slots=True)
+class SeedArgs:
+    command: Literal["seed"] = "seed"
+
+
+@dataclass(frozen=True, slots=True)
+class CreateOperatorArgs:
+    command: Literal["create-operator"]
+    username: str
+    display_name: str
+    role: Literal["admin", "analyst"]
+    password: str
+
+
+@dataclass(frozen=True, slots=True)
+class PruneAuditArgs:
+    command: Literal["prune-audit"] = "prune-audit"
+    retention_days: int | None = None
+
+
+class ManageSettings(Protocol):
+    database_url: str
+    database_echo: bool
+    audit_log_retention_days: int
+
+
+AsyncCommandArgs = SeedArgs | CreateOperatorArgs | PruneAuditArgs
+CommandArgs = MigrateArgs | AsyncCommandArgs
+
+
 def main() -> None:
-    args = _build_parser().parse_args()
+    args = _build_command_args(_build_parser().parse_args())
     settings = AppSettings()
 
-    if args.command == "migrate":
+    if isinstance(args, MigrateArgs):
         command.upgrade(_build_alembic_config(settings), args.revision)
         return
 
     asyncio.run(_async_main(args, settings))
 
 
-async def _async_main(args: object, settings: AppSettings) -> None:
+async def _async_main(args: AsyncCommandArgs, settings: ManageSettings) -> None:
     engine = build_engine(settings.database_url, echo=settings.database_echo)
     session_factory = build_session_factory(engine)
     initializer = DatabaseInitializer(
@@ -44,34 +82,34 @@ async def _async_main(args: object, settings: AppSettings) -> None:
     )
 
     try:
-        if args.command == "seed":  # type: ignore[union-attr]
+        if isinstance(args, SeedArgs):
             inserted = await initializer.seed_if_empty()
             print(f"Inserted {inserted} scenarios.")
             return
-        if args.command == "create-operator":  # type: ignore[union-attr]
+        if isinstance(args, CreateOperatorArgs):
             repository = SqlAlchemyOperatorRepository(session_factory)
             created = await repository.create_operator(
-                username=args.username,  # type: ignore[union-attr]
-                display_name=args.display_name,  # type: ignore[union-attr]
-                role=args.role,  # type: ignore[union-attr]
-                password_hash=PasswordHasher().hash_password(args.password),  # type: ignore[union-attr]
+                username=args.username,
+                display_name=args.display_name,
+                role=args.role,
+                password_hash=PasswordHasher().hash_password(args.password),
             )
             if created:
-                print(f"Created operator '{args.username}'.")  # type: ignore[union-attr]
+                print(f"Created operator '{args.username}'.")
             else:
-                print(f"Operator '{args.username}' already exists.")  # type: ignore[union-attr]
+                print(f"Operator '{args.username}' already exists.")
             return
-        if args.command == "prune-audit":  # type: ignore[union-attr]
+        if isinstance(args, PruneAuditArgs):
             service = AuditService(SqlAlchemyAuditLogRepository(session_factory))
             retention_days = (
-                args.retention_days  # type: ignore[union-attr]
-                if args.retention_days is not None  # type: ignore[union-attr]
+                args.retention_days
+                if args.retention_days is not None
                 else settings.audit_log_retention_days
             )
             pruned_events = await service.prune_expired_events(retention_days)
             print(f"Pruned {pruned_events} audit events.")
             return
-        raise ValueError(f"Unsupported command '{args.command}'.")  # type: ignore[union-attr]
+        assert_never(args)
     finally:
         await engine.dispose()
 
@@ -121,6 +159,37 @@ def _build_parser() -> ArgumentParser:
     return parser
 
 
+def _build_command_args(namespace: Namespace) -> CommandArgs:
+    command_name = getattr(namespace, "command", None)
+    if command_name == "migrate":
+        return MigrateArgs(command="migrate", revision=_namespace_str(namespace, "revision"))
+    if command_name == "seed":
+        return SeedArgs()
+    if command_name == "create-operator":
+        role = _namespace_str(namespace, "role")
+        if role == "admin":
+            return CreateOperatorArgs(
+                command="create-operator",
+                username=_namespace_str(namespace, "username"),
+                display_name=_namespace_str(namespace, "display_name"),
+                role="admin",
+                password=_namespace_str(namespace, "password"),
+            )
+        if role == "analyst":
+            return CreateOperatorArgs(
+                command="create-operator",
+                username=_namespace_str(namespace, "username"),
+                display_name=_namespace_str(namespace, "display_name"),
+                role="analyst",
+                password=_namespace_str(namespace, "password"),
+            )
+        raise ValueError(f"Unsupported operator role '{role}'.")
+    if command_name == "prune-audit":
+        return PruneAuditArgs(retention_days=_namespace_optional_int(namespace, "retention_days"))
+
+    raise ValueError(f"Unsupported command '{command_name}'.")
+
+
 def _build_alembic_config(settings: AppSettings) -> Config:
     root = _discover_project_root()
     config = Config(str(root / "alembic.ini"))
@@ -161,3 +230,17 @@ def _validate_project_root(root: Path) -> None:
         raise FileNotFoundError(
             f"RFI_PROJECT_ROOT={root} does not contain both 'alembic.ini' and 'alembic/'."
         )
+
+
+def _namespace_str(namespace: Namespace, attribute: str) -> str:
+    value = getattr(namespace, attribute, None)
+    if not isinstance(value, str):
+        raise ValueError(f"Expected '{attribute}' to be a string.")
+    return value
+
+
+def _namespace_optional_int(namespace: Namespace, attribute: str) -> int | None:
+    value = getattr(namespace, attribute, None)
+    if value is None or isinstance(value, int):
+        return value
+    raise ValueError(f"Expected '{attribute}' to be an integer or None.")

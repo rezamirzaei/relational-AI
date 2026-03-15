@@ -114,4 +114,3 @@ class ExplanationAudience(StrEnum):
 class WorkflowSourceType(StrEnum):
     SCENARIO = "scenario"
     DATASET = "dataset"
-

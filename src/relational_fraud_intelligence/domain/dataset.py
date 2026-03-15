@@ -120,4 +120,3 @@ class AnalysisResult(AppModel):
 
     # Summary
     summary: str = ""
-

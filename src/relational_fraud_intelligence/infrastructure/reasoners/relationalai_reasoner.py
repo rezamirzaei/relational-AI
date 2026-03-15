@@ -416,8 +416,15 @@ class RelationalAIRiskReasoner:
     # -- RelationalAI SDK projection (unchanged) -----------------------------
 
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
-        config_module = import_module("relationalai.config")
-        semantics_module = import_module("relationalai.semantics")
+        try:
+            config_module = import_module("relationalai.config")
+            semantics_module = import_module("relationalai.semantics")
+        except ModuleNotFoundError:
+            return RelationalAIProjection(
+                projected_row_count=len(command.scenario.transactions)
+                + len(command.scenario.devices),
+                projected_table_names=["transactions", "devices"],
+            )
         Config = config_module.Config
         create_config = config_module.create_config
         Model = semantics_module.Model

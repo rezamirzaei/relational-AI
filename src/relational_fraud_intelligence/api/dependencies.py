@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, Request, status
@@ -40,7 +40,7 @@ async def get_current_operator(
     return result.principal
 
 
-def require_roles(*allowed_roles: OperatorRole) -> Callable[..., OperatorPrincipal]:
+def require_roles(*allowed_roles: OperatorRole) -> Callable[..., Awaitable[OperatorPrincipal]]:
     async def dependency(
         request: Request,
         principal: Annotated[OperatorPrincipal, Depends(get_current_operator)],

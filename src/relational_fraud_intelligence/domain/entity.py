@@ -51,4 +51,3 @@ class MerchantProfile(AppModel):
     country_code: str = Field(min_length=2, max_length=2)
     category: str
     description: str
-

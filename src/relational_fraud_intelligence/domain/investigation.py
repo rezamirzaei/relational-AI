@@ -94,4 +94,3 @@ class InvestigationCase(AppModel):
     recommended_actions: list[str] = Field(default_factory=list)
     investigation_leads: list[InvestigationLead] = Field(default_factory=list)
     graph_analysis: GraphAnalysisResult | None = None
-

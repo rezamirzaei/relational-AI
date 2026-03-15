@@ -50,4 +50,3 @@ class ScenarioOverview(AppModel):
     transaction_count: int = Field(ge=0)
     total_volume: float = Field(ge=0.0)
     baseline_risk: RiskLevel
-

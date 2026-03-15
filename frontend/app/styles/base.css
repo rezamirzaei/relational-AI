@@ -51,4 +51,3 @@ h1, h2, h3 { margin: 0; }
 .muted-copy { max-width: 62ch; }
 .summary-lead { max-width: 66ch; font-size: 1rem; }
 code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-size: 0.88em; }
-

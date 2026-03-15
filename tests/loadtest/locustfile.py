@@ -37,6 +37,7 @@ class FraudAnalystUser(HttpUser):
 
     wait_time = between(1, 3)
     host = "http://localhost:8001"
+    headers: dict[str, str]
 
     def on_start(self) -> None:
         """Authenticate and store the JWT token."""
@@ -138,6 +139,3 @@ class FraudAnalystUser(HttpUser):
             files={"file": ("loadtest.csv", csv_content, "text/csv")},
             name="POST /datasets/upload",
         )
-
-
-

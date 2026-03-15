@@ -326,9 +326,7 @@ class SqlAlchemyDatasetStore:
     async def total_transactions(self) -> int:
         async with self._session_factory() as session:
             return (
-                await session.scalar(
-                    select(func.coalesce(func.sum(DatasetRecord.row_count), 0))
-                )
+                await session.scalar(select(func.coalesce(func.sum(DatasetRecord.row_count), 0)))
             ) or 0
 
     async def total_anomalies(self) -> int:

@@ -50,4 +50,3 @@ This project employs the following security measures:
 - **Dependency scanning**: `pip-audit` and `npm audit` run in CI.
 - **Static analysis**: Ruff with `flake8-bandit` security rules.
 - **Pre-commit hooks**: `detect-secrets` prevents accidental credential commits.
-

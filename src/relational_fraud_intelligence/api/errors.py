@@ -44,4 +44,3 @@ class ErrorResponse(BaseModel):
     error_code: ErrorCode
     detail: str
     request_id: str | None = None
-
