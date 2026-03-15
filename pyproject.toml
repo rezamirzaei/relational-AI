@@ -45,6 +45,9 @@ dev = [
 otlp = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
 ]
+loadtest = [
+    "locust>=2.29",
+]
 
 [project.scripts]
 rfi-api = "relational_fraud_intelligence.__main__:main"

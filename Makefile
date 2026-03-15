@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up export-openapi codegen-contracts
+.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up export-openapi codegen-contracts loadtest
 
 install: backend-install frontend-install
 
@@ -58,4 +58,7 @@ export-openapi:
 
 codegen-contracts: export-openapi
 	$(NPM) --prefix frontend run codegen:contracts
+
+loadtest:
+	locust -f tests/loadtest/locustfile.py
 

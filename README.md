@@ -624,6 +624,29 @@ The API exposes 25 endpoints across these areas:
 
 ---
 
+## API versioning strategy
+
+All routes are served under a versioned prefix controlled by the `RFI_API_PREFIX`
+setting (default: `/api/v1`).  The versioning policy is:
+
+| Rule | Detail |
+|------|--------|
+| **Non-breaking additions stay in the current version** | New endpoints, new optional response fields, and new optional query parameters are added to `/api/v1` without bumping the version. |
+| **Breaking changes get a new version prefix** | Renaming or removing a field, changing a field type, removing an endpoint, or altering auth semantics produces `/api/v2`. |
+| **Deprecation window** | When `/api/v2` ships, `/api/v1` continues to be served for at least two release cycles with a `Sunset` response header. |
+| **Contract of record** | `docs/openapi.json` is the single source of truth. The `openapi-check` CI job prevents accidental schema drift. |
+| **Generated clients** | Frontend TypeScript types are generated from the OpenAPI schema via `make codegen-contracts`. They are not committed to git — CI regenerates them before every typecheck. |
+
+### Migration checklist (when v2 is needed)
+
+1. Create a new `api/v2/` router package alongside the existing `api/` routes.
+2. Mount both routers in `app.py` under `/api/v1` and `/api/v2`.
+3. Add `Sunset` and `Deprecation` headers to v1 responses via middleware.
+4. Update `scripts/export_openapi.py` to export both versions.
+5. After the deprecation window, remove the v1 router and redirect `/api/v1/*` → `/api/v2/*` with `301`.
+
+---
+
 ## Project structure
 
 ```text

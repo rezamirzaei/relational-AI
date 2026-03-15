@@ -21,3 +21,4 @@ frontend/.next/
 data/
 htmlcov/
 frontend/coverage/
+frontend/lib/contracts.gen.ts
