@@ -16,6 +16,7 @@ import {
   SignedOutPanel,
 } from "@/components/dashboard-sections";
 import { Sidebar, TopBar, type ActiveView } from "@/components/sidebar";
+import { SkeletonCard, SkeletonMetricRow, SkeletonList } from "@/components/skeletons";
 import { useDashboardState } from "@/lib/use-dashboard-state";
 import type {
   HealthResponse,
@@ -112,7 +113,7 @@ export function Dashboard({
     analyze: "Analyze Data",
     alerts: "Fraud Alerts",
     cases: "Fraud Cases",
-    investigate: "Reference Scenarios",
+    investigate: "Scenarios",
     audit: "Audit Trail",
   };
 
@@ -174,8 +175,8 @@ export function Dashboard({
             <section className="dashboard-view-stack">
               <section className="content-card overview-hero">
                 <div>
-                  <p className="eyebrow">Reference scenarios</p>
-                  <h2>Validate the rule engine and practice investigations with seeded data.</h2>
+                  <p className="eyebrow">Fraud scenarios</p>
+                  <h2>Validate the rule engine and run structured investigations with seeded data.</h2>
                 </div>
                 <div className="llm-note compact">
                   <strong>How it works</strong>
@@ -190,7 +191,7 @@ export function Dashboard({
                 <aside className="surface scenario-rail">
                   <div className="rail-toolbar">
                     <div className="section-header">
-                      <span>Reference Scenarios</span>
+                      <span>Scenarios</span>
                       <span>{visibleScenarios.length}</span>
                     </div>
                     <label className="search-shell">
@@ -536,13 +537,13 @@ export function Dashboard({
                         type="button"
                       >
                         {isPending
-                          ? "Running reference investigation..."
-                          : "Run reference investigation"}
+                          ? "Running investigation..."
+                          : "Run investigation"}
                       </button>
                     </div>
                   ) : (
                     <div className="empty-state">
-                      Select a reference scenario to validate the investigation engine.
+                      Select a scenario to run the investigation engine.
                     </div>
                   )}
                 </section>
@@ -597,7 +598,7 @@ export function Dashboard({
                     <span>{datasets.length}</span>
                   </div>
 
-                  <div className="upload-zone">
+                  <label className="upload-zone" htmlFor="dataset-upload">
                     <p>
                       <strong>Upload a transaction CSV</strong>
                     </p>
@@ -605,9 +606,13 @@ export function Dashboard({
                       Required columns: <code>transaction_id</code>, <code>account_id</code>,{" "}
                       <code>amount</code>, <code>timestamp</code>
                     </p>
+                    <span className="upload-zone-cta">
+                      {isUploading ? "Uploading…" : "Choose file or drag & drop"}
+                    </span>
                     <input
                       accept=".csv"
                       disabled={isUploading}
+                      id="dataset-upload"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (file) void handleUploadDataset(file);
@@ -615,11 +620,7 @@ export function Dashboard({
                       }}
                       type="file"
                     />
-                    {isUploading ? <p className="muted-copy">Uploading...</p> : null}
-                    <p className="muted-copy" style={{ marginTop: 8 }}>
-                      Sample dataset: <code>docs/sample_data/sample_transactions.csv</code>
-                    </p>
-                  </div>
+                  </label>
 
                   {datasets.length === 0 ? (
                     <div className="empty-state">
@@ -737,16 +738,18 @@ export function Dashboard({
                   ) : null}
 
                   {selectedDataset?.status === "analyzing" ? (
-                    <div className="empty-state">
-                      Analysis is running. This may take a moment...
+                    <div className="stack" style={{ padding: 20 }}>
+                      <SkeletonCard />
+                      <SkeletonMetricRow count={3} />
                     </div>
                   ) : null}
 
                   {selectedDataset?.status === "completed" &&
                   isLoadingAnalysisDetail &&
                   !activeAnalysisMatchesSelection ? (
-                    <div className="empty-state">
-                      Loading analysis results...
+                    <div className="stack" style={{ padding: 20 }}>
+                      <SkeletonMetricRow count={4} />
+                      <SkeletonList rows={3} />
                     </div>
                   ) : null}
 

@@ -6,6 +6,7 @@ import {
   StatusBarChart,
 } from "@/components/charts";
 import type { ActiveView } from "@/components/sidebar";
+import { SkeletonCard, SkeletonList, SkeletonMetricRow } from "@/components/skeletons";
 import type {
   AnalysisExplanation,
   AuditEvent,
@@ -179,32 +180,7 @@ export function SignedOutPanel({
             <span>Case</span>
           </div>
         </div>
-        <div className="hero-stats">
-          <article className="hero-stat-card">
-            <span className="hero-label">Environment</span>
-            <strong>{backendHealth?.environment ?? "offline"}</strong>
-            <p>Current system environment.</p>
-          </article>
-          <article className="hero-stat-card">
-            <span className="hero-label">Scenarios</span>
-            <strong>{backendHealth?.seeded_scenarios ?? 0}</strong>
-            <p>Pre-loaded scenarios for testing and training.</p>
-          </article>
-          <article className="hero-stat-card">
-            <span className="hero-label">Operators</span>
-            <strong>{backendHealth?.seeded_operators ?? 0}</strong>
-            <p>Available user accounts.</p>
-          </article>
-          <article className="hero-stat-card">
-            <span className="hero-label">AI Engine</span>
-            <strong>
-              {backendHealth?.provider_posture.active_explanation_provider ?? "unknown"}
-            </strong>
-            <p>
-              Active analysis and explanation engine.
-            </p>
-          </article>
-        </div>
+
       </section>
 
       <section className="surface auth-shell">
@@ -242,7 +218,7 @@ export function SignedOutPanel({
         {loginError ? <div className="error-banner">{loginError}</div> : null}
         {showBootstrapCredentials ? (
           <div className="auth-help">
-            <strong>Demo credentials</strong>
+            <strong>Development credentials</strong>
             <p>analyst / AnalystPassword123!</p>
             <p>admin / AdminPassword123!</p>
           </div>
@@ -255,55 +231,6 @@ export function SignedOutPanel({
         ) : null}
       </section>
 
-      {workspaceGuide ? (
-        <section className="guide-grid">
-          <section className="surface guide-panel">
-            <div className="mini-header">
-              <span>Role Stories</span>
-              <span>{workspaceGuide.role_stories.length}</span>
-            </div>
-            <div className="story-grid">
-              {workspaceGuide.role_stories.map((story) => (
-                <article key={story.story_id} className="story-card">
-                  <div className="story-card-top">
-                    <span className="tag-pill">{story.platform_role}</span>
-                    <span className="story-persona">{story.persona_name}</span>
-                  </div>
-                  <h3>{story.title}</h3>
-                  <p className="muted-copy">{story.goal}</p>
-                  <div className="story-steps">
-                    {story.workflow_steps.map((step) => (
-                      <article key={step} className="action-item compact">
-                        <span className="action-marker" />
-                        <p>{step}</p>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="surface guide-panel">
-            <div className="mini-header">
-              <span>How Scoring Works</span>
-              <span>Rules-based</span>
-            </div>
-            <div className="action-stack">
-              {workspaceGuide.scoring_guarantees.map((guarantee) => (
-                <article key={guarantee} className="action-item">
-                  <span className="action-marker" />
-                  <p>{guarantee}</p>
-                </article>
-              ))}
-            </div>
-            <div className="llm-note">
-              <strong>AI disclaimer</strong>
-              <p>{workspaceGuide.llm_positioning_note}</p>
-            </div>
-          </section>
-        </section>
-      ) : null}
     </>
   );
 }
@@ -393,71 +320,11 @@ export function OverviewSection({
           value={String(dashboardStats?.total_anomalies_found ?? 0)}
         />
         <MetricCard
-          label="Reference Scenarios"
+          label="Scenarios"
           tone="good"
           value={String(dashboardStats?.total_scenarios ?? scenariosCount)}
         />
       </div>
-
-      {workspaceGuide ? (
-        <div className="insight-grid">
-          <section className="content-card">
-            <div className="mini-header">
-              <span>Role Stories</span>
-              <span>{workspaceGuide.role_stories.length}</span>
-            </div>
-            <div className="story-grid">
-              {workspaceGuide.role_stories.map((story) => (
-                <article key={story.story_id} className="story-card">
-                  <div className="story-card-top">
-                    <span className="tag-pill">{story.platform_role}</span>
-                    <span className="story-persona">{story.persona_name}</span>
-                  </div>
-                  <h3>{story.title}</h3>
-                  <p className="muted-copy">{story.goal}</p>
-                  <div className="story-steps">
-                    {story.workflow_steps.map((step) => (
-                      <article key={step} className="action-item compact">
-                        <span className="action-marker" />
-                        <p>{step}</p>
-                      </article>
-                    ))}
-                  </div>
-                  <div className="story-card-foot">
-                    <p>{story.success_signal}</p>
-                    <button
-                      className="small-button"
-                      onClick={() => onViewChange(asActiveView(story.recommended_view))}
-                      type="button"
-                    >
-                      Open {viewLabel(asActiveView(story.recommended_view))}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="content-card">
-            <div className="mini-header">
-              <span>How Scoring Works</span>
-              <span>Verified</span>
-            </div>
-            <div className="action-stack">
-              {workspaceGuide.scoring_guarantees.map((guarantee) => (
-                <article key={guarantee} className="action-item">
-                  <span className="action-marker" />
-                  <p>{guarantee}</p>
-                </article>
-              ))}
-            </div>
-            <div className="llm-note">
-              <strong>AI disclaimer</strong>
-              <p>{workspaceGuide.llm_positioning_note}</p>
-            </div>
-          </section>
-        </div>
-      ) : null}
 
       {dashboardStats && Object.keys(dashboardStats.cases_by_status).length > 0 ? (
         <div className="insight-grid">
@@ -644,7 +511,11 @@ export function CasesSection({
             Upload and analyze data to start building cases from your findings.
           </div>
         ) : isLoadingCaseDetail ? (
-          <div className="empty-state">Loading case evidence and transaction history...</div>
+          <div className="stack" style={{ padding: 20 }}>
+            <SkeletonCard />
+            <SkeletonMetricRow count={3} />
+            <SkeletonList rows={3} />
+          </div>
         ) : caseDetailError ? (
           <div className="error-banner">{caseDetailError}</div>
         ) : !activeCase ? (
@@ -1122,21 +993,6 @@ export function AnalysisCopilotCard({
               </article>
             ))}
           </div>
-          <div className="provider-grid">
-            <span>Requested</span>
-            <strong>{explanation.provider_summary.requested_provider}</strong>
-            <span>Active</span>
-            <strong>{explanation.provider_summary.active_provider}</strong>
-            <span>Source of truth</span>
-            <strong>{explanation.provider_summary.source_of_truth}</strong>
-          </div>
-          <div className="stack">
-            {explanation.provider_summary.notes.map((note) => (
-              <p key={note} className="provider-note">
-                {note}
-              </p>
-            ))}
-          </div>
         </section>
       </div>
     </section>
@@ -1148,7 +1004,7 @@ function viewLabel(view: ActiveView): string {
     case "overview":
       return "Workspace";
     case "investigate":
-      return "Reference Scenarios";
+      return "Scenarios";
     case "analyze":
       return "Analyze Data";
     case "cases":

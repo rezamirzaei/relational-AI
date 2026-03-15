@@ -44,7 +44,7 @@ const viewConfig: {
   { id: "analyze", label: "Analyze Data", icon: BarChart3 },
   { id: "alerts", label: "Alerts", icon: AlertTriangle },
   { id: "cases", label: "Cases", icon: Briefcase },
-  { id: "investigate", label: "Reference Scenarios", icon: FileSearch },
+  { id: "investigate", label: "Scenarios", icon: FileSearch },
   { id: "audit", label: "Audit Trail", icon: ScrollText, adminOnly: true },
 ];
 

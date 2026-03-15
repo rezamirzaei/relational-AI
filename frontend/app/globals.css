@@ -520,9 +520,18 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
 .dataset-card-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .analysis-summary-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr); gap: 16px; align-items: start; }
 
-.upload-zone { border: 2px dashed var(--border-strong); border-radius: 14px; padding: 24px; text-align: center; background: var(--bg-inset); margin-top: 14px; transition: border-color 0.2s; }
-.upload-zone:hover { border-color: var(--border-accent); }
-.upload-zone input[type="file"] { margin-top: 12px; font-size: 0.88rem; }
+.upload-zone { border: 2px dashed var(--border-strong); border-radius: 14px; padding: 24px; text-align: center; background: var(--bg-inset); margin-top: 14px; transition: border-color 0.2s, background 0.2s; cursor: pointer; }
+.upload-zone:hover { border-color: var(--border-accent); background: var(--bg-card-hover); }
+.upload-zone.drag-active { border-color: var(--accent); background: var(--accent-bg); }
+.upload-zone input[type="file"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+.upload-zone-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 14px; padding: 8px 18px; border-radius: 10px;
+  background: var(--bg-elevated); border: 1px solid var(--border-strong);
+  color: var(--ink-strong); font-size: 0.84rem; font-weight: 600;
+  transition: all 0.15s ease;
+}
+.upload-zone:hover .upload-zone-cta { border-color: var(--border-accent); background: var(--bg-card-hover); }
 
 /* ------------------------------------------------------------------ */
 /* Benford fallback                                                    */

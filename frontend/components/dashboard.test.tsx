@@ -905,8 +905,7 @@ describe("Dashboard", () => {
     expect(screen.getByText("Start by uploading your transaction data.")).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toHaveValue("");
     expect(screen.getByLabelText("Password")).toHaveValue("");
-    expect(screen.getByText("Demo credentials")).toBeInTheDocument();
-    expect(screen.getByText("Role Stories")).toBeInTheDocument();
+    expect(screen.getByText("Development credentials")).toBeInTheDocument();
   });
 
   it("authenticates an analyst, filters scenarios, and loads a different investigation", async () => {
@@ -937,7 +936,7 @@ describe("Dashboard", () => {
       expect(mockedFetchScenarioCatalog).toHaveBeenCalledWith("analyst-token");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Reference Scenarios/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Scenarios/i }));
     fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
 
     await waitFor(() => {
@@ -1017,10 +1016,10 @@ describe("Dashboard", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Reference Scenarios/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Scenarios/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Reference Scenarios/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Scenarios/i }));
     fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
 
     await waitFor(() => {
