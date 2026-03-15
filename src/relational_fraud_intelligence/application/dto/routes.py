@@ -37,6 +37,13 @@ class ProviderPostureResponse(AppModel):
     notes: list[str]
 
 
+class ReadinessResponse(AppModel):
+    """Lightweight readiness probe response for orchestrators."""
+
+    ready: bool
+    database: str
+
+
 class HealthResponse(AppModel):
     status: Literal["ok", "degraded"]
     app_name: str
@@ -100,6 +107,9 @@ class DatasetResponse(AppModel):
 
 class DatasetListResponse(AppModel):
     datasets: list[DatasetResponse]
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
 
 
 class TransactionIngestBody(AppModel):

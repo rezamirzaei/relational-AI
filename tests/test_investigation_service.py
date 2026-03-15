@@ -28,7 +28,9 @@ async def test_investigation_service_scores_synthetic_identity_ring_as_critical(
         case_assembler=InvestigationCaseAssembler(),
     )
 
-    result = await service.execute(InvestigateScenarioCommand(scenario_id="synthetic-identity-ring"))
+    result = await service.execute(
+        InvestigateScenarioCommand(scenario_id="synthetic-identity-ring")
+    )
 
     assert result.investigation.total_risk_score >= 80
     assert result.investigation.risk_level == "critical"

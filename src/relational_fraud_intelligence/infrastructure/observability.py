@@ -13,12 +13,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
     from relational_fraud_intelligence.settings import AppSettings
 
 logger = logging.getLogger(__name__)
 
 
-def setup_observability(app: "FastAPI", settings: "AppSettings") -> None:
+def setup_observability(app: FastAPI, settings: AppSettings) -> None:
     """Wire OpenTelemetry tracing + Prometheus metrics into *app*."""
     if not settings.otel_enabled:
         logger.info("OpenTelemetry disabled (RFI_OTEL_ENABLED=false). Skipping.")
@@ -69,6 +70,9 @@ def setup_observability(app: "FastAPI", settings: "AppSettings") -> None:
         provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
     trace.set_tracer_provider(provider)
+
+    # Store on app state so lifespan shutdown can flush pending spans
+    app.state.otel_tracer_provider = provider
 
     # --- FastAPI auto-instrumentation --------------------------------------
     FastAPIInstrumentor.instrument_app(app)

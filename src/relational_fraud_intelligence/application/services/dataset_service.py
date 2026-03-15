@@ -181,7 +181,9 @@ class DatasetService:
         await self._store.save_transactions(dataset.dataset_id, transactions)
         return dataset
 
-    async def ingest_transactions(self, name: str, transactions: list[dict[str, object]]) -> Dataset:
+    async def ingest_transactions(
+        self, name: str, transactions: list[dict[str, object]]
+    ) -> Dataset:
         """Ingest transactions via API (JSON array)."""
         parsed: list[UploadedTransaction] = []
         for i, raw in enumerate(transactions):

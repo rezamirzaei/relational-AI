@@ -76,6 +76,15 @@ select = [
     "I",
     "UP",
     "B",
+    "S",
+]
+ignore = [
+    "S101",  # assert is fine in tests
+    "S104",  # binding to 0.0.0.0 is intentional for container use
+    "S105",  # hardcoded passwords are in default dev settings only
+    "S106",  # same — dev-only password arguments
+    "S110",  # bare except-pass in fallback provider logic is intentional
+    "S311",  # random is used for UUIDs and test data, not cryptography
 ]
 
 [tool.coverage.run]

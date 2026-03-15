@@ -22,4 +22,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
         response = await call_next(request)
         response.headers[self._request_id_header] = request_id
+
+        # Propagate rate-limit headers set by the auth dependency
+        rl_limit = getattr(request.state, "rate_limit_limit", None)
+        if rl_limit is not None:
+            response.headers["X-RateLimit-Limit"] = str(rl_limit)
+            response.headers["X-RateLimit-Remaining"] = str(
+                getattr(request.state, "rate_limit_remaining", 0)
+            )
+            response.headers["X-RateLimit-Reset"] = str(
+                getattr(request.state, "rate_limit_reset", 0)
+            )
+
         return response

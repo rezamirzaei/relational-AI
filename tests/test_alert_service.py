@@ -138,7 +138,9 @@ async def test_list_alerts_filters_by_severity(alert_service: AlertService) -> N
     assert result.alerts[0].severity == RiskLevel.CRITICAL
 
 
-async def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertService) -> None:
+async def test_auto_generate_alerts_from_high_risk_investigation(
+    alert_service: AlertService,
+) -> None:
     rule_hits = [
         {
             "rule_code": "shared-device-cluster",

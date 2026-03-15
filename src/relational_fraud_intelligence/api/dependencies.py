@@ -52,11 +52,19 @@ def require_roles(*allowed_roles: OperatorRole) -> Callable[..., OperatorPrincip
                 detail="You do not have permission to access this endpoint.",
             )
 
+        limit = container.settings.rate_limit_api_requests
+        window = container.settings.rate_limit_api_window_seconds
         allowed, retry_after = container.rate_limiter.consume(
             key=f"api:{principal.user_id}",
-            limit=container.settings.rate_limit_api_requests,
-            window_seconds=container.settings.rate_limit_api_window_seconds,
+            limit=limit,
+            window_seconds=window,
         )
+
+        # Expose rate-limit info for header propagation by middleware
+        request.state.rate_limit_limit = limit
+        request.state.rate_limit_remaining = max(0, limit - 1) if allowed else 0
+        request.state.rate_limit_reset = retry_after
+
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

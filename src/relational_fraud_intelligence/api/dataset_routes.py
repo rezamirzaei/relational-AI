@@ -112,11 +112,16 @@ async def list_datasets(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> DatasetListResponse:
     request.state.current_principal = principal
     request.state.audit_action = "list-datasets"
     request.state.audit_resource_type = "dataset"
     datasets = await container.dataset_service.list_datasets()
+    total = len(datasets)
+    start = (page - 1) * page_size
+    page_items = datasets[start : start + page_size]
     return DatasetListResponse(
         datasets=[
             DatasetResponse(
@@ -127,8 +132,11 @@ async def list_datasets(
                 status=d.status,
                 error_message=d.error_message,
             )
-            for d in datasets
-        ]
+            for d in page_items
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

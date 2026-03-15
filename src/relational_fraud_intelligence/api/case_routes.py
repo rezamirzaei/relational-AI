@@ -61,7 +61,8 @@ async def create_case(
     try:
         await validate_case_source(command, container)
         created_case, _ = await create_case_with_source_links(
-            command=command, container=container,
+            command=command,
+            container=container,
             evidence_snapshot=await build_case_evidence_snapshot(command, container),
         )
         return CreateCaseResult(case=created_case)
@@ -91,7 +92,9 @@ async def list_cases(
     request.state.current_principal = principal
     request.state.audit_action = "list-cases"
     request.state.audit_resource_type = "fraud-case"
-    return await container.case_service.list_cases(ListCasesQuery(status=status, priority=priority, page=page, page_size=page_size))
+    return await container.case_service.list_cases(
+        ListCasesQuery(status=status, priority=priority, page=page, page_size=page_size)
+    )
 
 
 @router.get(
@@ -114,9 +117,12 @@ async def get_case(
         case = (await container.case_service.get_case(GetCaseQuery(case_id=case_id))).case
         comments = await container.case_service.list_comments(case_id)
         related_alerts = await container.alert_service.list_alerts_for_source(
-            source_type=case.source_type, source_id=case.source_id,
+            source_type=case.source_type,
+            source_id=case.source_id,
         )
-        snapshot_result = case_detail_from_snapshot(case=case, comments=comments, related_alerts=related_alerts)
+        snapshot_result = case_detail_from_snapshot(
+            case=case, comments=comments, related_alerts=related_alerts
+        )
         if snapshot_result is not None:
             return snapshot_result
 
@@ -127,17 +133,33 @@ async def get_case(
             except LookupError:
                 analysis = None
             return GetCaseResult(
-                case=case, comments=comments, related_alerts=related_alerts,
-                analysis=analysis, dataset=to_case_dataset_detail(dataset),
-                dataset_transactions=await container.dataset_service.get_transactions(case.source_id),
+                case=case,
+                comments=comments,
+                related_alerts=related_alerts,
+                analysis=analysis,
+                dataset=to_case_dataset_detail(dataset),
+                dataset_transactions=await container.dataset_service.get_transactions(
+                    case.source_id
+                ),
             )
 
         scenario_id = case.scenario_id or case.source_id
-        scenario = (await container.scenario_catalog_service.get_scenario(GetScenarioQuery(scenario_id=scenario_id))).scenario
-        investigation = (await container.investigation_service.execute(InvestigateScenarioCommand(scenario_id=scenario_id))).investigation
+        scenario = (
+            await container.scenario_catalog_service.get_scenario(
+                GetScenarioQuery(scenario_id=scenario_id)
+            )
+        ).scenario
+        investigation = (
+            await container.investigation_service.execute(
+                InvestigateScenarioCommand(scenario_id=scenario_id)
+            )
+        ).investigation
         return GetCaseResult(
-            case=case, comments=comments, related_alerts=related_alerts,
-            investigation=investigation, scenario_transactions=scenario.transactions,
+            case=case,
+            comments=comments,
+            related_alerts=related_alerts,
+            investigation=investigation,
+            scenario_transactions=scenario.transactions,
             investigator_notes=scenario.investigator_notes,
         )
     except LookupError as exc:
@@ -166,9 +188,14 @@ async def update_case_status(
     request.state.audit_resource_type = "fraud-case"
     request.state.audit_resource_id = case_id
     try:
-        return await container.case_service.update_status(UpdateCaseStatusCommand(
-            case_id=case_id, status=body.status, disposition=body.disposition, resolution_notes=body.resolution_notes,
-        ))
+        return await container.case_service.update_status(
+            UpdateCaseStatusCommand(
+                case_id=case_id,
+                status=body.status,
+                disposition=body.disposition,
+                resolution_notes=body.resolution_notes,
+            )
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -194,7 +221,8 @@ async def add_case_comment(
     try:
         comment = await container.case_service.add_comment(
             AddCaseCommentCommand(case_id=case_id, body=body.body),
-            author_id=principal.user_id, author_name=principal.display_name,
+            author_id=principal.user_id,
+            author_name=principal.display_name,
         )
         return AddCommentResult(comment=comment)
     except LookupError as exc:

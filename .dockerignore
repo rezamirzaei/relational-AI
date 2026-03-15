@@ -1,4 +1,5 @@
 .git
+.github
 .idea
 .venv
 __pycache__
@@ -13,4 +14,15 @@ dist
 build
 .coverage
 coverage.xml
+htmlcov
 .env
+*.env.local
+data/
+docs/
+tests/
+*.egg-info
+*.pyc
+.tox
+.DS_Store
+frontend/coverage/
+frontend/playwright-report/

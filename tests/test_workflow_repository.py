@@ -27,7 +27,9 @@ from relational_fraud_intelligence.domain.models import (
 )
 
 
-async def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRepository) -> None:
+async def test_sql_case_repository_persists_cases_and_comments(
+    case_repository: CaseRepository,
+) -> None:
     service = CaseService(case_repository)
     evidence_snapshot = CaseEvidenceSnapshot(
         dataset=Dataset(

@@ -1,4 +1,4 @@
-"""Health endpoint."""
+"""Health and readiness endpoints."""
 
 from fastapi import APIRouter
 
@@ -6,9 +6,25 @@ from relational_fraud_intelligence.api._helpers import ContainerDep
 from relational_fraud_intelligence.application.dto.routes import (
     HealthResponse,
     ProviderPostureResponse,
+    ReadinessResponse,
 )
 
 router = APIRouter()
+
+
+@router.get(
+    "/readyz",
+    response_model=ReadinessResponse,
+    tags=["System"],
+    summary="Readiness probe",
+    description=(
+        "Lightweight check for orchestrators (Kubernetes, Docker Compose). "
+        "Returns 200 if the database is reachable, 503 otherwise."
+    ),
+)
+async def readiness(container: ContainerDep) -> ReadinessResponse:
+    db_ok = await container.is_database_ready()
+    return ReadinessResponse(ready=db_ok, database="ok" if db_ok else "unavailable")
 
 
 @router.get(
