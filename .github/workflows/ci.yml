@@ -305,12 +305,30 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install ".[dev]"
 
       - name: pip-audit (Python dependency vulnerabilities)
         run: |
           pip install pip-audit
-          python -m pip freeze | grep -v '^relational-fraud-intelligence @ ' > requirements-audit.txt
+          python - <<'PY'
+          import subprocess
+          import sys
+
+          result = subprocess.run(
+              [sys.executable, "-m", "pip", "freeze"],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          with open("requirements-audit.txt", "w", encoding="utf-8") as requirements:
+              for line in result.stdout.splitlines():
+                  normalized = line.strip().lower()
+                  if not normalized or normalized.startswith("#"):
+                      continue
+                  if "relational-fraud-intelligence" in normalized:
+                      continue
+                  requirements.write(f"{line}\n")
+          PY
           pip-audit --strict --desc -r requirements-audit.txt
 
       - name: npm audit (frontend dependency vulnerabilities)
