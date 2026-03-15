@@ -30,7 +30,7 @@ router = APIRouter()
         "Validates operator credentials and returns a JWT access token for subsequent API calls."
     ),
 )
-def login_operator(
+async def login_operator(
     command: LoginCommand,
     request: Request,
     container: ContainerDep,
@@ -40,7 +40,7 @@ def login_operator(
     request.state.audit_resource_type = "operator-session"
     request.state.audit_resource_id = command.username.strip().lower()
     try:
-        result = container.auth_service.authenticate(command)
+        result = await container.auth_service.authenticate(command)
         request.state.current_principal = result.principal
         return result
     except AuthenticationError as exc:
@@ -55,7 +55,7 @@ def login_operator(
     tags=["Authentication"],
     summary="Get current operator profile",
 )
-def get_current_operator(principal: AnalystDep, request: Request) -> GetCurrentOperatorResult:
+async def get_current_operator(principal: AnalystDep, request: Request) -> GetCurrentOperatorResult:
     request.state.audit_action = "get-current-operator"
     request.state.audit_resource_type = "operator"
     request.state.audit_resource_id = principal.user_id
@@ -69,7 +69,7 @@ def get_current_operator(principal: AnalystDep, request: Request) -> GetCurrentO
     summary="List audit events",
     description="Returns recent audit events. Admin only.",
 )
-def list_audit_events(
+async def list_audit_events(
     query: Annotated[ListAuditEventsQuery, Depends()],
     request: Request,
     container: ContainerDep,
@@ -79,5 +79,4 @@ def list_audit_events(
     request.state.audit_action = "list-audit-events"
     request.state.audit_resource_type = "audit-event"
     request.state.audit_details = {"limit": str(query.limit)}
-    return container.auth_service.list_audit_events(query)
-
+    return await container.auth_service.list_audit_events(query)

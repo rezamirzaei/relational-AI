@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.domain.models import (
     AuditEvent,
@@ -18,41 +18,41 @@ from relational_fraud_intelligence.infrastructure.persistence.models import (
 
 
 class SqlAlchemyOperatorRepository:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def get_operator_by_id(self, user_id: str) -> OperatorPrincipal | None:
-        with self._session_factory() as session:
-            record = session.get(OperatorUserRecord, user_id)
+    async def get_operator_by_id(self, user_id: str) -> OperatorPrincipal | None:
+        async with self._session_factory() as session:
+            record = await session.get(OperatorUserRecord, user_id)
             if record is None:
                 return None
             return _to_principal(record)
 
-    def get_operator_by_username(self, username: str) -> OperatorPrincipal | None:
+    async def get_operator_by_username(self, username: str) -> OperatorPrincipal | None:
         normalized_username = username.strip().lower()
-        with self._session_factory() as session:
-            record = session.scalar(
+        async with self._session_factory() as session:
+            record = await session.scalar(
                 select(OperatorUserRecord).where(OperatorUserRecord.username == normalized_username)
             )
             if record is None:
                 return None
             return _to_principal(record)
 
-    def get_password_hash(self, username: str) -> str | None:
+    async def get_password_hash(self, username: str) -> str | None:
         normalized_username = username.strip().lower()
-        with self._session_factory() as session:
-            record = session.scalar(
+        async with self._session_factory() as session:
+            record = await session.scalar(
                 select(OperatorUserRecord).where(OperatorUserRecord.username == normalized_username)
             )
             return record.password_hash if record is not None else None
 
-    def update_last_login(self, user_id: str) -> None:
-        with self._session_factory.begin() as session:
-            record = session.get(OperatorUserRecord, user_id)
+    async def update_last_login(self, user_id: str) -> None:
+        async with self._session_factory.begin() as session:
+            record = await session.get(OperatorUserRecord, user_id)
             if record is not None:
                 record.last_login_at = datetime.now(UTC).replace(tzinfo=None)
 
-    def create_operator(
+    async def create_operator(
         self,
         username: str,
         display_name: str,
@@ -60,8 +60,8 @@ class SqlAlchemyOperatorRepository:
         password_hash: str,
     ) -> bool:
         normalized_username = username.strip().lower()
-        with self._session_factory.begin() as session:
-            existing = session.scalar(
+        async with self._session_factory.begin() as session:
+            existing = await session.scalar(
                 select(OperatorUserRecord).where(OperatorUserRecord.username == normalized_username)
             )
             if existing is not None:
@@ -83,10 +83,10 @@ class SqlAlchemyOperatorRepository:
 
 
 class SqlAlchemyAuditLogRepository:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def record_event(
+    async def record_event(
         self,
         request_id: str,
         action: str,
@@ -103,7 +103,7 @@ class SqlAlchemyAuditLogRepository:
         user_agent: str | None = None,
         details: dict[str, str] | None = None,
     ) -> None:
-        with self._session_factory.begin() as session:
+        async with self._session_factory.begin() as session:
             session.add(
                 AuditEventRecord(
                     occurred_at=datetime.now(UTC).replace(tzinfo=None),
@@ -123,16 +123,20 @@ class SqlAlchemyAuditLogRepository:
                 )
             )
 
-    def list_events(self, limit: int) -> list[AuditEvent]:
-        with self._session_factory() as session:
-            records = session.scalars(
-                select(AuditEventRecord).order_by(AuditEventRecord.occurred_at.desc()).limit(limit)
+    async def list_events(self, limit: int) -> list[AuditEvent]:
+        async with self._session_factory() as session:
+            records = (
+                await session.scalars(
+                    select(AuditEventRecord)
+                    .order_by(AuditEventRecord.occurred_at.desc())
+                    .limit(limit)
+                )
             ).all()
         return [_to_audit_event(record) for record in records]
 
-    def delete_events_older_than(self, cutoff: datetime) -> int:
-        with self._session_factory.begin() as session:
-            result = session.execute(
+    async def delete_events_older_than(self, cutoff: datetime) -> int:
+        async with self._session_factory.begin() as session:
+            result = await session.execute(
                 delete(AuditEventRecord).where(AuditEventRecord.occurred_at < cutoff)
             )
         return int(result.rowcount or 0)

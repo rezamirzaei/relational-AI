@@ -59,6 +59,11 @@ class AppSettings(BaseSettings):
     relationalai_use_external_config: bool = False
     relationalai_duckdb_path: str = ":memory:"
 
+    # Observability (OpenTelemetry + Prometheus) – opt-in
+    otel_enabled: bool = False
+    otel_service_name: str = "relational-fraud-intelligence"
+    otel_exporter_otlp_endpoint: str | None = None
+
     @model_validator(mode="after")
     def validate_security_settings(self) -> Self:
         if len(self.jwt_secret) < 32:

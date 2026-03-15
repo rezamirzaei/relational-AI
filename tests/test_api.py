@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from relational_fraud_intelligence.app import create_app
 
 
-def test_health_reports_database_and_rate_limit_ready() -> None:
+async def test_health_reports_database_and_rate_limit_ready() -> None:
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/health")
 
@@ -22,7 +22,7 @@ def test_health_reports_database_and_rate_limit_ready() -> None:
     assert payload["provider_posture"]["active_explanation_provider"] == "deterministic"
 
 
-def test_health_reports_provider_fallback_when_huggingface_is_requested_without_token(
+async def test_health_reports_provider_fallback_when_huggingface_is_requested_without_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RFI_TEXT_SIGNAL_PROVIDER", "huggingface")
@@ -41,14 +41,14 @@ def test_health_reports_provider_fallback_when_huggingface_is_requested_without_
     assert payload["provider_posture"]["notes"]
 
 
-def test_protected_routes_require_authentication() -> None:
+async def test_protected_routes_require_authentication() -> None:
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/scenarios")
 
     assert response.status_code == 401
 
 
-def test_operator_can_authenticate_and_load_scenarios() -> None:
+async def test_operator_can_authenticate_and_load_scenarios() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
 
@@ -62,7 +62,7 @@ def test_operator_can_authenticate_and_load_scenarios() -> None:
     assert len(payload["scenarios"]) == 3
 
 
-def test_investigate_scenario_returns_case_payload_for_authenticated_operator() -> None:
+async def test_investigate_scenario_returns_case_payload_for_authenticated_operator() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
         response = client.post(
@@ -78,7 +78,7 @@ def test_investigate_scenario_returns_case_payload_for_authenticated_operator() 
     assert payload["investigation"]["investigation_leads"]
 
 
-def test_scenario_investigation_can_create_a_linked_case() -> None:
+async def test_scenario_investigation_can_create_a_linked_case() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
 
@@ -108,7 +108,7 @@ def test_scenario_investigation_can_create_a_linked_case() -> None:
     )
 
 
-def test_admin_can_list_audit_events() -> None:
+async def test_admin_can_list_audit_events() -> None:
     with TestClient(create_app()) as client:
         analyst_token = authenticate(
             client,
@@ -132,7 +132,7 @@ def test_admin_can_list_audit_events() -> None:
     assert any(event["actor_username"] == "analyst" for event in payload["events"])
 
 
-def test_analyst_cannot_list_audit_events() -> None:
+async def test_analyst_cannot_list_audit_events() -> None:
     with TestClient(create_app()) as client:
         analyst_token = authenticate(
             client,
@@ -147,7 +147,7 @@ def test_analyst_cannot_list_audit_events() -> None:
     assert response.status_code == 403
 
 
-def test_workspace_guide_exposes_primary_workflow_and_roles() -> None:
+async def test_workspace_guide_exposes_primary_workflow_and_roles() -> None:
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/workspace/guide")
 
@@ -161,7 +161,7 @@ def test_workspace_guide_exposes_primary_workflow_and_roles() -> None:
     assert "does not change risk scores" in payload["llm_positioning_note"]
 
 
-def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> None:
+async def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -234,7 +234,7 @@ def test_dataset_analysis_generates_alerts_and_a_linked_case_from_analysis() -> 
         assert stats["total_cases"] == 1
 
 
-def test_dataset_case_detail_exposes_transactions_alerts_and_comments() -> None:
+async def test_dataset_case_detail_exposes_transactions_alerts_and_comments() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -292,7 +292,7 @@ def test_dataset_case_detail_exposes_transactions_alerts_and_comments() -> None:
     assert payload["comments"][0]["body"].startswith("Reviewed the linked transactions")
 
 
-def test_scenario_case_detail_exposes_transactions_notes_and_comments() -> None:
+async def test_scenario_case_detail_exposes_transactions_notes_and_comments() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
 
@@ -326,7 +326,7 @@ def test_scenario_case_detail_exposes_transactions_notes_and_comments() -> None:
     assert payload["comments"][0]["body"] == "Device overlap and note history justify escalation."
 
 
-def test_scenario_case_detail_uses_persisted_snapshot() -> None:
+async def test_scenario_case_detail_uses_persisted_snapshot() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
 
@@ -359,7 +359,7 @@ def test_scenario_case_detail_uses_persisted_snapshot() -> None:
     assert payload["investigator_notes"]
 
 
-def test_dataset_case_detail_uses_persisted_snapshot() -> None:
+async def test_dataset_case_detail_uses_persisted_snapshot() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -412,7 +412,7 @@ def test_dataset_case_detail_uses_persisted_snapshot() -> None:
     assert payload["dataset_transactions"]
 
 
-def test_case_status_update_uses_path_case_id() -> None:
+async def test_case_status_update_uses_path_case_id() -> None:
     with TestClient(create_app()) as client:
         access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
 
@@ -449,7 +449,7 @@ def test_case_status_update_uses_path_case_id() -> None:
     assert payload["resolved_at"] is not None
 
 
-def test_alert_status_update_uses_path_alert_id() -> None:
+async def test_alert_status_update_uses_path_alert_id() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -496,7 +496,7 @@ def test_alert_status_update_uses_path_alert_id() -> None:
     assert payload["acknowledged_at"] is not None
 
 
-def test_alert_status_update_rejects_unknown_linked_case() -> None:
+async def test_alert_status_update_rejects_unknown_linked_case() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -540,7 +540,7 @@ def test_alert_status_update_rejects_unknown_linked_case() -> None:
     assert "missing-case-id" in update_response.json()["detail"]
 
 
-def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
+async def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )
@@ -617,7 +617,7 @@ def test_alert_case_creation_links_the_alert_and_rejects_duplicates() -> None:
         assert payload["case"]["case_id"] in duplicate_response.json()["detail"]
 
 
-def test_dataset_explanation_returns_deterministic_operator_brief() -> None:
+async def test_dataset_explanation_returns_deterministic_operator_brief() -> None:
     sample_path = (
         Path(__file__).resolve().parent.parent / "docs" / "sample_data" / "sample_transactions.csv"
     )

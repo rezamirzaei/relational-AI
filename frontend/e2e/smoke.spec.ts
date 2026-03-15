@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockPublicAPI } from "./fixtures";
 
 /**
  * Smoke test — validates the signed-out landing page renders correctly
@@ -8,46 +9,9 @@ import { test, expect } from "@playwright/test";
  * making it reliable in CI environments.
  */
 
-const healthResponse = {
-  status: "ok",
-  app_name: "Relational Fraud Intelligence",
-  environment: "test",
-  database_status: "ready",
-  rate_limit_status: "ready",
-  provider_status: "ready",
-  rate_limit_backend: "memory",
-  seeded_scenarios: 3,
-  seeded_operators: 2,
-  provider_posture: {
-    requested_text_signal_provider: "keyword",
-    active_text_signal_provider: "keyword",
-    requested_reasoning_provider: "local-rule-engine",
-    active_reasoning_provider: "local-rule-engine",
-    requested_explanation_provider: "deterministic",
-    active_explanation_provider: "deterministic",
-    notes: [],
-  },
-};
-
-const workspaceGuideResponse = {
-  guide: {
-    primary_workflow_title: "Upload → Analyze → Alert → Case",
-    primary_workflow_summary: "Upload transaction data and run analysis.",
-    role_stories: [],
-    scoring_guarantees: [],
-    llm_positioning_note: "AI explains scored results.",
-  },
-};
-
 test.describe("Smoke tests", () => {
   test("signed-out page shows branding and sign-in form", async ({ page }) => {
-    // Mock backend API responses
-    await page.route("**/api/v1/health", (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(healthResponse) }),
-    );
-    await page.route("**/api/v1/workspace/guide", (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(workspaceGuideResponse) }),
-    );
+    await mockPublicAPI(page);
 
     await page.goto("/");
 
@@ -78,4 +42,3 @@ test.describe("Smoke tests", () => {
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 });
-

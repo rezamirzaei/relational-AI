@@ -22,7 +22,7 @@ router = APIRouter()
         "guarantees, and copilot positioning used by the frontend workspace."
     ),
 )
-def get_workspace_guide(
+async def get_workspace_guide(
     request: Request,
     container: ContainerDep,
 ) -> GetWorkspaceGuideResult:
@@ -41,7 +41,7 @@ def get_workspace_guide(
         "alert counts, risk distribution, and recent activity."
     ),
 )
-def get_dashboard_stats(
+async def get_dashboard_stats(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
@@ -49,5 +49,4 @@ def get_dashboard_stats(
     request.state.current_principal = principal
     request.state.audit_action = "get-dashboard-stats"
     request.state.audit_resource_type = "dashboard"
-    return container.dashboard_service.get_stats(GetDashboardStatsQuery())
-
+    return await container.dashboard_service.get_stats(GetDashboardStatsQuery())

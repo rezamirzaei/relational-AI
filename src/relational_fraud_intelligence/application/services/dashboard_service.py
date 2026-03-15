@@ -35,13 +35,13 @@ class DashboardService:
         self._alert_repo = alert_repository
         self._dataset_store = dataset_store
 
-    def get_stats(self, query: GetDashboardStatsQuery) -> GetDashboardStatsResult:
+    async def get_stats(self, query: GetDashboardStatsQuery) -> GetDashboardStatsResult:
         _ = query
-        scenarios = self._scenario_repo.list_scenarios(ListScenariosQuery())
-        cases_by_status = self._case_repo.count_by_status()
-        critical_cases = self._case_repo.count_critical()
-        alerts_by_severity = self._alert_repo.count_by_severity()
-        unacknowledged = self._alert_repo.count_unacknowledged()
+        scenarios = await self._scenario_repo.list_scenarios(ListScenariosQuery())
+        cases_by_status = await self._case_repo.count_by_status()
+        critical_cases = await self._case_repo.count_critical()
+        alerts_by_severity = await self._alert_repo.count_by_severity()
+        unacknowledged = await self._alert_repo.count_unacknowledged()
 
         total_cases = sum(cases_by_status.values())
         open_cases = cases_by_status.get("open", 0) + cases_by_status.get("investigating", 0)
@@ -54,17 +54,17 @@ class DashboardService:
         results: list[AnalysisResult] = []
         datasets: list[Dataset] = []
         if self._dataset_store is not None:
-            datasets = self._dataset_store.list_datasets()
-            results = self._dataset_store.list_results()
+            datasets = await self._dataset_store.list_datasets()
+            results = await self._dataset_store.list_results()
             total_datasets = len(datasets)
-            total_txns_analyzed = self._dataset_store.total_transactions()
-            total_anomalies_found = self._dataset_store.total_anomalies()
+            total_txns_analyzed = await self._dataset_store.total_transactions()
+            total_anomalies_found = await self._dataset_store.total_anomalies()
         completed_analyses = len(results)
         high_risk_analyses = sum(1 for result in results if result.risk_score >= 35)
         pending_analysis = sum(1 for dataset in datasets if dataset.status == "uploaded")
 
-        recent_cases, _ = self._case_repo.list_cases(page=1, page_size=25)
-        recent_alerts, _ = self._alert_repo.list_alerts(page=1, page_size=25)
+        recent_cases, _ = await self._case_repo.list_cases(page=1, page_size=25)
+        recent_alerts, _ = await self._alert_repo.list_alerts(page=1, page_size=25)
 
         risk_distribution: dict[str, int] = {}
         risk_values: list[int] = []

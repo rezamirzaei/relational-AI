@@ -62,19 +62,19 @@ UploadFileParam = Annotated[UploadFile, File(...)]
 # ---------------------------------------------------------------------------
 
 
-def validate_case_source(
+async def validate_case_source(
     command: CreateCaseCommand,
     container: ApplicationContainer,
 ) -> None:
     if command.source_type == WorkflowSourceType.DATASET:
-        container.dataset_service.get_dataset(command.source_id or "")
+        await container.dataset_service.get_dataset(command.source_id or "")
         return
-    container.scenario_catalog_service.get_scenario(
+    await container.scenario_catalog_service.get_scenario(
         GetScenarioQuery(scenario_id=command.source_id or "")
     )
 
 
-def build_case_command_from_alert(
+async def build_case_command_from_alert(
     alert: FraudAlert,
     container: ApplicationContainer,
 ) -> CreateCaseCommand:
@@ -84,7 +84,7 @@ def build_case_command_from_alert(
 
     if alert.source_type == WorkflowSourceType.DATASET:
         try:
-            analysis = container.dataset_service.get_result(alert.source_id)
+            analysis = await container.dataset_service.get_result(alert.source_id)
             risk_score = analysis.risk_score
             summary = analysis.summary
         except LookupError:
@@ -154,12 +154,12 @@ def build_case_command_from_investigation(
     )
 
 
-def build_case_command_from_analysis(
+async def build_case_command_from_analysis(
     dataset_id: str,
     container: ApplicationContainer,
 ) -> CreateCaseCommand:
-    dataset = container.dataset_service.get_dataset(dataset_id)
-    analysis = container.dataset_service.get_result(dataset_id)
+    dataset = await container.dataset_service.get_dataset(dataset_id)
+    analysis = await container.dataset_service.get_result(dataset_id)
     top_lead = analysis.investigation_leads[0] if analysis.investigation_leads else None
     additional_leads = max(0, len(analysis.investigation_leads) - 1)
 
@@ -260,28 +260,34 @@ def case_detail_from_snapshot(
     )
 
 
-def build_case_evidence_snapshot(
+async def build_case_evidence_snapshot(
     command: CreateCaseCommand,
     container: ApplicationContainer,
 ) -> CaseEvidenceSnapshot:
     if command.source_type == WorkflowSourceType.DATASET:
-        dataset = container.dataset_service.get_dataset(command.source_id or "")
+        dataset = await container.dataset_service.get_dataset(command.source_id or "")
         try:
-            analysis = container.dataset_service.get_result(dataset.dataset_id)
+            analysis = await container.dataset_service.get_result(dataset.dataset_id)
         except LookupError:
             analysis = None
         return build_dataset_case_snapshot(
             dataset=dataset,
             analysis=analysis,
-            dataset_transactions=container.dataset_service.get_transactions(dataset.dataset_id),
+            dataset_transactions=await container.dataset_service.get_transactions(
+                dataset.dataset_id
+            ),
         )
 
     scenario_id = command.scenario_id or command.source_id or ""
-    scenario = container.scenario_catalog_service.get_scenario(
-        GetScenarioQuery(scenario_id=scenario_id)
+    scenario = (
+        await container.scenario_catalog_service.get_scenario(
+            GetScenarioQuery(scenario_id=scenario_id)
+        )
     ).scenario
-    investigation = container.investigation_service.execute(
-        InvestigateScenarioCommand(scenario_id=scenario_id)
+    investigation = (
+        await container.investigation_service.execute(
+            InvestigateScenarioCommand(scenario_id=scenario_id)
+        )
     ).investigation
     return build_scenario_case_snapshot(
         investigation=investigation,
@@ -316,14 +322,14 @@ def build_scenario_case_snapshot(
     )
 
 
-def create_case_with_source_links(
+async def create_case_with_source_links(
     *,
     command: CreateCaseCommand,
     container: ApplicationContainer,
     evidence_snapshot: CaseEvidenceSnapshot,
     related_alerts: list[FraudAlert] | None = None,
 ) -> tuple[FraudCase, list[FraudAlert]]:
-    source_alerts = related_alerts or container.alert_service.list_alerts_for_source(
+    source_alerts = related_alerts or await container.alert_service.list_alerts_for_source(
         source_type=command.source_type,
         source_id=command.source_id or "",
     )
@@ -337,19 +343,21 @@ def create_case_with_source_links(
             ),
         )
 
-    created_case = container.case_service.create_case(
-        command,
-        evidence_snapshot=evidence_snapshot,
+    created_case = (
+        await container.case_service.create_case(
+            command,
+            evidence_snapshot=evidence_snapshot,
+        )
     ).case
-    linked_alerts = _link_source_alerts(container, source_alerts, created_case.case_id)
-    synced_case = container.case_service.sync_alert_count(
+    linked_alerts = await _link_source_alerts(container, source_alerts, created_case.case_id)
+    synced_case = await container.case_service.sync_alert_count(
         created_case.case_id,
-        container.alert_service.count_linked_to_case(created_case.case_id),
+        await container.alert_service.count_linked_to_case(created_case.case_id),
     )
     return synced_case, linked_alerts
 
 
-def sync_case_alert_counts(
+async def sync_case_alert_counts(
     container: ApplicationContainer,
     *case_ids: str | None,
 ) -> None:
@@ -359,15 +367,15 @@ def sync_case_alert_counts(
             continue
         seen_case_ids.add(case_id)
         try:
-            container.case_service.sync_alert_count(
+            await container.case_service.sync_alert_count(
                 case_id,
-                container.alert_service.count_linked_to_case(case_id),
+                await container.alert_service.count_linked_to_case(case_id),
             )
         except LookupError:
             continue
 
 
-def _link_source_alerts(
+async def _link_source_alerts(
     container: ApplicationContainer,
     alerts: list[FraudAlert],
     case_id: str,
@@ -377,11 +385,13 @@ def _link_source_alerts(
         if alert.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
             continue
         linked_alerts.append(
-            container.alert_service.update_status(
-                UpdateAlertStatusCommand(
-                    alert_id=alert.alert_id,
-                    status=AlertStatus.INVESTIGATING,
-                    linked_case_id=case_id,
+            (
+                await container.alert_service.update_status(
+                    UpdateAlertStatusCommand(
+                        alert_id=alert.alert_id,
+                        status=AlertStatus.INVESTIGATING,
+                        linked_case_id=case_id,
+                    )
                 )
             ).alert
         )
@@ -394,4 +404,9 @@ def _existing_linked_case_id(alerts: list[FraudAlert]) -> str | None:
 
 def _source_label(source_type: WorkflowSourceType) -> str:
     return "Dataset" if source_type == WorkflowSourceType.DATASET else "Scenario"
+
+
+
+
+
 

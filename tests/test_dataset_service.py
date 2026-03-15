@@ -34,43 +34,43 @@ VALID_CSV = textwrap.dedent("""\
 
 
 class TestDatasetUpload:
-    def test_upload_valid_csv(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV)
+    async def test_upload_valid_csv(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
 
         assert dataset.name == "test.csv"
         assert dataset.row_count == 10
         assert dataset.status == DatasetStatus.UPLOADED
         assert dataset.dataset_id
 
-    def test_upload_missing_columns(self, service: DatasetService) -> None:
+    async def test_upload_missing_columns(self, service: DatasetService) -> None:
         bad_csv = "name,value\nfoo,123\n"
         with pytest.raises(ValueError, match="missing required columns"):
-            service.upload_csv("bad.csv", bad_csv)
+            await service.upload_csv("bad.csv", bad_csv)
 
-    def test_upload_empty_csv(self, service: DatasetService) -> None:
+    async def test_upload_empty_csv(self, service: DatasetService) -> None:
         empty_csv = "transaction_id,account_id,amount,timestamp\n"
         with pytest.raises(ValueError, match="No valid transactions"):
-            service.upload_csv("empty.csv", empty_csv)
+            await service.upload_csv("empty.csv", empty_csv)
 
-    def test_upload_bytes(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV.encode("utf-8"))
+    async def test_upload_bytes(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV.encode("utf-8"))
         assert dataset.row_count == 10
 
-    def test_list_datasets(self, service: DatasetService) -> None:
-        service.upload_csv("one.csv", VALID_CSV)
-        service.upload_csv("two.csv", VALID_CSV)
-        datasets = service.list_datasets()
+    async def test_list_datasets(self, service: DatasetService) -> None:
+        await service.upload_csv("one.csv", VALID_CSV)
+        await service.upload_csv("two.csv", VALID_CSV)
+        datasets = await service.list_datasets()
         assert len(datasets) == 2
 
-    def test_get_dataset_not_found(self, service: DatasetService) -> None:
+    async def test_get_dataset_not_found(self, service: DatasetService) -> None:
         with pytest.raises(LookupError):
-            service.get_dataset("nonexistent")
+            await service.get_dataset("nonexistent")
 
 
 class TestDatasetAnalysis:
-    def test_analyze_dataset(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV)
-        result = service.analyze(dataset.dataset_id)
+    async def test_analyze_dataset(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
+        result = await service.analyze(dataset.dataset_id)
 
         assert result.dataset_id == dataset.dataset_id
         assert result.total_transactions == 10
@@ -82,23 +82,23 @@ class TestDatasetAnalysis:
         assert result.investigation_leads
 
         # Check dataset status updated
-        updated = service.get_dataset(dataset.dataset_id)
+        updated = await service.get_dataset(dataset.dataset_id)
         assert updated.status == DatasetStatus.COMPLETED
 
-    def test_analyze_nonexistent(self, service: DatasetService) -> None:
+    async def test_analyze_nonexistent(self, service: DatasetService) -> None:
         with pytest.raises(LookupError):
-            service.analyze("nonexistent")
+            await service.analyze("nonexistent")
 
-    def test_benford_digits_cover_all(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV)
-        result = service.analyze(dataset.dataset_id)
+    async def test_benford_digits_cover_all(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
+        result = await service.analyze(dataset.dataset_id)
         digits = [d.digit for d in result.benford_digits]
         assert digits == list(range(1, 10))
 
-    def test_outlier_detection_on_large_amount(self, service: DatasetService) -> None:
+    async def test_outlier_detection_on_large_amount(self, service: DatasetService) -> None:
         """TXN-008 at $15,000 should be flagged as an outlier."""
-        dataset = service.upload_csv("test.csv", VALID_CSV)
-        result = service.analyze(dataset.dataset_id)
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
+        result = await service.analyze(dataset.dataset_id)
 
         outlier_ids = [
             a.affected_entity_id
@@ -107,17 +107,17 @@ class TestDatasetAnalysis:
         ]
         assert "TXN-008" in outlier_ids
 
-    def test_get_result(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV)
-        service.analyze(dataset.dataset_id)
-        result = service.get_result(dataset.dataset_id)
+    async def test_get_result(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
+        await service.analyze(dataset.dataset_id)
+        result = await service.get_result(dataset.dataset_id)
         assert result.total_transactions == 10
 
-    def test_behavioral_inference_detects_shared_device_and_graph_structure(
+    async def test_behavioral_inference_detects_shared_device_and_graph_structure(
         self,
         service: DatasetService,
     ) -> None:
-        dataset = service.ingest_transactions(
+        dataset = await service.ingest_transactions(
             "behavioral.csv",
             [
                 {
@@ -167,7 +167,7 @@ class TestDatasetAnalysis:
             ],
         )
 
-        result = service.analyze(dataset.dataset_id)
+        result = await service.analyze(dataset.dataset_id)
 
         assert result.graph_analysis is not None
         assert result.behavioral_insights
@@ -178,14 +178,14 @@ class TestDatasetAnalysis:
         assert result.investigation_leads[0].lead_type == "shared-device-ring"
         assert result.graph_analysis.risk_amplification_factor > 1.0
 
-    def test_get_result_not_found(self, service: DatasetService) -> None:
-        dataset = service.upload_csv("test.csv", VALID_CSV)
+    async def test_get_result_not_found(self, service: DatasetService) -> None:
+        dataset = await service.upload_csv("test.csv", VALID_CSV)
         with pytest.raises(LookupError):
-            service.get_result(dataset.dataset_id)
+            await service.get_result(dataset.dataset_id)
 
 
 class TestTransactionIngestion:
-    def test_ingest_via_api(self, service: DatasetService) -> None:
+    async def test_ingest_via_api(self, service: DatasetService) -> None:
         transactions = [
             {
                 "transaction_id": "T1",
@@ -200,19 +200,19 @@ class TestTransactionIngestion:
                 "timestamp": "2026-03-01 11:00:00",
             },
         ]
-        dataset = service.ingest_transactions("api-test", transactions)
+        dataset = await service.ingest_transactions("api-test", transactions)
         assert dataset.row_count == 2
         assert dataset.name == "api-test"
 
-    def test_ingest_empty_raises(self, service: DatasetService) -> None:
+    async def test_ingest_empty_raises(self, service: DatasetService) -> None:
         with pytest.raises(ValueError, match="No valid transactions"):
-            service.ingest_transactions("empty", [])
+            await service.ingest_transactions("empty", [])
 
 
 class TestSampleDataset:
     """Test that the shipped sample CSV works with the analysis pipeline."""
 
-    def test_analyze_sample_csv(self, service: DatasetService) -> None:
+    async def test_analyze_sample_csv(self, service: DatasetService) -> None:
         import pathlib
 
         sample_path = (
@@ -225,10 +225,10 @@ class TestSampleDataset:
             pytest.skip("Sample CSV not generated yet")
 
         content = sample_path.read_text()
-        dataset = service.upload_csv("sample_transactions.csv", content)
+        dataset = await service.upload_csv("sample_transactions.csv", content)
         assert dataset.row_count > 800
 
-        result = service.analyze(dataset.dataset_id)
+        result = await service.analyze(dataset.dataset_id)
         assert result.total_transactions > 800
         assert result.total_anomalies > 0, "Sample dataset should have planted anomalies"
         assert result.risk_score > 0

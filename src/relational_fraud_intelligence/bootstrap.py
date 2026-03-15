@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.application.ports.explanations import (
     AnalysisExplanationService,
@@ -92,8 +91,8 @@ from relational_fraud_intelligence.settings import AppSettings
 @dataclass(slots=True)
 class ApplicationContainer:
     settings: AppSettings
-    engine: Engine
-    session_factory: sessionmaker[Session]
+    engine: AsyncEngine
+    session_factory: async_sessionmaker[AsyncSession]
     seed_result: SeedResult
     operator_bootstrap_result: OperatorBootstrapResult
     auth_service: AuthService
@@ -117,20 +116,20 @@ class ApplicationContainer:
     analysis_explanation_service: AnalysisExplanationService
     workspace_guide_service: WorkspaceGuideService
 
-    def is_database_ready(self) -> bool:
-        return ping_database(self.session_factory)
+    async def is_database_ready(self) -> bool:
+        return await ping_database(self.session_factory)
 
     def is_rate_limiter_ready(self) -> bool:
         return self.rate_limiter.is_healthy()
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         close = getattr(self.rate_limiter, "close", None)
         if callable(close):
             close()
-        self.engine.dispose()
+        await self.engine.dispose()
 
 
-def build_container(settings: AppSettings | None = None) -> ApplicationContainer:
+async def build_container(settings: AppSettings | None = None) -> ApplicationContainer:
     app_settings = settings or AppSettings()
 
     engine = build_engine(app_settings.database_url, echo=app_settings.database_echo)
@@ -140,7 +139,7 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         session_factory=session_factory,
         scenarios=build_seed_scenarios(),
     )
-    seed_result = initializer.initialize(
+    seed_result = await initializer.initialize(
         create_schema=app_settings.database_auto_create_schema,
         seed_if_empty=app_settings.seed_scenarios_on_startup,
     )
@@ -149,7 +148,7 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
     audit_log_repository = SqlAlchemyAuditLogRepository(session_factory)
     password_hasher = PasswordHasher()
     token_service = TokenService(app_settings)
-    operator_bootstrap_result = OperatorBootstrapper(
+    operator_bootstrap_result = await OperatorBootstrapper(
         repository=operator_repository,
         password_hasher=password_hasher,
         settings=app_settings,
@@ -162,7 +161,9 @@ def build_container(settings: AppSettings | None = None) -> ApplicationContainer
         settings=app_settings,
     )
     audit_service = AuditService(audit_log_repository)
-    pruned_audit_events = audit_service.prune_expired_events(app_settings.audit_log_retention_days)
+    pruned_audit_events = await audit_service.prune_expired_events(
+        app_settings.audit_log_retention_days
+    )
 
     scenario_repository = SqlAlchemyScenarioRepository(session_factory)
     scenario_catalog_service = ScenarioCatalogService(scenario_repository)

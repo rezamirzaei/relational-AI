@@ -14,6 +14,7 @@ from relational_fraud_intelligence.api.middleware.security_headers import (
 from relational_fraud_intelligence.api.routes import router
 from relational_fraud_intelligence.bootstrap import build_container
 from relational_fraud_intelligence.infrastructure.logging import configure_logging
+from relational_fraud_intelligence.infrastructure.observability import setup_observability
 from relational_fraud_intelligence.settings import AppSettings
 
 
@@ -21,12 +22,12 @@ from relational_fraud_intelligence.settings import AppSettings
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: AppSettings = app.state.settings
     configure_logging()
-    container = build_container(settings)
+    container = await build_container(settings)
     app.state.container = container
     try:
         yield
     finally:
-        container.shutdown()
+        await container.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -86,4 +87,8 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AuditMiddleware)
     app.include_router(router, prefix=settings.api_prefix)
+
+    # Observability (OpenTelemetry + Prometheus) – opt-in via RFI_OTEL_ENABLED
+    setup_observability(app, settings)
+
     return app

@@ -31,8 +31,8 @@ class InvestigationService:
         self._risk_reasoner = risk_reasoner
         self._case_assembler = case_assembler
 
-    def execute(self, command: InvestigateScenarioCommand) -> InvestigateScenarioResult:
-        scenario_result = self._scenario_repository.get_scenario(
+    async def execute(self, command: InvestigateScenarioCommand) -> InvestigateScenarioResult:
+        scenario_result = await self._scenario_repository.get_scenario(
             GetScenarioQuery(scenario_id=command.scenario_id)
         )
         text_result = self._text_signal_service.score(

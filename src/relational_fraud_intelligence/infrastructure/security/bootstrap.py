@@ -23,15 +23,15 @@ class OperatorBootstrapper:
         self._password_hasher = password_hasher
         self._settings = settings
 
-    def bootstrap(self) -> OperatorBootstrapResult:
+    async def bootstrap(self) -> OperatorBootstrapResult:
         created_users = 0
-        created_users += self._create_user_if_configured(
+        created_users += await self._create_user_if_configured(
             username=self._settings.bootstrap_admin_username,
             password=self._settings.bootstrap_admin_password,
             display_name=self._settings.bootstrap_admin_display_name,
             role="admin",
         )
-        created_users += self._create_user_if_configured(
+        created_users += await self._create_user_if_configured(
             username=self._settings.bootstrap_analyst_username,
             password=self._settings.bootstrap_analyst_password,
             display_name=self._settings.bootstrap_analyst_display_name,
@@ -39,7 +39,7 @@ class OperatorBootstrapper:
         )
         return OperatorBootstrapResult(created_users=created_users)
 
-    def _create_user_if_configured(
+    async def _create_user_if_configured(
         self,
         *,
         username: str | None,
@@ -50,7 +50,7 @@ class OperatorBootstrapper:
         if not username or not password:
             return 0
         password_hash = self._password_hasher.hash_password(password)
-        created = self._repository.create_operator(
+        created = await self._repository.create_operator(
             username=username,
             display_name=display_name,
             role=role,

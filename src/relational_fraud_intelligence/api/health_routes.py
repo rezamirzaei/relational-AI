@@ -21,8 +21,8 @@ router = APIRouter()
         "rate limiter, and seeded data counts."
     ),
 )
-def health(container: ContainerDep) -> HealthResponse:
-    database_ready = container.is_database_ready()
+async def health(container: ContainerDep) -> HealthResponse:
+    database_ready = await container.is_database_ready()
     rate_limiter_ready = container.is_rate_limiter_ready()
     rate_limit_backend_degraded = (
         container.active_rate_limit_backend != container.settings.rate_limit_backend
@@ -64,4 +64,3 @@ def health(container: ContainerDep) -> HealthResponse:
             notes=container.provider_startup_notes,
         ),
     )
-

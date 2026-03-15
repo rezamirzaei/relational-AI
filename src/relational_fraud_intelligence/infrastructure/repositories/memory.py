@@ -24,17 +24,17 @@ class InMemoryCaseRepository:
         self._cases: dict[str, FraudCase] = {}
         self._comments: dict[str, list[CaseComment]] = {}
 
-    def create_case(self, case: FraudCase) -> None:
+    async def create_case(self, case: FraudCase) -> None:
         self._cases[case.case_id] = case
         self._comments.setdefault(case.case_id, [])
 
-    def get_case(self, case_id: str) -> FraudCase | None:
+    async def get_case(self, case_id: str) -> FraudCase | None:
         return self._cases.get(case_id)
 
-    def update_case(self, case: FraudCase) -> None:
+    async def update_case(self, case: FraudCase) -> None:
         self._cases[case.case_id] = case
 
-    def list_cases(
+    async def list_cases(
         self,
         *,
         status: CaseStatus | None = None,
@@ -55,23 +55,23 @@ class InMemoryCaseRepository:
         start = (page - 1) * page_size
         return filtered[start : start + page_size], total
 
-    def add_comment(self, comment: CaseComment) -> None:
+    async def add_comment(self, comment: CaseComment) -> None:
         self._comments.setdefault(comment.case_id, []).append(comment)
 
-    def list_comments(self, case_id: str) -> list[CaseComment]:
+    async def list_comments(self, case_id: str) -> list[CaseComment]:
         return sorted(
             self._comments.get(case_id, []),
             key=lambda c: c.created_at,
             reverse=True,
         )
 
-    def count_by_status(self) -> dict[str, int]:
+    async def count_by_status(self) -> dict[str, int]:
         counts: dict[str, int] = {}
         for case in self._cases.values():
             counts[case.status] = counts.get(case.status, 0) + 1
         return counts
 
-    def count_critical(self) -> int:
+    async def count_critical(self) -> int:
         return sum(
             1
             for case in self._cases.values()
@@ -84,16 +84,16 @@ class InMemoryAlertRepository:
     def __init__(self) -> None:
         self._alerts: dict[str, FraudAlert] = {}
 
-    def create_alert(self, alert: FraudAlert) -> None:
+    async def create_alert(self, alert: FraudAlert) -> None:
         self._alerts[alert.alert_id] = alert
 
-    def get_alert(self, alert_id: str) -> FraudAlert | None:
+    async def get_alert(self, alert_id: str) -> FraudAlert | None:
         return self._alerts.get(alert_id)
 
-    def update_alert(self, alert: FraudAlert) -> None:
+    async def update_alert(self, alert: FraudAlert) -> None:
         self._alerts[alert.alert_id] = alert
 
-    def list_alerts(
+    async def list_alerts(
         self,
         *,
         status: AlertStatus | None = None,
@@ -111,16 +111,16 @@ class InMemoryAlertRepository:
         start = (page - 1) * page_size
         return filtered[start : start + page_size], total
 
-    def count_unacknowledged(self) -> int:
+    async def count_unacknowledged(self) -> int:
         return sum(1 for a in self._alerts.values() if a.status == AlertStatus.NEW)
 
-    def count_by_severity(self) -> dict[str, int]:
+    async def count_by_severity(self) -> dict[str, int]:
         counts: dict[str, int] = {}
         for alert in self._alerts.values():
             counts[alert.severity] = counts.get(alert.severity, 0) + 1
         return counts
 
-    def list_alerts_for_source(
+    async def list_alerts_for_source(
         self,
         *,
         source_type: WorkflowSourceType,
@@ -132,5 +132,5 @@ class InMemoryAlertRepository:
             if alert.source_type == source_type and alert.source_id == source_id
         ]
 
-    def count_linked_to_case(self, case_id: str) -> int:
+    async def count_linked_to_case(self, case_id: str) -> int:
         return sum(1 for alert in self._alerts.values() if alert.linked_case_id == case_id)

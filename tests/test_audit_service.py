@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.application.services.audit_service import AuditService
 from relational_fraud_intelligence.infrastructure.persistence.models import AuditEventRecord
@@ -9,12 +9,12 @@ from relational_fraud_intelligence.infrastructure.persistence.security_repositor
 )
 
 
-def test_audit_service_prunes_expired_events(
+async def test_audit_service_prunes_expired_events(
     audit_repository: SqlAlchemyAuditLogRepository,
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     now = datetime.now(UTC).replace(tzinfo=None)
-    with session_factory.begin() as session:
+    async with session_factory.begin() as session:
         session.add_all(
             [
                 AuditEventRecord(
@@ -53,8 +53,8 @@ def test_audit_service_prunes_expired_events(
         )
 
     service = AuditService(audit_repository)
-    pruned_events = service.prune_expired_events(90)
-    remaining_events = audit_repository.list_events(limit=10)
+    pruned_events = await service.prune_expired_events(90)
+    remaining_events = await audit_repository.list_events(limit=10)
 
     assert pruned_events == 1
     assert len(remaining_events) == 1

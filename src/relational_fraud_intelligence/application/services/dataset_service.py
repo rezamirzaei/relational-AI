@@ -50,34 +50,34 @@ class InMemoryDatasetStore:
         self._transactions: dict[str, list[UploadedTransaction]] = {}
         self._results: dict[str, AnalysisResult] = {}
 
-    def save_dataset(self, dataset: Dataset) -> None:
+    async def save_dataset(self, dataset: Dataset) -> None:
         self._datasets[dataset.dataset_id] = dataset
 
-    def get_dataset(self, dataset_id: str) -> Dataset | None:
+    async def get_dataset(self, dataset_id: str) -> Dataset | None:
         return self._datasets.get(dataset_id)
 
-    def list_datasets(self) -> list[Dataset]:
+    async def list_datasets(self) -> list[Dataset]:
         return sorted(self._datasets.values(), key=lambda d: d.uploaded_at, reverse=True)
 
-    def save_transactions(self, dataset_id: str, txns: list[UploadedTransaction]) -> None:
+    async def save_transactions(self, dataset_id: str, txns: list[UploadedTransaction]) -> None:
         self._transactions[dataset_id] = txns
 
-    def get_transactions(self, dataset_id: str) -> list[UploadedTransaction]:
+    async def get_transactions(self, dataset_id: str) -> list[UploadedTransaction]:
         return self._transactions.get(dataset_id, [])
 
-    def save_result(self, result: AnalysisResult) -> None:
+    async def save_result(self, result: AnalysisResult) -> None:
         self._results[result.dataset_id] = result
 
-    def get_result(self, dataset_id: str) -> AnalysisResult | None:
+    async def get_result(self, dataset_id: str) -> AnalysisResult | None:
         return self._results.get(dataset_id)
 
-    def list_results(self) -> list[AnalysisResult]:
+    async def list_results(self) -> list[AnalysisResult]:
         return sorted(self._results.values(), key=lambda result: result.completed_at, reverse=True)
 
-    def total_transactions(self) -> int:
+    async def total_transactions(self) -> int:
         return sum(len(txns) for txns in self._transactions.values())
 
-    def total_anomalies(self) -> int:
+    async def total_anomalies(self) -> int:
         return sum(r.total_anomalies for r in self._results.values())
 
 
@@ -114,7 +114,7 @@ class DatasetService:
     def __init__(self, store: DatasetStorePort) -> None:
         self._store = store
 
-    def upload_csv(self, filename: str, content: str | bytes) -> Dataset:
+    async def upload_csv(self, filename: str, content: str | bytes) -> Dataset:
         """Parse a CSV file and store as a new dataset."""
         if isinstance(content, bytes):
             content = content.decode("utf-8-sig")
@@ -177,11 +177,11 @@ class DatasetService:
             row_count=len(transactions),
             status=DatasetStatus.UPLOADED,
         )
-        self._store.save_dataset(dataset)
-        self._store.save_transactions(dataset.dataset_id, transactions)
+        await self._store.save_dataset(dataset)
+        await self._store.save_transactions(dataset.dataset_id, transactions)
         return dataset
 
-    def ingest_transactions(self, name: str, transactions: list[dict[str, object]]) -> Dataset:
+    async def ingest_transactions(self, name: str, transactions: list[dict[str, object]]) -> Dataset:
         """Ingest transactions via API (JSON array)."""
         parsed: list[UploadedTransaction] = []
         for i, raw in enumerate(transactions):
@@ -224,23 +224,23 @@ class DatasetService:
             row_count=len(parsed),
             status=DatasetStatus.UPLOADED,
         )
-        self._store.save_dataset(dataset)
-        self._store.save_transactions(dataset.dataset_id, parsed)
+        await self._store.save_dataset(dataset)
+        await self._store.save_transactions(dataset.dataset_id, parsed)
         return dataset
 
-    def analyze(self, dataset_id: str) -> AnalysisResult:
+    async def analyze(self, dataset_id: str) -> AnalysisResult:
         """Run all analysis engines on a dataset."""
-        dataset = self._store.get_dataset(dataset_id)
+        dataset = await self._store.get_dataset(dataset_id)
         if dataset is None:
             raise LookupError(f"Dataset '{dataset_id}' not found.")
 
-        transactions = self._store.get_transactions(dataset_id)
+        transactions = await self._store.get_transactions(dataset_id)
         if not transactions:
             raise ValueError(f"Dataset '{dataset_id}' has no transactions.")
 
         # Update status
         dataset.status = DatasetStatus.ANALYZING
-        self._store.save_dataset(dataset)
+        await self._store.save_dataset(dataset)
 
         all_anomalies: list[AnomalyFlag] = []
 
@@ -339,33 +339,33 @@ class DatasetService:
             )
 
             dataset.status = DatasetStatus.COMPLETED
-            self._store.save_dataset(dataset)
-            self._store.save_result(result)
+            await self._store.save_dataset(dataset)
+            await self._store.save_result(result)
             return result
 
         except Exception as exc:
             dataset.status = DatasetStatus.FAILED
             dataset.error_message = str(exc)
-            self._store.save_dataset(dataset)
+            await self._store.save_dataset(dataset)
             raise
 
-    def get_dataset(self, dataset_id: str) -> Dataset:
-        dataset = self._store.get_dataset(dataset_id)
+    async def get_dataset(self, dataset_id: str) -> Dataset:
+        dataset = await self._store.get_dataset(dataset_id)
         if dataset is None:
             raise LookupError(f"Dataset '{dataset_id}' not found.")
         return dataset
 
-    def list_datasets(self) -> list[Dataset]:
-        return self._store.list_datasets()
+    async def list_datasets(self) -> list[Dataset]:
+        return await self._store.list_datasets()
 
-    def get_result(self, dataset_id: str) -> AnalysisResult:
-        result = self._store.get_result(dataset_id)
+    async def get_result(self, dataset_id: str) -> AnalysisResult:
+        result = await self._store.get_result(dataset_id)
         if result is None:
             raise LookupError(f"No analysis results for dataset '{dataset_id}'.")
         return result
 
-    def get_transactions(self, dataset_id: str) -> list[UploadedTransaction]:
-        return self._store.get_transactions(dataset_id)
+    async def get_transactions(self, dataset_id: str) -> list[UploadedTransaction]:
+        return await self._store.get_transactions(dataset_id)
 
 
 def _compute_risk_score(

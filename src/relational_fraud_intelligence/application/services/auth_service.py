@@ -41,9 +41,9 @@ class AuthService:
         self._token_service = token_service
         self._settings = settings
 
-    def authenticate(self, command: LoginCommand) -> LoginResult:
-        principal = self._operator_repository.get_operator_by_username(command.username)
-        password_hash = self._operator_repository.get_password_hash(command.username)
+    async def authenticate(self, command: LoginCommand) -> LoginResult:
+        principal = await self._operator_repository.get_operator_by_username(command.username)
+        password_hash = await self._operator_repository.get_password_hash(command.username)
         if principal is None or password_hash is None:
             raise AuthenticationError("Invalid username or password.")
         if not principal.is_active:
@@ -51,7 +51,7 @@ class AuthService:
         if not self._password_hasher.verify_password(command.password, password_hash):
             raise AuthenticationError("Invalid username or password.")
 
-        self._operator_repository.update_last_login(principal.user_id)
+        await self._operator_repository.update_last_login(principal.user_id)
         access_token = self._token_service.issue_access_token(
             user_id=principal.user_id,
             username=principal.username,
@@ -63,7 +63,7 @@ class AuthService:
             principal=principal,
         )
 
-    def get_current_operator(self, token: str) -> GetCurrentOperatorResult:
+    async def get_current_operator(self, token: str) -> GetCurrentOperatorResult:
         try:
             payload = self._token_service.decode_access_token(token)
         except InvalidTokenError as exc:
@@ -73,10 +73,12 @@ class AuthService:
         if subject is None:
             raise AuthenticationError("Your session is invalid or has expired.")
 
-        principal = self._operator_repository.get_operator_by_id(subject)
+        principal = await self._operator_repository.get_operator_by_id(subject)
         if principal is None or not principal.is_active:
             raise AuthenticationError("Your session is invalid or has expired.")
         return GetCurrentOperatorResult(principal=principal)
 
-    def list_audit_events(self, query: ListAuditEventsQuery) -> ListAuditEventsResult:
-        return ListAuditEventsResult(events=self._audit_log_repository.list_events(query.limit))
+    async def list_audit_events(self, query: ListAuditEventsQuery) -> ListAuditEventsResult:
+        return ListAuditEventsResult(
+            events=await self._audit_log_repository.list_events(query.limit)
+        )

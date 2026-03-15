@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up export-openapi
+.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up export-openapi codegen-contracts
 
 install: backend-install frontend-install
 
@@ -32,7 +32,7 @@ frontend-test:
 frontend-build:
 	$(NPM) --prefix frontend run build
 
-quality: lint mypy test typecheck frontend-test frontend-build
+quality: lint mypy test codegen-contracts typecheck frontend-test frontend-build
 
 db-upgrade:
 	$(PYTHON) -m relational_fraud_intelligence.manage migrate
@@ -55,4 +55,7 @@ docker-up:
 
 export-openapi:
 	$(PYTHON) scripts/export_openapi.py
+
+codegen-contracts: export-openapi
+	$(NPM) --prefix frontend run codegen:contracts
 

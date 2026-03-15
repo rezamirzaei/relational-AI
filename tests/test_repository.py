@@ -14,16 +14,16 @@ from relational_fraud_intelligence.infrastructure.persistence.seed import Databa
 from relational_fraud_intelligence.infrastructure.seed.scenarios import build_seed_scenarios
 
 
-def test_repository_lists_seeded_scenarios(
+async def test_repository_lists_seeded_scenarios(
     scenario_repository: SqlAlchemyScenarioRepository,
 ) -> None:
-    result = scenario_repository.list_scenarios(ListScenariosQuery())
+    result = await scenario_repository.list_scenarios(ListScenariosQuery())
 
     assert len(result.scenarios) == 3
     assert result.scenarios[0].scenario_id == "payroll-mule-funnel"
 
 
-def test_database_initializer_is_idempotent(
+async def test_database_initializer_is_idempotent(
     session_factory: sessionmaker[Session],
     engine: Engine,
 ) -> None:
@@ -33,8 +33,8 @@ def test_database_initializer_is_idempotent(
         scenarios=build_seed_scenarios(),
     )
 
-    inserted = initializer.seed_if_empty()
-    result = SqlAlchemyScenarioRepository(session_factory).get_scenario(
+    inserted = await initializer.seed_if_empty()
+    result = await SqlAlchemyScenarioRepository(session_factory).get_scenario(
         GetScenarioQuery(scenario_id="payroll-mule-funnel")
     )
 

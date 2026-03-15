@@ -30,7 +30,7 @@ class AlertService:
     def __init__(self, alert_repository: AlertRepository) -> None:
         self._repo = alert_repository
 
-    def create_alert(self, command: CreateAlertCommand) -> CreateAlertResult:
+    async def create_alert(self, command: CreateAlertCommand) -> CreateAlertResult:
         now = datetime.now(UTC)
         alert = FraudAlert(
             alert_id=str(uuid4()),
@@ -46,11 +46,11 @@ class AlertService:
             narrative=command.narrative,
             created_at=now,
         )
-        self._repo.create_alert(alert)
+        await self._repo.create_alert(alert)
         return CreateAlertResult(alert=alert)
 
-    def update_status(self, command: UpdateAlertStatusCommand) -> UpdateAlertStatusResult:
-        alert = self._repo.get_alert(command.alert_id)
+    async def update_status(self, command: UpdateAlertStatusCommand) -> UpdateAlertStatusResult:
+        alert = await self._repo.get_alert(command.alert_id)
         if alert is None:
             raise LookupError(f"Alert '{command.alert_id}' not found.")
 
@@ -70,17 +70,17 @@ class AlertService:
         elif command.status in {AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE}:
             alert.resolved_at = now
 
-        self._repo.update_alert(alert)
+        await self._repo.update_alert(alert)
         return UpdateAlertStatusResult(alert=alert)
 
-    def get_alert(self, query: GetAlertQuery) -> GetAlertResult:
-        alert = self._repo.get_alert(query.alert_id)
+    async def get_alert(self, query: GetAlertQuery) -> GetAlertResult:
+        alert = await self._repo.get_alert(query.alert_id)
         if alert is None:
             raise LookupError(f"Alert '{query.alert_id}' not found.")
         return GetAlertResult(alert=alert)
 
-    def list_alerts(self, query: ListAlertsQuery) -> ListAlertsResult:
-        alerts, total = self._repo.list_alerts(
+    async def list_alerts(self, query: ListAlertsQuery) -> ListAlertsResult:
+        alerts, total = await self._repo.list_alerts(
             status=query.status,
             severity=query.severity,
             page=query.page,
@@ -93,25 +93,25 @@ class AlertService:
             page_size=query.page_size,
         )
 
-    def list_alerts_for_source(
+    async def list_alerts_for_source(
         self,
         *,
         source_type: WorkflowSourceType,
         source_id: str,
     ) -> list[FraudAlert]:
-        return self._repo.list_alerts_for_source(source_type=source_type, source_id=source_id)
+        return await self._repo.list_alerts_for_source(source_type=source_type, source_id=source_id)
 
-    def count_linked_to_case(self, case_id: str) -> int:
-        return self._repo.count_linked_to_case(case_id)
+    async def count_linked_to_case(self, case_id: str) -> int:
+        return await self._repo.count_linked_to_case(case_id)
 
-    def generate_alerts_from_investigation(
+    async def generate_alerts_from_investigation(
         self,
         scenario_id: str,
         risk_score: int,
         rule_hits: Sequence[Mapping[str, object]],
     ) -> list[FraudAlert]:
         """Auto-generate alerts when risk score crosses thresholds."""
-        return self.generate_alerts_from_findings(
+        return await self.generate_alerts_from_findings(
             source_type=WorkflowSourceType.SCENARIO,
             source_id=scenario_id,
             scenario_id=scenario_id,
@@ -119,13 +119,13 @@ class AlertService:
             findings=rule_hits,
         )
 
-    def generate_alerts_from_analysis(
+    async def generate_alerts_from_analysis(
         self,
         dataset_id: str,
         risk_score: int,
         findings: Sequence[Mapping[str, object]],
     ) -> list[FraudAlert]:
-        return self.generate_alerts_from_findings(
+        return await self.generate_alerts_from_findings(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset_id,
             scenario_id=None,
@@ -133,7 +133,7 @@ class AlertService:
             findings=findings,
         )
 
-    def generate_alerts_from_findings(
+    async def generate_alerts_from_findings(
         self,
         *,
         source_type: WorkflowSourceType,
@@ -147,7 +147,7 @@ class AlertService:
         if risk_score < 35:
             return generated
 
-        existing = self._repo.list_alerts_for_source(
+        existing = await self._repo.list_alerts_for_source(
             source_type=source_type,
             source_id=source_id,
         )
@@ -161,7 +161,7 @@ class AlertService:
             severity = RiskLevel.HIGH
 
         for hit in findings[:3]:
-            result = self.create_alert(
+            result = await self.create_alert(
                 CreateAlertCommand(
                     source_type=source_type,
                     source_id=source_id,

@@ -24,8 +24,8 @@ def alert_service() -> AlertService:
     return AlertService(InMemoryAlertRepository())
 
 
-def test_create_alert_returns_new_alert(alert_service: AlertService) -> None:
-    result = alert_service.create_alert(
+async def test_create_alert_returns_new_alert(alert_service: AlertService) -> None:
+    result = await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="test-scenario",
             rule_code="shared-device-cluster",
@@ -41,8 +41,8 @@ def test_create_alert_returns_new_alert(alert_service: AlertService) -> None:
     assert result.alert.source_type == WorkflowSourceType.SCENARIO
 
 
-def test_acknowledge_alert_sets_acknowledged_timestamp(alert_service: AlertService) -> None:
-    created = alert_service.create_alert(
+async def test_acknowledge_alert_sets_acknowledged_timestamp(alert_service: AlertService) -> None:
+    created = await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="s1",
             rule_code="rapid-spend-burst",
@@ -52,7 +52,7 @@ def test_acknowledge_alert_sets_acknowledged_timestamp(alert_service: AlertServi
         )
     )
 
-    result = alert_service.update_status(
+    result = await alert_service.update_status(
         UpdateAlertStatusCommand(
             alert_id=created.alert.alert_id,
             status=AlertStatus.ACKNOWLEDGED,
@@ -63,8 +63,8 @@ def test_acknowledge_alert_sets_acknowledged_timestamp(alert_service: AlertServi
     assert result.alert.acknowledged_at is not None
 
 
-def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
-    created = alert_service.create_alert(
+async def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
+    created = await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="s1",
             rule_code="cross-border-mismatch",
@@ -74,7 +74,7 @@ def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
         )
     )
 
-    result = alert_service.update_status(
+    result = await alert_service.update_status(
         UpdateAlertStatusCommand(
             alert_id=created.alert.alert_id,
             status=AlertStatus.FALSE_POSITIVE,
@@ -85,8 +85,8 @@ def test_resolve_alert_as_false_positive(alert_service: AlertService) -> None:
     assert result.alert.resolved_at is not None
 
 
-def test_reopening_alert_clears_terminal_timestamp(alert_service: AlertService) -> None:
-    created = alert_service.create_alert(
+async def test_reopening_alert_clears_terminal_timestamp(alert_service: AlertService) -> None:
+    created = await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="s1",
             rule_code="cross-border-mismatch",
@@ -96,13 +96,13 @@ def test_reopening_alert_clears_terminal_timestamp(alert_service: AlertService) 
         )
     )
 
-    alert_service.update_status(
+    await alert_service.update_status(
         UpdateAlertStatusCommand(
             alert_id=created.alert.alert_id,
             status=AlertStatus.FALSE_POSITIVE,
         )
     )
-    reopened = alert_service.update_status(
+    reopened = await alert_service.update_status(
         UpdateAlertStatusCommand(
             alert_id=created.alert.alert_id,
             status=AlertStatus.INVESTIGATING,
@@ -113,8 +113,8 @@ def test_reopening_alert_clears_terminal_timestamp(alert_service: AlertService) 
     assert reopened.alert.resolved_at is None
 
 
-def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
-    alert_service.create_alert(
+async def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
+    await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="s1",
             rule_code="r1",
@@ -123,7 +123,7 @@ def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
             narrative="Low risk.",
         )
     )
-    alert_service.create_alert(
+    await alert_service.create_alert(
         CreateAlertCommand(
             scenario_id="s2",
             rule_code="r2",
@@ -133,12 +133,12 @@ def test_list_alerts_filters_by_severity(alert_service: AlertService) -> None:
         )
     )
 
-    result = alert_service.list_alerts(ListAlertsQuery(severity=RiskLevel.CRITICAL))
+    result = await alert_service.list_alerts(ListAlertsQuery(severity=RiskLevel.CRITICAL))
     assert result.total_count == 1
     assert result.alerts[0].severity == RiskLevel.CRITICAL
 
 
-def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertService) -> None:
+async def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertService) -> None:
     rule_hits = [
         {
             "rule_code": "shared-device-cluster",
@@ -148,7 +148,7 @@ def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertS
         {"rule_code": "rapid-spend-burst", "title": "Rapid spend burst", "narrative": "Test"},
     ]
 
-    generated = alert_service.generate_alerts_from_investigation(
+    generated = await alert_service.generate_alerts_from_investigation(
         scenario_id="test-scenario",
         risk_score=85,
         rule_hits=rule_hits,
@@ -159,8 +159,8 @@ def test_auto_generate_alerts_from_high_risk_investigation(alert_service: AlertS
     assert all(a.status == AlertStatus.NEW for a in generated)
 
 
-def test_auto_generate_no_alerts_for_low_risk(alert_service: AlertService) -> None:
-    generated = alert_service.generate_alerts_from_investigation(
+async def test_auto_generate_no_alerts_for_low_risk(alert_service: AlertService) -> None:
+    generated = await alert_service.generate_alerts_from_investigation(
         scenario_id="test-scenario",
         risk_score=20,
         rule_hits=[{"rule_code": "r1", "title": "t1", "narrative": "n1"}],
@@ -169,7 +169,7 @@ def test_auto_generate_no_alerts_for_low_risk(alert_service: AlertService) -> No
     assert len(generated) == 0
 
 
-def test_auto_generate_alerts_is_idempotent_per_source(alert_service: AlertService) -> None:
+async def test_auto_generate_alerts_is_idempotent_per_source(alert_service: AlertService) -> None:
     rule_hits = [
         {
             "rule_code": "shared-device-cluster",
@@ -178,12 +178,12 @@ def test_auto_generate_alerts_is_idempotent_per_source(alert_service: AlertServi
         },
     ]
 
-    first = alert_service.generate_alerts_from_investigation(
+    first = await alert_service.generate_alerts_from_investigation(
         scenario_id="test-scenario",
         risk_score=85,
         rule_hits=rule_hits,
     )
-    second = alert_service.generate_alerts_from_investigation(
+    second = await alert_service.generate_alerts_from_investigation(
         scenario_id="test-scenario",
         risk_score=85,
         rule_hits=rule_hits,
@@ -194,12 +194,12 @@ def test_auto_generate_alerts_is_idempotent_per_source(alert_service: AlertServi
     assert second[0].alert_id == first[0].alert_id
 
 
-def test_get_nonexistent_alert_raises_lookup_error(alert_service: AlertService) -> None:
+async def test_get_nonexistent_alert_raises_lookup_error(alert_service: AlertService) -> None:
     with pytest.raises(LookupError):
-        alert_service.get_alert(GetAlertQuery(alert_id="does-not-exist"))
+        await alert_service.get_alert(GetAlertQuery(alert_id="does-not-exist"))
 
 
-def test_auto_generate_alerts_from_dataset_analysis(alert_service: AlertService) -> None:
+async def test_auto_generate_alerts_from_dataset_analysis(alert_service: AlertService) -> None:
     findings = [
         {
             "rule_code": "velocity-spike",
@@ -208,7 +208,7 @@ def test_auto_generate_alerts_from_dataset_analysis(alert_service: AlertService)
         }
     ]
 
-    generated = alert_service.generate_alerts_from_analysis(
+    generated = await alert_service.generate_alerts_from_analysis(
         dataset_id="dataset-1",
         risk_score=62,
         findings=findings,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from argparse import ArgumentParser
 from pathlib import Path
@@ -30,6 +31,10 @@ def main() -> None:
         command.upgrade(_build_alembic_config(settings), args.revision)
         return
 
+    asyncio.run(_async_main(args, settings))
+
+
+async def _async_main(args: object, settings: AppSettings) -> None:
     engine = build_engine(settings.database_url, echo=settings.database_echo)
     session_factory = build_session_factory(engine)
     initializer = DatabaseInitializer(
@@ -39,36 +44,36 @@ def main() -> None:
     )
 
     try:
-        if args.command == "seed":
-            inserted = initializer.seed_if_empty()
+        if args.command == "seed":  # type: ignore[union-attr]
+            inserted = await initializer.seed_if_empty()
             print(f"Inserted {inserted} scenarios.")
             return
-        if args.command == "create-operator":
+        if args.command == "create-operator":  # type: ignore[union-attr]
             repository = SqlAlchemyOperatorRepository(session_factory)
-            created = repository.create_operator(
-                username=args.username,
-                display_name=args.display_name,
-                role=args.role,
-                password_hash=PasswordHasher().hash_password(args.password),
+            created = await repository.create_operator(
+                username=args.username,  # type: ignore[union-attr]
+                display_name=args.display_name,  # type: ignore[union-attr]
+                role=args.role,  # type: ignore[union-attr]
+                password_hash=PasswordHasher().hash_password(args.password),  # type: ignore[union-attr]
             )
             if created:
-                print(f"Created operator '{args.username}'.")
+                print(f"Created operator '{args.username}'.")  # type: ignore[union-attr]
             else:
-                print(f"Operator '{args.username}' already exists.")
+                print(f"Operator '{args.username}' already exists.")  # type: ignore[union-attr]
             return
-        if args.command == "prune-audit":
+        if args.command == "prune-audit":  # type: ignore[union-attr]
             service = AuditService(SqlAlchemyAuditLogRepository(session_factory))
             retention_days = (
-                args.retention_days
-                if args.retention_days is not None
+                args.retention_days  # type: ignore[union-attr]
+                if args.retention_days is not None  # type: ignore[union-attr]
                 else settings.audit_log_retention_days
             )
-            pruned_events = service.prune_expired_events(retention_days)
+            pruned_events = await service.prune_expired_events(retention_days)
             print(f"Pruned {pruned_events} audit events.")
             return
-        raise ValueError(f"Unsupported command '{args.command}'.")
+        raise ValueError(f"Unsupported command '{args.command}'.")  # type: ignore[union-attr]
     finally:
-        engine.dispose()
+        await engine.dispose()
 
 
 def _build_parser() -> ArgumentParser:

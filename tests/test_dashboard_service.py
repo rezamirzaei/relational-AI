@@ -16,7 +16,7 @@ from relational_fraud_intelligence.application.services.dataset_service import D
 from relational_fraud_intelligence.domain.models import RiskLevel, WorkflowSourceType
 
 
-def test_dashboard_stats_reflect_real_workflow_activity(
+async def test_dashboard_stats_reflect_real_workflow_activity(
     scenario_repository: ScenarioRepository,
     case_repository: CaseRepository,
     alert_repository: AlertRepository,
@@ -26,7 +26,7 @@ def test_dashboard_stats_reflect_real_workflow_activity(
     alert_service = AlertService(alert_repository)
     dataset_service = DatasetService(dataset_store)
 
-    dataset = dataset_service.ingest_transactions(
+    dataset = await dataset_service.ingest_transactions(
         "triage.csv",
         [
             {
@@ -55,9 +55,9 @@ def test_dashboard_stats_reflect_real_workflow_activity(
             },
         ],
     )
-    analysis = dataset_service.analyze(dataset.dataset_id)
+    analysis = await dataset_service.analyze(dataset.dataset_id)
 
-    case_service.create_case(
+    await case_service.create_case(
         CreateCaseCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset.dataset_id,
@@ -67,7 +67,7 @@ def test_dashboard_stats_reflect_real_workflow_activity(
             risk_level=analysis.risk_level,
         )
     )
-    alert_service.create_alert(
+    await alert_service.create_alert(
         CreateAlertCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset.dataset_id,
@@ -85,7 +85,7 @@ def test_dashboard_stats_reflect_real_workflow_activity(
         dataset_store=dataset_store,
     )
 
-    result = service.get_stats(GetDashboardStatsQuery())
+    result = await service.get_stats(GetDashboardStatsQuery())
 
     assert result.stats.total_scenarios == 3
     assert result.stats.total_datasets == 1

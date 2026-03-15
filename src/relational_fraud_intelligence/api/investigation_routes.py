@@ -33,7 +33,7 @@ router = APIRouter()
     summary="List fraud scenarios",
     description="Returns all seeded fraud scenarios with baseline risk assessment.",
 )
-def list_scenarios(
+async def list_scenarios(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
@@ -41,7 +41,7 @@ def list_scenarios(
     request.state.current_principal = principal
     request.state.audit_action = "list-scenarios"
     request.state.audit_resource_type = "fraud-scenario"
-    return container.scenario_catalog_service.list_scenarios(ListScenariosQuery())
+    return await container.scenario_catalog_service.list_scenarios(ListScenariosQuery())
 
 
 @router.get(
@@ -54,7 +54,7 @@ def list_scenarios(
         "merchants, and transactions."
     ),
 )
-def get_scenario(
+async def get_scenario(
     scenario_id: str,
     request: Request,
     container: ContainerDep,
@@ -65,7 +65,7 @@ def get_scenario(
     request.state.audit_resource_type = "fraud-scenario"
     request.state.audit_resource_id = scenario_id
     try:
-        return container.scenario_catalog_service.get_scenario(
+        return await container.scenario_catalog_service.get_scenario(
             GetScenarioQuery(scenario_id=scenario_id)
         )
     except LookupError as exc:
@@ -83,7 +83,7 @@ def get_scenario(
         "case assembly."
     ),
 )
-def investigate_scenario(
+async def investigate_scenario(
     command: InvestigateScenarioCommand,
     request: Request,
     container: ContainerDep,
@@ -94,11 +94,11 @@ def investigate_scenario(
     request.state.audit_resource_type = "fraud-scenario"
     request.state.audit_resource_id = command.scenario_id
     try:
-        result = container.investigation_service.execute(command)
+        result = await container.investigation_service.execute(command)
 
         # Auto-generate alerts from high-risk investigations
         if result.investigation.total_risk_score >= 35:
-            container.alert_service.generate_alerts_from_investigation(
+            await container.alert_service.generate_alerts_from_investigation(
                 scenario_id=command.scenario_id,
                 risk_score=result.investigation.total_risk_score,
                 rule_hits=findings_from_investigation(result.investigation),
@@ -119,7 +119,7 @@ def investigate_scenario(
         "highest-signal scenario leads, and links any open scenario alerts to that case."
     ),
 )
-def create_case_from_investigation(
+async def create_case_from_investigation(
     scenario_id: str,
     request: Request,
     container: ContainerDep,
@@ -130,13 +130,15 @@ def create_case_from_investigation(
     request.state.audit_resource_type = "fraud-scenario"
     request.state.audit_resource_id = scenario_id
     try:
-        result = container.investigation_service.execute(
+        result = await container.investigation_service.execute(
             InvestigateScenarioCommand(scenario_id=scenario_id)
         )
-        scenario = container.scenario_catalog_service.get_scenario(
-            GetScenarioQuery(scenario_id=scenario_id)
+        scenario = (
+            await container.scenario_catalog_service.get_scenario(
+                GetScenarioQuery(scenario_id=scenario_id)
+            )
         ).scenario
-        related_alerts = container.alert_service.generate_alerts_from_investigation(
+        related_alerts = await container.alert_service.generate_alerts_from_investigation(
             scenario_id=scenario_id,
             risk_score=result.investigation.total_risk_score,
             rule_hits=findings_from_investigation(result.investigation),
@@ -147,8 +149,8 @@ def create_case_from_investigation(
             investigator_notes=scenario.investigator_notes,
         )
         case_command = build_case_command_from_investigation(result.investigation)
-        validate_case_source(case_command, container)
-        created_case, linked_alerts = create_case_with_source_links(
+        await validate_case_source(case_command, container)
+        created_case, linked_alerts = await create_case_with_source_links(
             command=case_command,
             container=container,
             evidence_snapshot=evidence_snapshot,
@@ -162,4 +164,3 @@ def create_case_from_investigation(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-

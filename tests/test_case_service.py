@@ -33,8 +33,8 @@ def case_service() -> CaseService:
     return CaseService(InMemoryCaseRepository())
 
 
-def test_create_case_returns_open_case_with_sla(case_service: CaseService) -> None:
-    result = case_service.create_case(
+async def test_create_case_returns_open_case_with_sla(case_service: CaseService) -> None:
+    result = await case_service.create_case(
         CreateCaseCommand(
             scenario_id="test-scenario",
             title="Suspected synthetic identity ring",
@@ -54,8 +54,8 @@ def test_create_case_returns_open_case_with_sla(case_service: CaseService) -> No
     assert result.case.case_id
 
 
-def test_update_case_status_to_resolved_sets_resolved_at(case_service: CaseService) -> None:
-    create_result = case_service.create_case(
+async def test_update_case_status_to_resolved_sets_resolved_at(case_service: CaseService) -> None:
+    create_result = await case_service.create_case(
         CreateCaseCommand(
             scenario_id="test-scenario",
             title="Test case",
@@ -66,7 +66,7 @@ def test_update_case_status_to_resolved_sets_resolved_at(case_service: CaseServi
     )
     case_id = create_result.case.case_id
 
-    result = case_service.update_status(
+    result = await case_service.update_status(
         UpdateCaseStatusCommand(
             case_id=case_id,
             status=CaseStatus.RESOLVED,
@@ -81,8 +81,8 @@ def test_update_case_status_to_resolved_sets_resolved_at(case_service: CaseServi
     assert result.case.resolution_notes == "Device cluster confirmed as coordinated fraud ring."
 
 
-def test_reopening_case_clears_terminal_resolution_state(case_service: CaseService) -> None:
-    create_result = case_service.create_case(
+async def test_reopening_case_clears_terminal_resolution_state(case_service: CaseService) -> None:
+    create_result = await case_service.create_case(
         CreateCaseCommand(
             scenario_id="test-scenario",
             title="Test case",
@@ -93,7 +93,7 @@ def test_reopening_case_clears_terminal_resolution_state(case_service: CaseServi
     )
     case_id = create_result.case.case_id
 
-    case_service.update_status(
+    await case_service.update_status(
         UpdateCaseStatusCommand(
             case_id=case_id,
             status=CaseStatus.RESOLVED,
@@ -101,7 +101,7 @@ def test_reopening_case_clears_terminal_resolution_state(case_service: CaseServi
             resolution_notes="Closed during the first review pass.",
         )
     )
-    reopened = case_service.update_status(
+    reopened = await case_service.update_status(
         UpdateCaseStatusCommand(case_id=case_id, status=CaseStatus.INVESTIGATING)
     )
 
@@ -111,8 +111,8 @@ def test_reopening_case_clears_terminal_resolution_state(case_service: CaseServi
     assert reopened.case.resolution_notes is None
 
 
-def test_assign_case_transitions_to_investigating(case_service: CaseService) -> None:
-    create_result = case_service.create_case(
+async def test_assign_case_transitions_to_investigating(case_service: CaseService) -> None:
+    create_result = await case_service.create_case(
         CreateCaseCommand(
             scenario_id="test-scenario",
             title="Test case",
@@ -121,7 +121,7 @@ def test_assign_case_transitions_to_investigating(case_service: CaseService) -> 
     )
     case_id = create_result.case.case_id
 
-    result = case_service.assign_case(
+    result = await case_service.assign_case(
         AssignCaseCommand(case_id=case_id, analyst_id="user-123"),
         analyst_name="Jane Doe",
     )
@@ -131,8 +131,8 @@ def test_assign_case_transitions_to_investigating(case_service: CaseService) -> 
     assert result.case.assigned_analyst_name == "Jane Doe"
 
 
-def test_add_comment_increments_comment_count(case_service: CaseService) -> None:
-    create_result = case_service.create_case(
+async def test_add_comment_increments_comment_count(case_service: CaseService) -> None:
+    create_result = await case_service.create_case(
         CreateCaseCommand(
             scenario_id="test-scenario",
             title="Test case",
@@ -141,7 +141,7 @@ def test_add_comment_increments_comment_count(case_service: CaseService) -> None
     )
     case_id = create_result.case.case_id
 
-    comment = case_service.add_comment(
+    comment = await case_service.add_comment(
         AddCaseCommentCommand(case_id=case_id, body="Initial review looks suspicious."),
         author_id="analyst-1",
         author_name="Fraud Analyst",
@@ -150,33 +150,33 @@ def test_add_comment_increments_comment_count(case_service: CaseService) -> None
     assert comment.body == "Initial review looks suspicious."
     assert comment.author_name == "Fraud Analyst"
 
-    fetched = case_service.get_case(GetCaseQuery(case_id=case_id))
+    fetched = await case_service.get_case(GetCaseQuery(case_id=case_id))
     assert fetched.case.comment_count == 1
 
 
-def test_list_cases_filters_by_status(case_service: CaseService) -> None:
-    case_service.create_case(
+async def test_list_cases_filters_by_status(case_service: CaseService) -> None:
+    await case_service.create_case(
         CreateCaseCommand(scenario_id="s1", title="Open case", summary="Open"),
     )
-    create_result = case_service.create_case(
+    create_result = await case_service.create_case(
         CreateCaseCommand(scenario_id="s2", title="Resolved case", summary="Resolved"),
     )
-    case_service.update_status(
+    await case_service.update_status(
         UpdateCaseStatusCommand(case_id=create_result.case.case_id, status=CaseStatus.RESOLVED)
     )
 
-    open_result = case_service.list_cases(ListCasesQuery(status=CaseStatus.OPEN))
+    open_result = await case_service.list_cases(ListCasesQuery(status=CaseStatus.OPEN))
     assert open_result.total_count == 1
     assert open_result.cases[0].title == "Open case"
 
 
-def test_get_nonexistent_case_raises_lookup_error(case_service: CaseService) -> None:
+async def test_get_nonexistent_case_raises_lookup_error(case_service: CaseService) -> None:
     with pytest.raises(LookupError):
-        case_service.get_case(GetCaseQuery(case_id="does-not-exist"))
+        await case_service.get_case(GetCaseQuery(case_id="does-not-exist"))
 
 
-def test_create_case_can_use_dataset_source(case_service: CaseService) -> None:
-    result = case_service.create_case(
+async def test_create_case_can_use_dataset_source(case_service: CaseService) -> None:
+    result = await case_service.create_case(
         CreateCaseCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id="dataset-123",
@@ -194,7 +194,7 @@ def test_create_case_can_use_dataset_source(case_service: CaseService) -> None:
     assert result.case.priority == CasePriority.HIGH
 
 
-def test_create_case_can_store_evidence_snapshot(case_service: CaseService) -> None:
+async def test_create_case_can_store_evidence_snapshot(case_service: CaseService) -> None:
     dataset = Dataset(
         dataset_id="dataset-123",
         name="march.csv",
@@ -202,7 +202,7 @@ def test_create_case_can_store_evidence_snapshot(case_service: CaseService) -> N
         row_count=8,
         status=DatasetStatus.COMPLETED,
     )
-    result = case_service.create_case(
+    result = await case_service.create_case(
         CreateCaseCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset.dataset_id,

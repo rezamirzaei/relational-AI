@@ -53,7 +53,7 @@ async def upload_dataset(
     request.state.audit_resource_type = "dataset"
     try:
         content = await file.read()
-        dataset = container.dataset_service.upload_csv(
+        dataset = await container.dataset_service.upload_csv(
             filename=file.filename or "upload.csv",
             content=content,
         )
@@ -76,7 +76,7 @@ async def upload_dataset(
     summary="Ingest transactions via API",
     description="Accepts a JSON array of transaction records for programmatic ingestion.",
 )
-def ingest_transactions(
+async def ingest_transactions(
     body: TransactionIngestBody,
     request: Request,
     container: ContainerDep,
@@ -86,7 +86,7 @@ def ingest_transactions(
     request.state.audit_action = "ingest-transactions"
     request.state.audit_resource_type = "dataset"
     try:
-        dataset = container.dataset_service.ingest_transactions(
+        dataset = await container.dataset_service.ingest_transactions(
             name=body.name,
             transactions=body.transactions,
         )
@@ -108,7 +108,7 @@ def ingest_transactions(
     tags=["Datasets"],
     summary="List uploaded datasets",
 )
-def list_datasets(
+async def list_datasets(
     request: Request,
     container: ContainerDep,
     principal: AnalystDep,
@@ -116,7 +116,7 @@ def list_datasets(
     request.state.current_principal = principal
     request.state.audit_action = "list-datasets"
     request.state.audit_resource_type = "dataset"
-    datasets = container.dataset_service.list_datasets()
+    datasets = await container.dataset_service.list_datasets()
     return DatasetListResponse(
         datasets=[
             DatasetResponse(
@@ -144,7 +144,7 @@ def list_datasets(
         "and geographies."
     ),
 )
-def analyze_dataset(
+async def analyze_dataset(
     dataset_id: str,
     request: Request,
     container: ContainerDep,
@@ -155,7 +155,7 @@ def analyze_dataset(
     request.state.audit_resource_type = "dataset"
     request.state.audit_resource_id = dataset_id
     try:
-        result = container.dataset_service.analyze(dataset_id)
+        result = await container.dataset_service.analyze(dataset_id)
         findings: list[dict[str, object]] = [
             {
                 "rule_code": lead.lead_type,
@@ -173,7 +173,7 @@ def analyze_dataset(
                 }
                 for anomaly in result.anomalies
             ]
-        container.alert_service.generate_alerts_from_analysis(
+        await container.alert_service.generate_alerts_from_analysis(
             dataset_id=dataset_id,
             risk_score=result.risk_score,
             findings=findings,
@@ -191,7 +191,7 @@ def analyze_dataset(
     tags=["Datasets"],
     summary="Get analysis results for a dataset",
 )
-def get_analysis_results(
+async def get_analysis_results(
     dataset_id: str,
     request: Request,
     container: ContainerDep,
@@ -202,7 +202,7 @@ def get_analysis_results(
     request.state.audit_resource_type = "dataset"
     request.state.audit_resource_id = dataset_id
     try:
-        result = container.dataset_service.get_result(dataset_id)
+        result = await container.dataset_service.get_result(dataset_id)
         return AnalysisResponse(analysis=result)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -218,7 +218,7 @@ def get_analysis_results(
         "analysis-generated investigation leads, and links any open dataset alerts to that case."
     ),
 )
-def create_case_from_analysis(
+async def create_case_from_analysis(
     dataset_id: str,
     request: Request,
     container: ContainerDep,
@@ -229,20 +229,20 @@ def create_case_from_analysis(
     request.state.audit_resource_type = "dataset"
     request.state.audit_resource_id = dataset_id
     try:
-        analysis = container.dataset_service.get_result(dataset_id)
-        case_command = build_case_command_from_analysis(dataset_id, container)
-        validate_case_source(case_command, container)
-        related_alerts = container.alert_service.list_alerts_for_source(
+        analysis = await container.dataset_service.get_result(dataset_id)
+        case_command = await build_case_command_from_analysis(dataset_id, container)
+        await validate_case_source(case_command, container)
+        related_alerts = await container.alert_service.list_alerts_for_source(
             source_type=WorkflowSourceType.DATASET,
             source_id=dataset_id,
         )
-        created_case, linked_alerts = create_case_with_source_links(
+        created_case, linked_alerts = await create_case_with_source_links(
             command=case_command,
             container=container,
             evidence_snapshot=build_dataset_case_snapshot(
-                dataset=container.dataset_service.get_dataset(dataset_id),
+                dataset=await container.dataset_service.get_dataset(dataset_id),
                 analysis=analysis,
-                dataset_transactions=container.dataset_service.get_transactions(dataset_id),
+                dataset_transactions=await container.dataset_service.get_transactions(dataset_id),
             ),
             related_alerts=related_alerts,
         )
@@ -267,7 +267,7 @@ def create_case_from_analysis(
         "Hugging Face explanation provider is active."
     ),
 )
-def get_analysis_explanation(
+async def get_analysis_explanation(
     dataset_id: str,
     request: Request,
     container: ContainerDep,
@@ -279,8 +279,8 @@ def get_analysis_explanation(
     request.state.audit_resource_type = "dataset"
     request.state.audit_resource_id = dataset_id
     try:
-        dataset = container.dataset_service.get_dataset(dataset_id)
-        analysis = container.dataset_service.get_result(dataset_id)
+        dataset = await container.dataset_service.get_dataset(dataset_id)
+        analysis = await container.dataset_service.get_result(dataset_id)
         explanation = container.analysis_explanation_service.explain(
             dataset=dataset,
             analysis=analysis,
@@ -289,5 +289,17 @@ def get_analysis_explanation(
         return GetAnalysisExplanationResult(explanation=explanation)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+
+
+
+
+
+
+
+
+
+
 
 

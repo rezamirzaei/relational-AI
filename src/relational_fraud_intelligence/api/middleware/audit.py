@@ -42,7 +42,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 ip_address = request.client.host if request.client is not None else None
                 user_agent = request.headers.get("user-agent")
 
-                container.audit_service.record_http_event(
+                await container.audit_service.record_http_event(
                     request_id=request_id,
                     action=action,
                     resource_type=resource_type,

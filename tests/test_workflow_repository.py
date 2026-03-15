@@ -27,7 +27,7 @@ from relational_fraud_intelligence.domain.models import (
 )
 
 
-def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRepository) -> None:
+async def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRepository) -> None:
     service = CaseService(case_repository)
     evidence_snapshot = CaseEvidenceSnapshot(
         dataset=Dataset(
@@ -38,7 +38,7 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRe
             status=DatasetStatus.COMPLETED,
         )
     )
-    created = service.create_case(
+    created = await service.create_case(
         CreateCaseCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id="dataset-42",
@@ -50,14 +50,14 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRe
         evidence_snapshot=evidence_snapshot,
     )
 
-    service.add_comment(
+    await service.add_comment(
         AddCaseCommentCommand(case_id=created.case.case_id, body="Escalated for review."),
         author_id="analyst-1",
         author_name="Analyst One",
     )
 
-    fetched = service.get_case(GetCaseQuery(case_id=created.case.case_id))
-    listed = service.list_cases(ListCasesQuery())
+    fetched = await service.get_case(GetCaseQuery(case_id=created.case.case_id))
+    listed = await service.list_cases(ListCasesQuery())
 
     assert fetched.case.source_type == WorkflowSourceType.DATASET
     assert fetched.case.comment_count == 1
@@ -68,9 +68,9 @@ def test_sql_case_repository_persists_cases_and_comments(case_repository: CaseRe
     assert listed.cases[0].source_id == "dataset-42"
 
 
-def test_sql_alert_repository_filters_by_source(alert_repository: AlertRepository) -> None:
+async def test_sql_alert_repository_filters_by_source(alert_repository: AlertRepository) -> None:
     service = AlertService(alert_repository)
-    created = service.create_alert(
+    created = await service.create_alert(
         CreateAlertCommand(
             source_type=WorkflowSourceType.DATASET,
             source_id="dataset-42",
@@ -81,16 +81,16 @@ def test_sql_alert_repository_filters_by_source(alert_repository: AlertRepositor
         )
     )
 
-    listed = service.list_alerts(ListAlertsQuery())
+    listed = await service.list_alerts(ListAlertsQuery())
 
     assert listed.total_count == 1
     assert listed.alerts[0].status == AlertStatus.NEW
     assert listed.alerts[0].alert_id == created.alert.alert_id
 
 
-def test_sql_dataset_store_persists_analysis_results(dataset_store: DatasetStore) -> None:
+async def test_sql_dataset_store_persists_analysis_results(dataset_store: DatasetStore) -> None:
     service = DatasetService(dataset_store)
-    dataset = service.ingest_transactions(
+    dataset = await service.ingest_transactions(
         "api-upload",
         [
             {
@@ -114,9 +114,9 @@ def test_sql_dataset_store_persists_analysis_results(dataset_store: DatasetStore
         ],
     )
 
-    result = service.analyze(dataset.dataset_id)
+    result = await service.analyze(dataset.dataset_id)
 
-    assert service.get_dataset(dataset.dataset_id).status == DatasetStatus.COMPLETED
-    assert service.get_result(dataset.dataset_id).analysis_id == result.analysis_id
-    assert dataset_store.list_results()
-    assert dataset_store.total_transactions() == 3
+    assert (await service.get_dataset(dataset.dataset_id)).status == DatasetStatus.COMPLETED
+    assert (await service.get_result(dataset.dataset_id)).analysis_id == result.analysis_id
+    assert await dataset_store.list_results()
+    assert await dataset_store.total_transactions() == 3

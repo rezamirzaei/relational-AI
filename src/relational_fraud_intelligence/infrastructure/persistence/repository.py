@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session, selectinload, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from relational_fraud_intelligence.application.dto.investigation import (
     GetScenarioQuery,
@@ -21,13 +22,15 @@ from relational_fraud_intelligence.infrastructure.persistence.models import (
 
 
 class SqlAlchemyScenarioRepository:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def list_scenarios(self, query: ListScenariosQuery) -> ListScenariosResult:
+    async def list_scenarios(self, query: ListScenariosQuery) -> ListScenariosResult:
         _ = query
-        with self._session_factory() as session:
-            scenarios = session.scalars(self._base_query().order_by(ScenarioRecord.title)).all()
+        async with self._session_factory() as session:
+            scenarios = (
+                await session.scalars(self._base_query().order_by(ScenarioRecord.title))
+            ).all()
 
         return ListScenariosResult(
             scenarios=[
@@ -35,9 +38,9 @@ class SqlAlchemyScenarioRepository:
             ]
         )
 
-    def get_scenario(self, query: GetScenarioQuery) -> GetScenarioResult:
-        with self._session_factory() as session:
-            scenario = session.scalar(
+    async def get_scenario(self, query: GetScenarioQuery) -> GetScenarioResult:
+        async with self._session_factory() as session:
+            scenario = await session.scalar(
                 self._base_query().where(ScenarioRecord.scenario_id == query.scenario_id)
             )
 

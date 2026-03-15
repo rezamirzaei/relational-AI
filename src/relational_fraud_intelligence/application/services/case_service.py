@@ -44,7 +44,7 @@ class CaseService:
     def __init__(self, case_repository: CaseRepository) -> None:
         self._repo = case_repository
 
-    def create_case(
+    async def create_case(
         self,
         command: CreateCaseCommand,
         *,
@@ -77,11 +77,11 @@ class CaseService:
             ),
             evidence_snapshot=evidence_snapshot,
         )
-        self._repo.create_case(case)
+        await self._repo.create_case(case)
         return CreateCaseResult(case=case)
 
-    def update_status(self, command: UpdateCaseStatusCommand) -> UpdateCaseStatusResult:
-        case = self._repo.get_case(command.case_id)
+    async def update_status(self, command: UpdateCaseStatusCommand) -> UpdateCaseStatusResult:
+        case = await self._repo.get_case(command.case_id)
         if case is None:
             raise LookupError(f"Case '{command.case_id}' not found.")
 
@@ -99,15 +99,15 @@ class CaseService:
             case.resolution_notes = None
             case.resolved_at = None
 
-        self._repo.update_case(case)
+        await self._repo.update_case(case)
         return UpdateCaseStatusResult(case=case)
 
-    def assign_case(
+    async def assign_case(
         self,
         command: AssignCaseCommand,
         analyst_name: str,
     ) -> AssignCaseResult:
-        case = self._repo.get_case(command.case_id)
+        case = await self._repo.get_case(command.case_id)
         if case is None:
             raise LookupError(f"Case '{command.case_id}' not found.")
 
@@ -117,17 +117,17 @@ class CaseService:
         if case.status == CaseStatus.OPEN:
             case.status = CaseStatus.INVESTIGATING
 
-        self._repo.update_case(case)
+        await self._repo.update_case(case)
         return AssignCaseResult(case=case)
 
-    def add_comment(
+    async def add_comment(
         self,
         command: AddCaseCommentCommand,
         *,
         author_id: str,
         author_name: str,
     ) -> CaseComment:
-        case = self._repo.get_case(command.case_id)
+        case = await self._repo.get_case(command.case_id)
         if case is None:
             raise LookupError(f"Case '{command.case_id}' not found.")
 
@@ -139,28 +139,28 @@ class CaseService:
             body=command.body,
             created_at=datetime.now(UTC),
         )
-        self._repo.add_comment(comment)
+        await self._repo.add_comment(comment)
 
         case.comment_count += 1
         case.updated_at = datetime.now(UTC)
-        self._repo.update_case(case)
+        await self._repo.update_case(case)
 
         return comment
 
-    def list_comments(self, case_id: str) -> list[CaseComment]:
-        case = self._repo.get_case(case_id)
+    async def list_comments(self, case_id: str) -> list[CaseComment]:
+        case = await self._repo.get_case(case_id)
         if case is None:
             raise LookupError(f"Case '{case_id}' not found.")
-        return self._repo.list_comments(case_id)
+        return await self._repo.list_comments(case_id)
 
-    def get_case(self, query: GetCaseQuery) -> GetCaseResult:
-        case = self._repo.get_case(query.case_id)
+    async def get_case(self, query: GetCaseQuery) -> GetCaseResult:
+        case = await self._repo.get_case(query.case_id)
         if case is None:
             raise LookupError(f"Case '{query.case_id}' not found.")
         return GetCaseResult(case=case)
 
-    def list_cases(self, query: ListCasesQuery) -> ListCasesResult:
-        cases, total = self._repo.list_cases(
+    async def list_cases(self, query: ListCasesQuery) -> ListCasesResult:
+        cases, total = await self._repo.list_cases(
             status=query.status,
             priority=query.priority,
             assigned_analyst_id=query.assigned_analyst_id,
@@ -174,12 +174,12 @@ class CaseService:
             page_size=query.page_size,
         )
 
-    def sync_alert_count(self, case_id: str, count: int) -> FraudCase:
-        case = self._repo.get_case(case_id)
+    async def sync_alert_count(self, case_id: str, count: int) -> FraudCase:
+        case = await self._repo.get_case(case_id)
         if case is None:
             raise LookupError(f"Case '{case_id}' not found.")
 
         case.alert_count = count
         case.updated_at = datetime.now(UTC)
-        self._repo.update_case(case)
+        await self._repo.update_case(case)
         return case

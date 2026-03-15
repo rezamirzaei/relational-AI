@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 
 import pytest
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.infrastructure.persistence.repository import (
     SqlAlchemyScenarioRepository,
@@ -28,7 +28,7 @@ from relational_fraud_intelligence.infrastructure.seed.scenarios import build_se
 
 @pytest.fixture(autouse=True)
 def test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RFI_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("RFI_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
     monkeypatch.setenv("RFI_DATABASE_AUTO_CREATE_SCHEMA", "true")
     monkeypatch.setenv("RFI_SEED_SCENARIOS_ON_STARTUP", "true")
     monkeypatch.setenv("RFI_TEXT_SIGNAL_PROVIDER", "keyword")
@@ -41,62 +41,62 @@ def test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RFI_RATE_LIMIT_BACKEND", "memory")
 
 
-@pytest.fixture()
-def engine() -> Generator[Engine, None, None]:
-    engine = build_engine("sqlite+pysqlite:///:memory:")
+@pytest_asyncio.fixture()
+async def engine() -> AsyncGenerator[AsyncEngine, None]:
+    engine = build_engine("sqlite+aiosqlite:///:memory:")
     yield engine
-    engine.dispose()
+    await engine.dispose()
 
 
-@pytest.fixture()
-def session_factory(engine: Engine) -> sessionmaker[Session]:
+@pytest_asyncio.fixture()
+async def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     session_factory = build_session_factory(engine)
     initializer = DatabaseInitializer(
         engine=engine,
         session_factory=session_factory,
         scenarios=build_seed_scenarios(),
     )
-    initializer.initialize(create_schema=True, seed_if_empty=True)
+    await initializer.initialize(create_schema=True, seed_if_empty=True)
     return session_factory
 
 
 @pytest.fixture()
 def scenario_repository(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyScenarioRepository:
     return SqlAlchemyScenarioRepository(session_factory)
 
 
 @pytest.fixture()
 def operator_repository(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyOperatorRepository:
     return SqlAlchemyOperatorRepository(session_factory)
 
 
 @pytest.fixture()
 def audit_repository(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyAuditLogRepository:
     return SqlAlchemyAuditLogRepository(session_factory)
 
 
 @pytest.fixture()
 def case_repository(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyCaseRepository:
     return SqlAlchemyCaseRepository(session_factory)
 
 
 @pytest.fixture()
 def alert_repository(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyAlertRepository:
     return SqlAlchemyAlertRepository(session_factory)
 
 
 @pytest.fixture()
 def dataset_store(
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SqlAlchemyDatasetStore:
     return SqlAlchemyDatasetStore(session_factory)

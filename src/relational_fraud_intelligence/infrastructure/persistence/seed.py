@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.domain.models import FraudScenario
 from relational_fraud_intelligence.infrastructure.persistence.base import Base
@@ -21,32 +20,33 @@ class SeedResult:
 class DatabaseInitializer:
     def __init__(
         self,
-        engine: Engine,
-        session_factory: sessionmaker[Session],
+        engine: AsyncEngine,
+        session_factory: async_sessionmaker[AsyncSession],
         scenarios: tuple[FraudScenario, ...],
     ) -> None:
         self._engine = engine
         self._session_factory = session_factory
         self._scenarios = scenarios
 
-    def initialize(self, *, create_schema: bool, seed_if_empty: bool) -> SeedResult:
+    async def initialize(self, *, create_schema: bool, seed_if_empty: bool) -> SeedResult:
         created_schema = False
         if create_schema:
-            Base.metadata.create_all(self._engine)
+            async with self._engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
             created_schema = True
 
         inserted_scenarios = 0
         if seed_if_empty:
-            inserted_scenarios = self.seed_if_empty()
+            inserted_scenarios = await self.seed_if_empty()
 
         return SeedResult(
             created_schema=created_schema,
             inserted_scenarios=inserted_scenarios,
         )
 
-    def seed_if_empty(self) -> int:
-        with self._session_factory.begin() as session:
-            existing_count = session.scalar(select(func.count()).select_from(ScenarioRecord))
+    async def seed_if_empty(self) -> int:
+        async with self._session_factory.begin() as session:
+            existing_count = await session.scalar(select(func.count()).select_from(ScenarioRecord))
             if existing_count:
                 return 0
 

@@ -21,7 +21,7 @@ def get_request_id(request: Request) -> str:
     return cast(str, getattr(request.state, "request_id", "unknown"))
 
 
-def get_current_operator(
+async def get_current_operator(
     request: Request,
     container: Annotated[ApplicationContainer, Depends(get_container)],
     credentials: Annotated[
@@ -32,7 +32,7 @@ def get_current_operator(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise _unauthorized("You must authenticate to access this endpoint.")
     try:
-        result = container.auth_service.get_current_operator(credentials.credentials)
+        result = await container.auth_service.get_current_operator(credentials.credentials)
     except AuthenticationError as exc:
         raise _unauthorized(str(exc)) from exc
 
@@ -41,7 +41,7 @@ def get_current_operator(
 
 
 def require_roles(*allowed_roles: OperatorRole) -> Callable[..., OperatorPrincipal]:
-    def dependency(
+    async def dependency(
         request: Request,
         principal: Annotated[OperatorPrincipal, Depends(get_current_operator)],
         container: Annotated[ApplicationContainer, Depends(get_container)],

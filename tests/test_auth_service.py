@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from relational_fraud_intelligence.application.dto.auth import (
     ListAuditEventsQuery,
@@ -23,12 +23,12 @@ from relational_fraud_intelligence.infrastructure.security.tokens import TokenSe
 from relational_fraud_intelligence.settings import AppSettings
 
 
-def test_auth_service_authenticates_and_round_trips_operator(
+async def test_auth_service_authenticates_and_round_trips_operator(
     operator_repository: SqlAlchemyOperatorRepository,
     audit_repository: SqlAlchemyAuditLogRepository,
 ) -> None:
     password_hasher = PasswordHasher()
-    operator_repository.create_operator(
+    await operator_repository.create_operator(
         username="reviewer",
         display_name="Case Reviewer",
         role="analyst",
@@ -42,21 +42,21 @@ def test_auth_service_authenticates_and_round_trips_operator(
         settings=AppSettings(),
     )
 
-    login_result = service.authenticate(
+    login_result = await service.authenticate(
         LoginCommand(username="reviewer", password="ReviewerPassword123!")
     )
-    current_operator = service.get_current_operator(login_result.access_token)
+    current_operator = await service.get_current_operator(login_result.access_token)
 
     assert login_result.principal.username == "reviewer"
     assert current_operator.principal.display_name == "Case Reviewer"
 
 
-def test_auth_service_rejects_invalid_password(
+async def test_auth_service_rejects_invalid_password(
     operator_repository: SqlAlchemyOperatorRepository,
     audit_repository: SqlAlchemyAuditLogRepository,
 ) -> None:
     password_hasher = PasswordHasher()
-    operator_repository.create_operator(
+    await operator_repository.create_operator(
         username="reviewer",
         display_name="Case Reviewer",
         role="analyst",
@@ -71,23 +71,23 @@ def test_auth_service_rejects_invalid_password(
     )
 
     with pytest.raises(AuthenticationError):
-        service.authenticate(LoginCommand(username="reviewer", password="wrong-password"))
+        await service.authenticate(LoginCommand(username="reviewer", password="wrong-password"))
 
 
-def test_auth_service_rejects_disabled_operator(
+async def test_auth_service_rejects_disabled_operator(
     operator_repository: SqlAlchemyOperatorRepository,
     audit_repository: SqlAlchemyAuditLogRepository,
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     password_hasher = PasswordHasher()
-    operator_repository.create_operator(
+    await operator_repository.create_operator(
         username="disabled-user",
         display_name="Disabled User",
         role="analyst",
         password_hash=password_hasher.hash_password("DisabledPassword123!"),
     )
-    with session_factory.begin() as session:
-        record = session.scalar(
+    async with session_factory.begin() as session:
+        record = await session.scalar(
             select(OperatorUserRecord).where(OperatorUserRecord.username == "disabled-user")
         )
         assert record is not None
@@ -102,18 +102,18 @@ def test_auth_service_rejects_disabled_operator(
     )
 
     with pytest.raises(AuthorizationError):
-        service.authenticate(
+        await service.authenticate(
             LoginCommand(username="disabled-user", password="DisabledPassword123!")
         )
 
 
-def test_auth_service_rejects_token_for_disabled_operator(
+async def test_auth_service_rejects_token_for_disabled_operator(
     operator_repository: SqlAlchemyOperatorRepository,
     audit_repository: SqlAlchemyAuditLogRepository,
-    session_factory: sessionmaker[Session],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     password_hasher = PasswordHasher()
-    operator_repository.create_operator(
+    await operator_repository.create_operator(
         username="reviewer",
         display_name="Case Reviewer",
         role="analyst",
@@ -126,22 +126,22 @@ def test_auth_service_rejects_token_for_disabled_operator(
         token_service=TokenService(AppSettings()),
         settings=AppSettings(),
     )
-    login_result = service.authenticate(
+    login_result = await service.authenticate(
         LoginCommand(username="reviewer", password="ReviewerPassword123!")
     )
 
-    with session_factory.begin() as session:
-        record = session.scalar(
+    async with session_factory.begin() as session:
+        record = await session.scalar(
             select(OperatorUserRecord).where(OperatorUserRecord.username == "reviewer")
         )
         assert record is not None
         record.is_active = False
 
     with pytest.raises(AuthenticationError):
-        service.get_current_operator(login_result.access_token)
+        await service.get_current_operator(login_result.access_token)
 
 
-def test_auth_service_lists_audit_events(
+async def test_auth_service_lists_audit_events(
     operator_repository: SqlAlchemyOperatorRepository,
     audit_repository: SqlAlchemyAuditLogRepository,
 ) -> None:
@@ -152,7 +152,7 @@ def test_auth_service_lists_audit_events(
         token_service=TokenService(AppSettings()),
         settings=AppSettings(),
     )
-    audit_repository.record_event(
+    await audit_repository.record_event(
         request_id="req-123",
         action="list-scenarios",
         resource_type="fraud-scenario",
@@ -164,7 +164,7 @@ def test_auth_service_lists_audit_events(
         details={"limit": "3"},
     )
 
-    result = service.list_audit_events(ListAuditEventsQuery(limit=10))
+    result = await service.list_audit_events(ListAuditEventsQuery(limit=10))
 
     assert len(result.events) == 1
     assert result.events[0].action == "list-scenarios"

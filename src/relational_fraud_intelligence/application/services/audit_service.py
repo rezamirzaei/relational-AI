@@ -10,7 +10,7 @@ class AuditService:
     def __init__(self, repository: AuditLogRepository) -> None:
         self._repository = repository
 
-    def record_http_event(
+    async def record_http_event(
         self,
         *,
         request_id: str,
@@ -25,7 +25,7 @@ class AuditService:
         user_agent: str | None = None,
         details: dict[str, str] | None = None,
     ) -> None:
-        self._repository.record_event(
+        await self._repository.record_event(
             request_id=request_id,
             actor_user_id=principal.user_id if principal is not None else None,
             actor_username=principal.username if principal is not None else None,
@@ -41,6 +41,6 @@ class AuditService:
             details=details,
         )
 
-    def prune_expired_events(self, retention_days: int) -> int:
+    async def prune_expired_events(self, retention_days: int) -> int:
         cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=retention_days)
-        return self._repository.delete_events_older_than(cutoff)
+        return await self._repository.delete_events_older_than(cutoff)
