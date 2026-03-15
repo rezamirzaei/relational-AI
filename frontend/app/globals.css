@@ -397,16 +397,12 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
 .hero-copy { max-width: 64ch; font-size: 1.04rem; line-height: 1.72; color: var(--ink-soft); }
 .hero-ribbon { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .hero-ribbon span { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card); color: var(--ink-soft); font-size: 0.84rem; font-weight: 500; }
-.hero-stats { display: grid; gap: 12px; }
-.hero-stat-card { padding: 16px 18px; }
-.hero-stat-card strong { display: block; margin-top: 6px; font-size: 1.5rem; line-height: 1; }
-.hero-stat-card p { color: var(--ink-soft); margin-top: 4px; font-size: 0.86rem; }
 
 /* ------------------------------------------------------------------ */
 /* Auth                                                                */
 /* ------------------------------------------------------------------ */
 .auth-shell { padding: 24px; margin-bottom: 20px; }
-.auth-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.auth-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: end; }
 .auth-field { display: grid; gap: 6px; }
 .auth-field span { color: var(--ink-muted); font-size: 0.82rem; }
 .auth-field input {
@@ -545,19 +541,10 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
 .benford-bar.neutral { background: var(--good); }
 
 /* ------------------------------------------------------------------ */
-/* Guide, LLM Notes, Copilot                                          */
+/* AI Summary & Notes                                                  */
 /* ------------------------------------------------------------------ */
 .guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.guide-panel, .copilot-card { padding: 20px; }
-.copilot-card { display: grid; gap: 14px; }
-.story-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
-.story-card { border: 1px solid var(--border); border-radius: 16px; background: var(--bg-card); padding: 16px; display: grid; gap: 10px; }
-.story-card h3 { font-family: var(--font-display-stack); font-size: 1.1rem; }
-.story-persona { font-size: 0.82rem; color: var(--ink-muted); }
-.story-steps { display: grid; gap: 6px; }
-.story-card-top, .story-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.story-card-foot { align-items: end; }
-.story-card-foot p { margin: 0; color: var(--ink-soft); }
+.ai-summary-card { padding: 20px; display: grid; gap: 14px; }
 .action-item.compact { padding: 10px 12px; }
 .action-item.compact p { margin: 0; }
 .llm-note { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--gradient-hero); }
@@ -636,17 +623,6 @@ code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-s
   .risk-meter-shell { min-width: auto; width: 100%; }
 }
 
-/* ------------------------------------------------------------------ */
-/* Legacy nav bar (signed-out state)                                   */
-/* ------------------------------------------------------------------ */
-.nav-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 18px; margin-bottom: 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-surface-strong); backdrop-filter: blur(12px); }
-.nav-left { display: flex; gap: 4px; flex-wrap: wrap; }
-.nav-right { display: flex; align-items: center; gap: 12px; }
-.operator-info { font-size: 0.84rem; color: var(--ink-soft); }
-.nav-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--ink-soft); font-size: 0.82rem; font-weight: 500; cursor: pointer; transition: all 0.15s ease; }
-.nav-tab:hover { background: rgba(255,255,255,0.04); }
-.nav-tab.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; border-color: rgba(124,109,240,0.2); }
-.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--critical); color: white; font-size: 0.66rem; font-weight: 700; }
 
 /* ------------------------------------------------------------------ */
 /* Ops Header (signed-out state)                                       */

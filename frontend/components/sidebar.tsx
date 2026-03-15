@@ -90,9 +90,10 @@ export function Sidebar({
           onClick={() => setCollapsed(!collapsed)}
           type="button"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
         >
           <Shield size={22} strokeWidth={2.2} />
-          {!collapsed && <span className="brand-text">Fraud Intel</span>}
+          {!collapsed && <span className="brand-text">Fraud Intelligence</span>}
         </button>
       </div>
 
@@ -130,6 +131,7 @@ export function Sidebar({
           onClick={toggleTheme}
           type="button"
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}

@@ -84,7 +84,7 @@ type AuditSectionProps = {
   dateFormatter: Intl.DateTimeFormat;
 };
 
-type AnalysisCopilotCardProps = {
+type AnalysisSummaryCardProps = {
   explanation: AnalysisExplanation | null;
   isLoading: boolean;
   loadError: string | null;
@@ -121,6 +121,9 @@ export function DashboardHeader({
   operator,
   workspaceGuide,
 }: DashboardHeaderProps) {
+  const dbOk = backendHealth?.database_status === "ready";
+  const servicesOk = backendHealth?.provider_status === "ready";
+
   return (
     <header className="ops-header">
       <div>
@@ -129,24 +132,29 @@ export function DashboardHeader({
         </div>
         <h1>Relational Fraud Intelligence</h1>
       </div>
-      <div className="status-row">
-        <StatusPill
-          label={backendHealth?.database_status ?? "offline"}
-          tone={backendHealth?.database_status === "ready" ? "good" : "critical"}
-        />
-        <StatusPill
-          label={backendHealth?.rate_limit_status ?? "unavailable"}
-          tone={backendHealth?.rate_limit_status === "ready" ? "good" : "warning"}
-        />
-        <StatusPill
-          label={`providers ${backendHealth?.provider_status ?? "unknown"}`}
-          tone={backendHealth?.provider_status === "ready" ? "good" : "warning"}
-        />
-        <StatusPill
-          label={operator?.role ?? "signed-out"}
-          tone={operator ? "neutral" : "warning"}
-        />
-      </div>
+      {operator ? (
+        <div className="status-row">
+          <StatusPill
+            label={dbOk ? "Database ✓" : "Database ✗"}
+            tone={dbOk ? "good" : "critical"}
+          />
+          <StatusPill
+            label={servicesOk ? "Services ✓" : "Services degraded"}
+            tone={servicesOk ? "good" : "warning"}
+          />
+          <StatusPill
+            label={`Signed in · ${operator.role}`}
+            tone="neutral"
+          />
+        </div>
+      ) : (
+        <div className="status-row">
+          <StatusPill
+            label={dbOk ? "Online" : "Offline"}
+            tone={dbOk ? "good" : "critical"}
+          />
+        </div>
+      )}
     </header>
   );
 }
@@ -891,20 +899,20 @@ export function AuditSection({ auditEvents, dateFormatter }: AuditSectionProps) 
   );
 }
 
-export function AnalysisCopilotCard({
+export function AnalysisSummaryCard({
   explanation,
   isLoading,
   loadError,
-}: AnalysisCopilotCardProps) {
+}: AnalysisSummaryCardProps) {
   if (isLoading) {
     return (
-      <section className="content-card copilot-card">
+      <section className="content-card ai-summary-card">
         <div className="mini-header">
           <span>AI Summary</span>
           <span>Loading</span>
         </div>
         <p className="muted-copy">
-          Generating an analysis summary from the scored findings...
+          Generating an analysis summary from the scored findings…
         </p>
       </section>
     );
@@ -912,7 +920,7 @@ export function AnalysisCopilotCard({
 
   if (loadError) {
     return (
-      <section className="content-card copilot-card">
+      <section className="content-card ai-summary-card">
         <div className="mini-header">
           <span>AI Summary</span>
           <span>Error</span>
@@ -924,7 +932,7 @@ export function AnalysisCopilotCard({
 
   if (!explanation) {
     return (
-      <section className="content-card copilot-card">
+      <section className="content-card ai-summary-card">
         <div className="mini-header">
           <span>AI Summary</span>
           <span>Ready</span>
@@ -937,7 +945,7 @@ export function AnalysisCopilotCard({
   }
 
   return (
-    <section className="content-card copilot-card">
+    <section className="content-card ai-summary-card">
       <div className="mini-header">
         <span>AI Summary</span>
         <span>{explanation.audience}</span>
@@ -983,7 +991,7 @@ export function AnalysisCopilotCard({
         <section className="content-card inset-card">
           <div className="mini-header">
             <span>Watch-outs</span>
-            <span>{explanation.provider_summary.source_of_truth}</span>
+            <span>Scoring basis</span>
           </div>
           <div className="action-stack">
             {explanation.watchouts.map((item) => (
@@ -999,35 +1007,3 @@ export function AnalysisCopilotCard({
   );
 }
 
-function viewLabel(view: ActiveView): string {
-  switch (view) {
-    case "overview":
-      return "Workspace";
-    case "investigate":
-      return "Scenarios";
-    case "analyze":
-      return "Analyze Data";
-    case "cases":
-      return "Cases";
-    case "alerts":
-      return "Alerts";
-    case "audit":
-      return "Audit Trail";
-    default:
-      return view;
-  }
-}
-
-function asActiveView(view: string): ActiveView {
-  if (
-    view === "overview" ||
-    view === "investigate" ||
-    view === "analyze" ||
-    view === "cases" ||
-    view === "alerts" ||
-    view === "audit"
-  ) {
-    return view;
-  }
-  return "analyze";
-}

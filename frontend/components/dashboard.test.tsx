@@ -900,7 +900,7 @@ describe("Dashboard", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Relational Fraud Intelligence" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("ready").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Online").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByText("Start by uploading your transaction data.")).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toHaveValue("");

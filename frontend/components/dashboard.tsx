@@ -7,7 +7,7 @@ import {
 } from "@/components/charts";
 import {
   AlertsSection,
-  AnalysisCopilotCard,
+  AnalysisSummaryCard,
   AuditSection,
   CasesSection,
   DashboardHeader,
@@ -419,13 +419,13 @@ export function Dashboard({
                           </div>
                           <div className="provider-grid">
                             <span>Analysis engine</span>
-                            <strong>{activeInvestigation.provider_summary.active_reasoning_provider}</strong>
+                            <strong>{activeInvestigation.provider_summary.active_reasoning_provider ? "Active ✓" : "Unavailable"}</strong>
                             <span>Text analysis</span>
-                            <strong>{activeInvestigation.provider_summary.active_text_provider}</strong>
+                            <strong>{activeInvestigation.provider_summary.active_text_provider ? "Active ✓" : "Unavailable"}</strong>
                             <span>Database</span>
-                            <strong>{backendHealth?.database_status ?? "unavailable"}</strong>
+                            <strong>{backendHealth?.database_status === "ready" ? "Ready ✓" : "Unavailable"}</strong>
                             <span>Rate limiting</span>
-                            <strong>{backendHealth?.rate_limit_backend ?? "unavailable"}</strong>
+                            <strong>{backendHealth?.rate_limit_status === "ready" ? "Ready ✓" : "Degraded"}</strong>
                           </div>
                           <div className="stack">
                             {activeInvestigation.provider_summary.notes.map((note) => (
@@ -514,7 +514,7 @@ export function Dashboard({
                                 </div>
                                 <p>{signal.rationale}</p>
                                 <span className="signal-meta">
-                                  {signal.provider} via {signal.source_kind}
+                                  Confidence: {(signal.confidence * 100).toFixed(0)}%
                                 </span>
                               </article>
                             ))}
@@ -1060,7 +1060,7 @@ export function Dashboard({
                           ) : null}
                         </section>
 
-                        <AnalysisCopilotCard
+                        <AnalysisSummaryCard
                           explanation={analysisExplanation}
                           isLoading={isLoadingAnalysisDetail}
                           loadError={analysisExplanationError}

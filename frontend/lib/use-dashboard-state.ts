@@ -393,7 +393,7 @@ export function useDashboardState(
       setAnalysisExplanationError(
         explanationResult.reason instanceof Error
           ? explanationResult.reason.message
-          : "Could not load the copilot brief.",
+          : "Could not load the AI summary.",
       );
     }
 
