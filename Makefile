@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up
+.PHONY: install backend-install frontend-install lint format mypy test typecheck frontend-test frontend-build quality db-upgrade db-seed audit-prune precommit-install precommit-run docker-up export-openapi
 
 install: backend-install frontend-install
 
@@ -52,3 +52,7 @@ precommit-run:
 
 docker-up:
 	docker compose up --build
+
+export-openapi:
+	$(PYTHON) scripts/export_openapi.py
+

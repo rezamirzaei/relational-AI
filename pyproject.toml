@@ -46,7 +46,10 @@ packages = ["src/relational_fraud_intelligence"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "--strict-markers --cov=relational_fraud_intelligence --cov-report=term-missing"
+addopts = "--strict-markers --cov=relational_fraud_intelligence --cov-report=term-missing -m 'not postgres'"
+markers = [
+    "postgres: tests that require a real Postgres database (deselected by default)",
+]
 
 [tool.ruff]
 line-length = 100

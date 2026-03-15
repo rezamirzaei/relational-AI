@@ -1,3 +1,24 @@
+"""Database engine and session factory construction.
+
+Architecture note — synchronous SQLAlchemy by design
+-----------------------------------------------------
+This module provides synchronous SQLAlchemy Engine and Session objects.
+FastAPI automatically runs synchronous endpoint functions in a threadpool
+executor (via ``anyio.to_thread``), so request concurrency is not blocked.
+
+A future async migration would involve:
+  1. Switch to ``sqlalchemy.ext.asyncio.create_async_engine`` and
+     ``async_sessionmaker``.
+  2. Replace the ``psycopg`` (sync) driver with ``asyncpg``.
+  3. Convert every repository method to ``async def`` with ``await session.execute(...)``.
+  4. Update all application services and route handlers to ``async def``.
+  5. Rewrite test fixtures to use ``async`` session factories.
+
+This is a significant refactor across the full stack. The current sync
+approach is deliberately preserved as the correct baseline while the
+codebase is single-process and the threadpool provides adequate concurrency.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

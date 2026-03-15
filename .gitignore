@@ -9,6 +9,9 @@ __pycache__/
 coverage.xml
 dist/
 build/
+*.egg-info/
+*.eggs
+.tox/
 node_modules/
 frontend/.next/
 *.tsbuildinfo
