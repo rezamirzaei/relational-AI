@@ -2,6 +2,38 @@
 
 Relational Fraud Intelligence is a dataset-first fraud triage platform for uploaded transaction data. It combines statistical analysis, behavioral pattern detection, persistent alerts, durable case management, reference scenario investigations, and operator-facing explanations without letting the explanation layer control the score.
 
+---
+
+## Table of contents
+
+- [Why this project exists](#why-this-project-exists)
+- [Workflow at a glance](#workflow-at-a-glance)
+- [What the platform does](#what-the-platform-does)
+- [Core concepts](#core-concepts)
+- [Quick start](#quick-start)
+- [Full container stack](#full-container-stack)
+- [Daily operator workflow](#daily-operator-workflow)
+- [Runtime modes](#runtime-modes)
+- [Architecture](#architecture)
+- [Deployment topology](#deployment-topology)
+- [Startup model](#startup-model)
+- [Request and scoring model](#request-and-scoring-model)
+- [Provider fallback model](#provider-fallback-model)
+- [Persistence model](#persistence-model)
+- [Workflows](#workflows)
+- [Alert lifecycle](#alert-lifecycle)
+- [Case lifecycle](#case-lifecycle)
+- [Reference investigation workflow](#reference-investigation-workflow)
+- [Evidence durability](#evidence-durability)
+- [API surface](#api-surface)
+- [Project structure](#project-structure)
+- [Contributing](#contributing)
+- [Quality gates](#quality-gates)
+- [Security](#security)
+- [License](#license)
+
+---
+
 ## Why this project exists
 
 Most fraud tools are either notebook-grade analysis sandboxes or workflow queues with weak evidence handling. This project joins the two:
@@ -41,15 +73,6 @@ flowchart LR
 - **Supports deterministic and optional AI-assisted modes** with safe fallbacks.
 - **Audits operator activity** and exposes runtime posture through `/health`.
 
-## Documentation map
-
-- [README.md](README.md): product overview, quick start, and repo map
-- [CONTRIBUTING.md](CONTRIBUTING.md): development setup, quality gates, and PR guidelines
-- [SECURITY.md](SECURITY.md): vulnerability reporting and production security checklist
-- [docs/workflows.md](docs/workflows.md): end-to-end operator workflows and lifecycle diagrams
-- [docs/architecture.md](docs/architecture.md): system architecture, deployment, persistence, and runtime model
-- [docs/sample_data/sample_transactions.csv](docs/sample_data/sample_transactions.csv): example dataset for local testing
-
 ## Core concepts
 
 ### Datasets
@@ -71,6 +94,8 @@ Reference scenarios are seeded fraud stories used for validation, demo flows, gr
 ### Explanation providers
 
 The explanation layer helps operators understand results. It does not change risk scores, suppress alerts, or open cases.
+
+---
 
 ## Quick start
 
@@ -132,8 +157,6 @@ The compose stack starts Postgres, Redis, the FastAPI backend, and the Next.js f
 5. Open or update a case, assign it, add comments, and record disposition.
 6. Use the dashboard and audit views to monitor throughput, queue pressure, and traceability.
 
-The deep-dive version of this flow, including lifecycle diagrams, lives in [docs/workflows.md](docs/workflows.md).
-
 ## Runtime modes
 
 | Mode | Key settings | Purpose |
@@ -144,61 +167,469 @@ The deep-dive version of this flow, including lifecycle diagrams, lives in [docs
 
 If an optional provider cannot start cleanly, the platform records the fallback in runtime notes and continues serving with deterministic defaults.
 
-## Security and operations
+---
 
-- `RFI_JWT_SECRET` must be rotated outside local/test and must be at least 32 characters.
-- Bootstrap operator passwords must be at least 12 characters.
-- Login and general API traffic are rate-limited independently.
-- Every request receives an `X-Request-ID` and is written to the audit trail.
-- Cases persist evidence snapshots so later rule or provider changes do not rewrite historical case context.
-- Audit retention is controlled by `RFI_AUDIT_LOG_RETENTION_DAYS`.
-- `rfi-manage create-operator` creates named operators for managed environments.
-- `rfi-manage prune-audit` deletes expired audit events on demand.
+## Architecture
 
-## Quality and delivery
+### System context
 
-Local quality commands:
+```mermaid
+graph TB
+    Browser[Browser]
 
-```bash
-make lint
-make mypy
-make test
-make typecheck
-make frontend-test
-make frontend-build
-make quality
-pre-commit run --all-files
+    subgraph Frontend["Next.js workspace"]
+        Overview[Overview and dashboard]
+        DatasetsUI[Dataset analysis workspace]
+        AlertsUI[Alert queue]
+        CasesUI[Case management]
+        ScenariosUI[Reference investigations]
+    end
+
+    subgraph API["FastAPI boundary"]
+        Auth[Auth and RBAC]
+        Routes[Typed REST routes]
+        Middleware[Request context, security headers, audit]
+    end
+
+    subgraph Services["Application services"]
+        DatasetService[DatasetService]
+        InvestigationService[InvestigationService]
+        AlertService[AlertService]
+        CaseService[CaseService]
+        DashboardService[DashboardService]
+        AuthService[AuthService]
+        AuditService[AuditService]
+        GuideService[WorkspaceGuideService]
+    end
+
+    subgraph Analysis["Analysis and provider layer"]
+        Statistical[Benford, outliers, velocity, round amounts]
+        Behavioral[Behavioral pattern analysis]
+        Graph[Graph analyzer]
+        Reasoner[Local or RelationalAI reasoner]
+        TextSignals[Keyword or Hugging Face text signals]
+        Explainers[Deterministic or Hugging Face explanations]
+    end
+
+    subgraph Persistence["Persistence and infrastructure"]
+        WorkflowRepo[Workflow repositories]
+        ScenarioRepo[Scenario repository]
+        SecurityRepo[Security repositories]
+        DB[(Postgres or SQLite)]
+        Redis[(Redis rate limiter)]
+    end
+
+    Browser --> Frontend
+    Frontend --> API
+    API --> Services
+    DatasetService --> Statistical
+    DatasetService --> Behavioral
+    InvestigationService --> Reasoner
+    InvestigationService --> TextSignals
+    InvestigationService --> Graph
+    AlertService --> WorkflowRepo
+    CaseService --> WorkflowRepo
+    DashboardService --> WorkflowRepo
+    GuideService --> WorkflowRepo
+    AuthService --> SecurityRepo
+    AuditService --> SecurityRepo
+    WorkflowRepo --> DB
+    ScenarioRepo --> DB
+    SecurityRepo --> DB
+    API --> Redis
+    Services --> Explainers
 ```
 
-CI validates:
+### Architectural intent
 
-- pre-commit on the full repository
-- backend lint, strict typing, tests, and coverage
-- frontend typecheck, component tests, and production build
-- migration and runtime smoke tests with Postgres and Redis
-- backend and frontend Docker image builds
+- The main workflow starts from uploaded transaction data, not canned scenarios.
+- Reference scenarios are persistent seed data used for validation and controlled investigations.
+- Scoring logic is deterministic by default and remains the source of truth.
+- Optional AI integrations sit behind stable ports and fall back instead of taking the platform down.
+- Alerts and cases are durable workflow state, not transient derived views.
+- Cases persist an immutable evidence snapshot so historical investigations stay stable.
 
-## API surface summary
+### Layer responsibilities
 
-The API currently exposes 25 endpoints across these areas:
+| Layer | Responsibility | Notes |
+|------|----------------|-------|
+| Next.js frontend | Operator workspace | Dashboard, dataset review, alerts, cases, reference investigations |
+| FastAPI routes + middleware | HTTP contract | Auth, request context, security headers, audit logging |
+| Application services | Workflow orchestration | Dataset analysis, investigations, alerts, cases, dashboard, auth |
+| Infrastructure analysis | Scoring engines | Benford, outliers, velocity, round amounts, behavioral analysis, graph analysis |
+| Provider adapters | Optional enrichment | Hugging Face text and explanations, RelationalAI reasoning |
+| Repositories | Persistence boundary | SQLAlchemy-backed datasets, alerts, cases, audit, operators, scenarios |
+| External services | Shared operational dependencies | Postgres/SQLite, Redis, optional Hugging Face, optional RelationalAI |
 
-- system health
-- authentication
-- workspace guidance and dashboard stats
-- reference scenario investigations
-- datasets upload, ingest, analysis, explanation, and case creation
-- alerts listing, triage, and case creation
-- cases listing, detail, status, and comments
-- admin audit access
+## Deployment topology
 
-The full endpoint map is documented in [docs/architecture.md](docs/architecture.md) and [docs/workflows.md](docs/workflows.md).
+```mermaid
+graph LR
+    User[Operator browser]
+    Frontend[Next.js container or dev server]
+    Backend[FastAPI container or process]
+    Postgres[(Postgres)]
+    SQLite[(SQLite)]
+    Redis[(Redis)]
+    HF[Hugging Face API]
+    RAI[RelationalAI adapter]
+
+    User --> Frontend
+    Frontend -->|REST /api/v1| Backend
+    Backend --> Postgres
+    Backend -. local/test fallback .-> SQLite
+    Backend --> Redis
+    Backend -. optional .-> HF
+    Backend -. optional .-> RAI
+```
+
+The normal local container baseline uses Postgres and Redis. Tests and lightweight runs can use SQLite and in-memory rate limiting.
+
+## Startup model
+
+```mermaid
+sequenceDiagram
+    participant App as FastAPI lifespan
+    participant Container as build_container
+    participant DB as Database layer
+    participant Security as Security bootstrap
+    participant Providers as Provider selection
+
+    App->>Container: build_container(settings)
+    Container->>DB: build engine and session factory
+    Container->>DB: initialize seed data and optional schema creation
+    Container->>Security: bootstrap admin and analyst operators
+    Container->>DB: prune expired audit events
+    Container->>Providers: choose text, reasoning, explanation providers
+    Providers-->>Container: active providers + startup notes
+    Container-->>App: assembled services and runtime state
+```
+
+Important runtime properties:
+
+- Migrations are applied explicitly through `rfi-manage migrate`.
+- Scenario seeding can happen at startup if enabled.
+- Redis rate limiting falls back to memory if Redis is unavailable.
+- Hugging Face and RelationalAI integrations degrade gracefully through fallback wrappers.
+- `/health` reports the resulting runtime posture.
+
+## Request and scoring model
+
+### Dataset analysis path
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend
+    participant API as FastAPI
+    participant Dataset as DatasetService
+    participant Engines as Analysis engines
+    participant Alerts as AlertService
+
+    UI->>API: POST /datasets/upload or /datasets/ingest
+    API->>Dataset: persist dataset and transactions
+    UI->>API: POST /datasets/{id}/analyze
+    API->>Dataset: analyze(dataset_id)
+    Dataset->>Engines: Benford + outliers + velocity + round amount + behavioral analysis
+    Engines-->>Dataset: anomalies, graph analysis, leads, risk score
+    Dataset-->>API: AnalysisResult
+    API->>Alerts: auto-generate alerts when score >= 35
+    API-->>UI: scored analysis payload
+```
+
+### Reference investigation path
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend
+    participant API as FastAPI
+    participant Investigation as InvestigationService
+    participant Text as Text signal service
+    participant Reasoner as Risk reasoner
+    participant Graph as Graph analyzer
+    participant Alerts as AlertService
+
+    UI->>API: POST /investigations
+    API->>Investigation: investigate(scenario_id)
+    Investigation->>Text: score(scenario notes and merchant text)
+    Investigation->>Reasoner: reason(scenario, text signals)
+    Investigation->>Graph: analyze_scenario_graph(scenario)
+    Investigation-->>API: InvestigationCase
+    API->>Alerts: auto-generate alerts when score >= 35
+    API-->>UI: investigation result
+```
+
+## Provider fallback model
+
+```mermaid
+flowchart TD
+    Requested[Requested optional provider] --> Available{Can provider start or respond?}
+    Available -->|yes| Active[Use requested provider]
+    Available -->|no| Fallback[Switch to deterministic fallback]
+    Fallback --> Notes[Attach startup or runtime notes]
+    Active --> Result[Return result]
+    Notes --> Result
+
+    Result --> Guardrail[Risk thresholds, alert generation, and case creation rules stay unchanged]
+```
+
+This design is deliberate. Providers may improve text interpretation or analyst-facing language, but they do not own the core workflow state machine.
+
+## Persistence model
+
+```mermaid
+erDiagram
+    SCENARIOS ||--o{ CUSTOMERS : contains
+    SCENARIOS ||--o{ ACCOUNTS : contains
+    SCENARIOS ||--o{ DEVICES : contains
+    SCENARIOS ||--o{ MERCHANTS : contains
+    SCENARIOS ||--o{ TRANSACTIONS : contains
+    SCENARIOS ||--o{ INVESTIGATOR_NOTES : contains
+
+    CUSTOMERS ||--o{ ACCOUNTS : owns
+    CUSTOMERS }o--o{ DEVICES : links_via_device_customer_links
+    CUSTOMERS ||--o{ INVESTIGATOR_NOTES : subject_of
+
+    DATASETS ||--o{ FRAUD_ALERTS : source_for
+    DATASETS ||--o{ FRAUD_CASES : source_for
+    SCENARIOS ||--o{ FRAUD_ALERTS : source_for
+    SCENARIOS ||--o{ FRAUD_CASES : source_for
+
+    FRAUD_CASES ||--o{ FRAUD_ALERTS : may_link
+    OPERATOR_USERS ||--o{ AUDIT_EVENTS : generates
+```
+
+What is persisted:
+
+- Scenario catalog and all related entities
+- Operator users and audit events
+- Uploaded datasets, raw uploaded transactions, and completed analysis JSON
+- Fraud alerts
+- Fraud cases, comment count, alert count, and immutable `evidence_snapshot`
+
+What is derived at read time:
+
+- Dashboard aggregates
+- `/health` posture summaries
+- Workflow guidance content
+
+---
+
+## Workflows
+
+### Workflow map
+
+```mermaid
+flowchart TD
+    Analyst[Analyst signs in] --> Choice{What is the starting point?}
+    Choice -->|Real transaction data| DatasetFlow[Dataset workflow]
+    Choice -->|Reference validation case| ScenarioFlow[Reference investigation workflow]
+
+    DatasetFlow --> Analyze[Analyze dataset]
+    Analyze --> Leads[Review anomalies, graph signals, investigation leads]
+    Leads --> Alerts[Review generated alerts]
+    Alerts --> Cases[Create or update case]
+
+    ScenarioFlow --> Investigate[Run scenario investigation]
+    Investigate --> ScenarioResults[Review rule hits, graph analysis, text signals]
+    ScenarioResults --> Cases
+
+    Cases --> Track[Assign, comment, escalate, resolve, close]
+    Track --> Dashboard[Dashboard and audit review]
+```
+
+### Primary product workflow: dataset first
+
+The normal operator journey starts with real transaction data.
+
+**Step 1 — Ingest data.** Operators upload a CSV through `POST /datasets/upload` or ingest a JSON payload through `POST /datasets/ingest`. Each dataset persists metadata, normalized transactions, and status (`uploaded`, `analyzing`, `completed`, `failed`).
+
+**Step 2 — Analyze the dataset.** `POST /datasets/{id}/analyze` runs Benford analysis, statistical outlier detection, velocity spike detection, round-amount detection, and behavioral analysis across accounts, merchants, devices, and geographies. The result includes an overall risk score, anomaly flags, graph analysis summary, investigation leads, and a human-readable summary.
+
+**Step 3 — Alert generation.** If the resulting score is `>= 35`, the platform creates up to three alerts from the strongest findings for that dataset source.
+
+**Step 4 — Create or update a case.** Analysts can open a case from a dataset analysis, an alert, a scenario investigation, or the generic `POST /cases` endpoint. The platform stores an evidence snapshot so later changes in rules or providers do not rewrite the historical case.
+
+**Step 5 — Triage and disposition.** Cases and alerts move through their own lifecycle states while the dashboard and audit trail reflect the work.
+
+### Dataset state model
+
+```mermaid
+stateDiagram-v2
+    [*] --> uploaded
+    uploaded --> analyzing: POST /datasets/{id}/analyze
+    analyzing --> completed: analysis stored successfully
+    analyzing --> failed: analysis or parsing error recorded
+```
+
+## Alert lifecycle
+
+Alerts are persistent queue items. They can be linked to cases and reopened after terminal states.
+
+```mermaid
+stateDiagram-v2
+    [*] --> new
+    new --> acknowledged
+    new --> investigating
+    acknowledged --> investigating
+    investigating --> resolved
+    investigating --> false_positive
+    acknowledged --> resolved
+    acknowledged --> false_positive
+    resolved --> new: reopen
+    resolved --> investigating: reopen
+    false_positive --> new: reopen
+    false_positive --> investigating: reopen
+```
+
+- `acknowledged_at` is set when an alert is first acknowledged.
+- `resolved_at` is set when an alert reaches `resolved` or `false-positive`.
+- Reopening clears stale terminal timestamps so status and timestamps stay consistent.
+
+## Case lifecycle
+
+Cases are the durable investigation record. Assignment can move an `open` case into `investigating`, and reopening clears resolution metadata.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+    open --> investigating: assignment or status update
+    investigating --> escalated
+    investigating --> resolved
+    investigating --> closed
+    escalated --> investigating
+    escalated --> resolved
+    escalated --> closed
+    resolved --> open: reopen
+    resolved --> investigating: reopen
+    resolved --> escalated: reopen
+    closed --> open: reopen
+    closed --> investigating: reopen
+    closed --> escalated: reopen
+```
+
+- `priority` defaults from risk level unless explicitly provided.
+- High and critical cases get shorter SLA deadlines.
+- Moving out of `resolved` or `closed` clears disposition, resolution notes, and `resolved_at`.
+- Case comments increment a persisted `comment_count`.
+- Linked alerts are tracked through a persisted `alert_count`.
+
+## Reference investigation workflow
+
+Reference scenarios are useful for rule validation, demos, graph testing, and deterministic fraud narratives. They are not the main data-entry path.
+
+```mermaid
+sequenceDiagram
+    participant Analyst
+    participant UI as Frontend
+    participant API as FastAPI
+    participant Investigation as InvestigationService
+    participant Text as Text signal service
+    participant Reasoner as Risk reasoner
+    participant Graph as Graph analyzer
+    participant Alerts as AlertService
+    participant Cases as CaseService
+
+    Analyst->>UI: Choose seeded scenario
+    UI->>API: POST /investigations
+    API->>Investigation: investigate(scenario_id)
+    Investigation->>Text: extract text signals
+    Investigation->>Reasoner: compute rule-based risk
+    Investigation->>Graph: analyze scenario relationships
+    Investigation-->>API: InvestigationCase
+    API->>Alerts: create alerts when score >= 35
+    API-->>UI: investigation result
+    Analyst->>UI: Persist as case if needed
+    UI->>API: POST /investigations/{id}/case
+    API->>Cases: create case with snapshot
+```
+
+## Evidence durability
+
+This is the project rule that protects historical integrity.
+
+```mermaid
+flowchart LR
+    Source[Dataset analysis or scenario investigation] --> CaseCreate[Create case]
+    CaseCreate --> Snapshot[Persist evidence_snapshot in fraud_cases]
+    Snapshot --> History[Historical case detail stays stable]
+    Rules[Future rule changes] --> History
+    Providers[Future provider changes] --> History
+    SeedData[Future scenario seed changes] --> History
+```
+
+Without this rule, old cases would drift as the codebase evolved. The current implementation avoids that.
+
+### Durable evidence rule
+
+Case detail is intentionally audit-stable:
+
+- Creating a case from a dataset stores the analysis-backed evidence snapshot.
+- Creating a case from a scenario investigation stores the investigation-backed evidence snapshot.
+- Later rule, provider, or seed-data changes do not rewrite that stored case evidence.
+
+### Role-based view
+
+| Role | Primary concern | Most used areas |
+|------|-----------------|-----------------|
+| Analyst | Turn risky data into a durable case quickly | datasets, alerts, cases |
+| Queue owner | Keep alert backlog moving and close false positives fast | alerts, cases, dashboard |
+| Admin | Verify platform health, traceability, and operator activity | dashboard, audit events, health |
+
+---
+
+## API surface
+
+The API exposes 25 endpoints across these areas:
+
+| Method | Path | Category | Purpose |
+|--------|------|----------|---------|
+| GET | `/health` | System | Health and runtime posture |
+| POST | `/auth/token` | Authentication | Operator login |
+| GET | `/auth/me` | Authentication | Current operator |
+| GET | `/workspace/guide` | Dashboard | Workflow guidance |
+| GET | `/dashboard/stats` | Dashboard | Aggregated workflow metrics |
+| GET | `/scenarios` | Investigations | List reference scenarios |
+| GET | `/scenarios/{id}` | Investigations | Scenario detail |
+| POST | `/investigations` | Investigations | Run reference investigation |
+| POST | `/investigations/{id}/case` | Investigations | Open case from investigation |
+| POST | `/datasets/upload` | Datasets | Upload CSV |
+| POST | `/datasets/ingest` | Datasets | Ingest JSON transactions |
+| GET | `/datasets` | Datasets | List datasets |
+| POST | `/datasets/{id}/analyze` | Datasets | Run analysis |
+| GET | `/datasets/{id}/analysis` | Datasets | Read analysis |
+| GET | `/datasets/{id}/explanation` | Datasets | Read operator explanation |
+| POST | `/datasets/{id}/case` | Datasets | Open case from analysis |
+| GET | `/alerts` | Alerts | List alerts |
+| PATCH | `/alerts/{id}` | Alerts | Update alert status or linkage |
+| POST | `/alerts/{id}/case` | Alerts | Open case from alert source |
+| POST | `/cases` | Cases | Create case |
+| GET | `/cases` | Cases | List cases |
+| GET | `/cases/{id}` | Cases | Case detail |
+| PATCH | `/cases/{id}/status` | Cases | Update case lifecycle |
+| POST | `/cases/{id}/comments` | Cases | Add comment |
+| GET | `/audit-events` | Admin | Read audit trail |
+
+### Endpoints by workflow stage
+
+| Stage | Endpoints | Outcome |
+|------|-----------|---------|
+| Authenticate | `POST /auth/token`, `GET /auth/me` | Establish operator session |
+| Learn workflow | `GET /workspace/guide` | Fetch role-aware workflow guidance |
+| Ingest data | `POST /datasets/upload`, `POST /datasets/ingest`, `GET /datasets` | Create and inspect datasets |
+| Analyze data | `POST /datasets/{id}/analyze`, `GET /datasets/{id}/analysis`, `GET /datasets/{id}/explanation` | Score dataset and fetch explanation |
+| Investigate scenarios | `GET /scenarios`, `GET /scenarios/{id}`, `POST /investigations` | Run reference investigation |
+| Work alerts | `GET /alerts`, `PATCH /alerts/{id}`, `POST /alerts/{id}/case` | Triage alert queue and open cases |
+| Work cases | `POST /cases`, `GET /cases`, `GET /cases/{id}`, `PATCH /cases/{id}/status`, `POST /cases/{id}/comments`, `POST /datasets/{id}/case`, `POST /investigations/{id}/case` | Create and manage durable investigations |
+| Monitor platform | `GET /dashboard/stats`, `GET /audit-events`, `GET /health` | Observe queue health, audit trail, and runtime posture |
+
+---
 
 ## Project structure
 
 ```text
 alembic/                               Alembic migrations
 backend/                               Backend container build context
-docs/                                  Architecture, workflows, sample data
+docs/sample_data/                      Sample transaction CSV for local testing
 frontend/                              Next.js application
 src/relational_fraud_intelligence/
   api/                                 FastAPI routes, middleware, dependencies
@@ -209,10 +640,186 @@ tests/                                 Backend unit and API tests
 .github/workflows/                     CI and CD automation
 ```
 
-## Where to read next
+---
 
-- Read [docs/workflows.md](docs/workflows.md) if you want to understand how analysts move from data to case.
-- Read [docs/architecture.md](docs/architecture.md) if you want the system, deployment, and persistence view.
+## Contributing
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 22+
+- Docker & Docker Compose (for the full container stack)
+
+### Development setup
+
+```bash
+# Clone the repository
+git clone <repo-url> && cd relational-AI
+
+# Copy the env template
+cp .env.example .env
+
+# Install backend (with dev extras) and frontend
+make install
+
+# Install pre-commit hooks
+make precommit-install
+```
+
+### Running locally
+
+Start the backend and frontend in separate terminals:
+
+```bash
+# Terminal 1 — backend
+rfi-api
+
+# Terminal 2 — frontend
+npm --prefix frontend run dev
+```
+
+Or bring up the full stack with Docker:
+
+```bash
+docker compose up --build
+```
+
+### Writing a pull request
+
+1. Create a feature branch from `main`.
+2. Keep commits focused — one logical change per commit.
+3. Write or update tests for any new behavior.
+4. Run `make quality` before pushing.
+5. Open a PR with a clear title and description of _what_ changed and _why_.
+
+### Adding a database migration
+
+```bash
+# After changing domain models or table definitions:
+rfi-manage migrate   # applies existing migrations
+# Then create a new Alembic revision manually in alembic/versions/
+```
+
+Follow the existing naming convention: `YYYYMMDD_NNNN_description.py`.
+
+### Code style
+
+- **Backend**: enforced by [Ruff](https://docs.astral.sh/ruff/) (line length 100, Python 3.11 target). Import order and formatting are automatic.
+- **Frontend**: TypeScript strict mode. Prefer explicit types over `any`.
+- **Commits**: use imperative mood ("Add feature" not "Added feature").
+
+## Quality gates
+
+Every pull request must pass:
+
+```bash
+make quality          # runs all checks below in sequence
+```
+
+Individual checks:
+
+| Command | What it does |
+|---------|--------------|
+| `make lint` | Ruff lint on backend source, tests, and migrations |
+| `make format` | Ruff auto-format |
+| `make mypy` | Strict type checking for the backend |
+| `make test` | Backend pytest suite with coverage enforcement (≥ 85%) |
+| `make typecheck` | Frontend TypeScript type checking |
+| `make frontend-test` | Frontend Vitest component tests |
+| `make frontend-build` | Production Next.js build |
+| `pre-commit run --all-files` | Full pre-commit hook sweep |
+
+CI validates:
+
+- Pre-commit on the full repository
+- Backend lint, strict typing, tests, and coverage
+- Frontend typecheck, component tests, and production build
+- Migration and runtime smoke tests with Postgres and Redis
+- Backend and frontend Docker image builds
+
+---
+
+## Security
+
+### Reporting a vulnerability
+
+If you discover a security vulnerability, **do not open a public GitHub issue**. Report it privately by emailing the maintainers or using GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) feature on this repository.
+
+Include:
+
+- A description of the vulnerability and its impact.
+- Steps to reproduce or a proof of concept.
+- The version or commit hash where you found the issue.
+
+We will acknowledge receipt within 48 hours and aim to provide a fix or mitigation plan within 7 days.
+
+### Supported versions
+
+| Version | Supported |
+|---------|-----------|
+| 1.0.x   | ✅ Active |
+| < 1.0   | ❌ No     |
+
+### Security design highlights
+
+**Authentication & authorization**
+
+- Operators authenticate via JWT tokens issued by `/api/v1/auth/token`.
+- Tokens are signed with `HS256` using `RFI_JWT_SECRET`, which **must** be at least 32 characters and must be rotated outside `local` and `test` environments.
+- Bootstrap operator passwords must be at least 12 characters.
+- Routes enforce role-based access: `analyst` and `admin` roles gate different capabilities.
+
+**Rate limiting**
+
+- Login and general API traffic are rate-limited independently.
+- Rate limiting supports in-memory and Redis backends with automatic fallback.
+
+**Audit trail**
+
+- Every request receives a unique `X-Request-ID` and is logged to the audit table.
+- Audit retention is configurable via `RFI_AUDIT_LOG_RETENTION_DAYS` (default: 90).
+- The `rfi-manage prune-audit` command removes expired events.
+
+**Request security**
+
+- CORS origins are explicitly configured via `RFI_CORS_ALLOWED_ORIGINS`.
+- Security headers are applied by the `SecurityHeadersMiddleware`.
+- Cases persist immutable evidence snapshots so later rule or provider changes do not rewrite historical context.
+
+**Provider isolation**
+
+- Optional AI integrations (Hugging Face, RelationalAI) sit behind stable application ports.
+- If a provider fails at startup, the platform records the fallback and continues with deterministic defaults — it never exposes raw provider errors to operators.
+
+### Production configuration checklist
+
+| Setting | Requirement |
+|---------|-------------|
+| `RFI_JWT_SECRET` | ≥ 32 characters, rotated outside local/test |
+| `RFI_BOOTSTRAP_ADMIN_PASSWORD` | ≥ 12 characters |
+| `RFI_BOOTSTRAP_ANALYST_PASSWORD` | ≥ 12 characters |
+| `RFI_APP_ENV` | Set to `production` (blocks default JWT secret) |
+| `RFI_CORS_ALLOWED_ORIGINS` | Restrict to your actual frontend origin |
+| `RFI_RATE_LIMIT_BACKEND` | `redis` recommended for multi-instance deployments |
+
+### Management commands
+
+- `rfi-manage create-operator` — creates named operators for managed environments.
+- `rfi-manage prune-audit` — deletes expired audit events on demand.
+
+---
+
+## Design rules worth preserving
+
+- Keep scoring deterministic and explainable by default.
+- Keep optional providers behind explicit interfaces and fallbacks.
+- Treat alerts and cases as workflow state, not cache.
+- Preserve historical evidence with stored snapshots.
+- Keep dataset analysis as the primary product flow.
+- Alert thresholds stay fixed regardless of provider mode.
+- The explanation layer never decides workflow state on its own.
+
+---
 
 ## License
 
