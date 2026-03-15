@@ -44,6 +44,8 @@ flowchart LR
 ## Documentation map
 
 - [README.md](README.md): product overview, quick start, and repo map
+- [CONTRIBUTING.md](CONTRIBUTING.md): development setup, quality gates, and PR guidelines
+- [SECURITY.md](SECURITY.md): vulnerability reporting and production security checklist
 - [docs/workflows.md](docs/workflows.md): end-to-end operator workflows and lifecycle diagrams
 - [docs/architecture.md](docs/architecture.md): system architecture, deployment, persistence, and runtime model
 - [docs/sample_data/sample_transactions.csv](docs/sample_data/sample_transactions.csv): example dataset for local testing

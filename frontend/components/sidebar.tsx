@@ -8,10 +8,12 @@ import {
   FileSearch,
   LayoutDashboard,
   LogOut,
+  Menu,
   Moon,
   ScrollText,
   Shield,
   Sun,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -29,8 +31,10 @@ type SidebarProps = {
   activeView: ActiveView;
   alerts: FraudAlert[];
   cases: FraudCase[];
+  mobileOpen?: boolean;
   operator: OperatorPrincipal;
   onLogout: () => void;
+  onMobileClose?: () => void;
   onViewChange: (view: ActiveView) => void;
 };
 
@@ -52,8 +56,10 @@ export function Sidebar({
   activeView,
   alerts,
   cases,
+  mobileOpen = false,
   operator,
   onLogout,
+  onMobileClose,
   onViewChange,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -82,89 +88,122 @@ export function Sidebar({
     (v) => !v.adminOnly || operator.role === "admin",
   );
 
+  function handleViewChange(view: ActiveView) {
+    onViewChange(view);
+    onMobileClose?.();
+  }
+
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
-      <div className="sidebar-top">
-        <button
-          className="sidebar-brand"
-          onClick={() => setCollapsed(!collapsed)}
-          type="button"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!collapsed}
-        >
-          <Shield size={22} strokeWidth={2.2} />
-          {!collapsed && <span className="brand-text">Fraud Intelligence</span>}
-        </button>
-      </div>
-
-      <nav className="sidebar-nav">
-        {visibleViews.map((view) => {
-          const isActive = activeView === view.id;
-          const Icon = view.icon;
-          const badge =
-            view.id === "alerts"
-              ? newAlertsCount
-              : view.id === "cases"
-                ? activeCasesCount
-                : 0;
-
-          return (
-            <button
-              key={view.id}
-              className={`sidebar-link ${isActive ? "active" : ""}`}
-              onClick={() => onViewChange(view.id)}
-              type="button"
-              title={view.label}
-              aria-label={view.label}
-            >
-              <Icon size={18} strokeWidth={isActive ? 2.4 : 1.8} />
-              {!collapsed && <span>{view.label}</span>}
-              {badge > 0 && <span className="sidebar-badge">{badge}</span>}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="sidebar-bottom">
-        <button
-          className="sidebar-link"
-          onClick={toggleTheme}
-          type="button"
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
-        </button>
-
-        <div className="sidebar-user">
-          <div className="sidebar-avatar">
-            {operator.display_name
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </div>
-          {!collapsed && (
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{operator.display_name}</span>
-              <span className="sidebar-user-role">{operator.role}</span>
-            </div>
-          )}
+    <>
+      {mobileOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => onMobileClose?.()}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
+        <div className="sidebar-top">
+          <button
+            className="sidebar-brand"
+            onClick={() => setCollapsed(!collapsed)}
+            type="button"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+          >
+            <Shield size={22} strokeWidth={2.2} />
+            {!collapsed && <span className="brand-text">Fraud Intelligence</span>}
+          </button>
         </div>
 
-        <button
-          className="sidebar-link logout"
-          onClick={onLogout}
-          type="button"
-          title="Sign out"
-        >
-          <LogOut size={18} />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
-      </div>
-    </aside>
+        <nav className="sidebar-nav">
+          {visibleViews.map((view) => {
+            const isActive = activeView === view.id;
+            const Icon = view.icon;
+            const badge =
+              view.id === "alerts"
+                ? newAlertsCount
+                : view.id === "cases"
+                  ? activeCasesCount
+                  : 0;
+
+            return (
+              <button
+                key={view.id}
+                className={`sidebar-link ${isActive ? "active" : ""}`}
+                onClick={() => handleViewChange(view.id)}
+                type="button"
+                title={view.label}
+                aria-label={view.label}
+              >
+                <Icon size={18} strokeWidth={isActive ? 2.4 : 1.8} />
+                {!collapsed && <span>{view.label}</span>}
+                {badge > 0 && <span className="sidebar-badge">{badge}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <button
+            className="sidebar-link"
+            onClick={toggleTheme}
+            type="button"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
+          </button>
+
+          <div className="sidebar-user">
+            <div className="sidebar-avatar">
+              {operator.display_name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
+            </div>
+            {!collapsed && (
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name">{operator.display_name}</span>
+                <span className="sidebar-user-role">{operator.role}</span>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="sidebar-link logout"
+            onClick={onLogout}
+            type="button"
+            title="Sign out"
+          >
+            <LogOut size={18} />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+export function MobileMenuButton({
+  onClick,
+  isOpen,
+}: {
+  onClick: () => void;
+  isOpen: boolean;
+}) {
+  return (
+    <button
+      className="mobile-menu-button"
+      onClick={onClick}
+      type="button"
+      aria-label={isOpen ? "Close navigation" : "Open navigation"}
+    >
+      {isOpen ? <X size={22} /> : <Menu size={22} />}
+    </button>
   );
 }
 
@@ -176,6 +215,9 @@ type TopBarProps = {
 };
 
 export function TopBar({ title, subtitle, healthStatus, children }: TopBarProps) {
+  const healthLabel = healthStatus === "ready" ? "Online" : healthStatus ? "Degraded" : null;
+  const healthTone = healthStatus === "ready" ? "good" : "warning";
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -183,12 +225,10 @@ export function TopBar({ title, subtitle, healthStatus, children }: TopBarProps)
         {subtitle && <span className="topbar-subtitle">{subtitle}</span>}
       </div>
       <div className="topbar-right">
-        {healthStatus && (
-          <span
-            className={`topbar-health ${healthStatus === "ready" ? "good" : "warning"}`}
-          >
+        {healthLabel && (
+          <span className={`topbar-health ${healthTone}`}>
             <Activity size={14} />
-            {healthStatus}
+            {healthLabel}
           </span>
         )}
         {children}

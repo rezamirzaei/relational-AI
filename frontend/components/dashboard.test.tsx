@@ -1610,4 +1610,43 @@ describe("Dashboard", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  it("displays a bootstrap error banner when the backend is unreachable", () => {
+    render(
+      <Dashboard
+        backendHealth={null}
+        bootstrapError="The backend is not reachable yet."
+        workspaceGuide={null}
+      />,
+    );
+
+    expect(screen.getByText("The backend is not reachable yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
+  });
+
+  it("shows humanized health status in the TopBar after sign-in", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Online")).toBeInTheDocument();
+    });
+  });
 });

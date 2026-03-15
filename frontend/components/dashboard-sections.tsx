@@ -40,6 +40,7 @@ type DashboardHeaderProps = {
 
 type SignedOutPanelProps = {
   backendHealth: HealthResponse | null;
+  bootstrapError: string | null;
   isAuthenticating: boolean;
   loginError: string | null;
   password: string;
@@ -161,6 +162,7 @@ export function DashboardHeader({
 
 export function SignedOutPanel({
   backendHealth,
+  bootstrapError,
   isAuthenticating,
   loginError,
   password,
@@ -196,6 +198,7 @@ export function SignedOutPanel({
           <span>Operator Sign-In</span>
           <span>Required</span>
         </div>
+        {bootstrapError ? <div className="error-banner" role="alert">{bootstrapError}</div> : null}
         <form className="auth-form" onSubmit={onSubmit}>
           <label className="auth-field">
             <span>Username</span>
@@ -225,17 +228,11 @@ export function SignedOutPanel({
         </form>
         {loginError ? <div className="error-banner">{loginError}</div> : null}
         {showBootstrapCredentials ? (
-          <div className="auth-help">
-            <strong>Development credentials</strong>
+          <details className="auth-help">
+            <summary>Development credentials</summary>
             <p>analyst / AnalystPassword123!</p>
             <p>admin / AdminPassword123!</p>
-          </div>
-        ) : null}
-        {backendHealth?.provider_posture.notes.length ? (
-          <div className="llm-note">
-            <strong>System notes</strong>
-            <p>{backendHealth.provider_posture.notes.join(" ")}</p>
-          </div>
+          </details>
         ) : null}
       </section>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   BenfordChart,
   RiskGauge,
@@ -15,7 +17,7 @@ import {
   OverviewSection,
   SignedOutPanel,
 } from "@/components/dashboard-sections";
-import { Sidebar, TopBar, type ActiveView } from "@/components/sidebar";
+import { MobileMenuButton, Sidebar, TopBar, type ActiveView } from "@/components/sidebar";
 import { SkeletonCard, SkeletonMetricRow, SkeletonList } from "@/components/skeletons";
 import { useDashboardState } from "@/lib/use-dashboard-state";
 import type {
@@ -117,9 +119,11 @@ export function Dashboard({
     audit: "Audit Trail",
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   if (!operator || !authToken) {
     return (
-      <main className="page-shell" style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px 40px" }}>
+      <main id="main-content" className="page-shell" style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px 40px" }}>
         <DashboardHeader
           backendHealth={backendHealth}
           operator={operator}
@@ -127,6 +131,7 @@ export function Dashboard({
         />
         <SignedOutPanel
           backendHealth={backendHealth}
+          bootstrapError={bootstrapError}
           isAuthenticating={isAuthenticating}
           loginError={loginError}
           password={password}
@@ -147,19 +152,26 @@ export function Dashboard({
         activeView={activeView}
         alerts={alerts}
         cases={cases}
+        mobileOpen={mobileMenuOpen}
         operator={operator}
         onLogout={handleLogout}
+        onMobileClose={() => setMobileMenuOpen(false)}
         onViewChange={setActiveView}
       />
 
-      <main className="app-main">
+      <main id="main-content" className="app-main" tabIndex={-1}>
         <TopBar
           title={viewTitles[activeView]}
           subtitle={workspaceGuide?.primary_workflow_title}
           healthStatus={backendHealth?.database_status}
-        />
+        >
+          <MobileMenuButton
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            isOpen={mobileMenuOpen}
+          />
+        </TopBar>
 
-          {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+          {errorMessage ? <div className="error-banner" role="alert" aria-live="assertive">{errorMessage}</div> : null}
 
           {activeView === "overview" && (
             <OverviewSection
@@ -176,13 +188,13 @@ export function Dashboard({
               <section className="content-card overview-hero">
                 <div>
                   <p className="eyebrow">Fraud scenarios</p>
-                  <h2>Validate the rule engine and run structured investigations with seeded data.</h2>
+                  <h2>Run structured fraud scenarios to surface investigation leads.</h2>
                 </div>
                 <div className="llm-note compact">
                   <strong>How it works</strong>
                   <p>
-                    These scenarios use pre-loaded transaction data to test rules, check analysis
-                    accuracy, and help new analysts learn the workflow.
+                    Each scenario contains a set of realistic transactions. Select one to run
+                    the analysis engine, review generated leads, and decide whether to open a case.
                   </p>
                 </div>
               </section>
@@ -513,9 +525,6 @@ export function Dashboard({
                                   </span>
                                 </div>
                                 <p>{signal.rationale}</p>
-                                <span className="signal-meta">
-                                  Confidence: {(signal.confidence * 100).toFixed(0)}%
-                                </span>
                               </article>
                             ))}
                           </div>

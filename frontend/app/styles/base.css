@@ -1,0 +1,54 @@
+/* =====================================================================
+   Reset, Base Styles & Typography
+   ===================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  min-height: 100%;
+  font-family: var(--font-body-stack);
+  background: var(--bg-primary);
+  color: var(--ink-strong);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.5), transparent 60%);
+  z-index: 0;
+}
+:root[data-theme="light"] body::before {
+  background-image:
+    linear-gradient(rgba(16, 37, 45, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 37, 45, 0.03) 1px, transparent 1px);
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--neutral); text-decoration: none; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Typography                                                          */
+/* ------------------------------------------------------------------ */
+.eyebrow, .hero-label, .section-header, .mini-header, .signal-meta, .provider-note, .status-pill {
+  letter-spacing: 0.09em; text-transform: uppercase; font-size: 0.72rem;
+}
+.ops-header h1, .hero-panel h2, .headline-copy h2, .scenario-card h2 { margin: 0; font-family: var(--font-display-stack); }
+h1, h2, h3 { margin: 0; }
+
+.muted-copy, .summary-lead, .hero-copy { color: var(--ink-soft); line-height: 1.65; margin: 0; }
+.muted-copy { max-width: 62ch; }
+.summary-lead { max-width: 66ch; font-size: 1rem; }
+code { padding: 2px 8px; border-radius: 6px; background: var(--bg-inset); font-size: 0.88em; }
+

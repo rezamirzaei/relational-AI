@@ -1,0 +1,38 @@
+/* =====================================================================
+   Responsive Breakpoints
+   ===================================================================== */
+
+@media (max-width: 1280px) {
+  .hero-panel, .workspace-grid, .insight-grid, .content-grid, .metrics-grid,
+  .analysis-workspace-grid, .analysis-summary-grid, .insight-grid.compact,
+  .case-workspace-grid, .case-detail-grid { grid-template-columns: 1fr; }
+  .workflow-strip, .workflow-strip.compact { grid-template-columns: repeat(2, 1fr); }
+  .auth-form { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .sidebar { width: var(--sidebar-collapsed); }
+  .sidebar .brand-text, .sidebar .sidebar-link span, .sidebar .sidebar-user-info { display: none; }
+  .app-main { margin-left: var(--sidebar-collapsed); padding: 0 16px 32px; }
+}
+@media (max-width: 768px) {
+  .ops-header { flex-direction: column; }
+}
+@media (max-width: 640px) {
+  .sidebar { display: none; }
+  .sidebar.mobile-open {
+    display: flex; width: var(--sidebar-width); z-index: 200;
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar-backdrop { display: block; }
+  .mobile-menu-button { display: inline-flex; }
+  .app-main { margin-left: 0; padding: 0 12px 24px; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .workflow-strip, .workflow-strip.compact { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .topbar { flex-direction: row; height: auto; padding: 12px 0; gap: 8px; }
+  .overview-hero { flex-direction: column; }
+  .overview-hero-actions { min-width: 0; width: 100%; }
+  .headline-row { flex-direction: column; }
+  .risk-meter-shell { min-width: auto; width: 100%; }
+}
+

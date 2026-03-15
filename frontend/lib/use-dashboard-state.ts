@@ -6,7 +6,7 @@
  * the component owns rendering.
  */
 
-import { FormEvent, useDeferredValue, useEffect, useState, useTransition } from "react";
+import { FormEvent, useCallback, useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
   addCaseComment,
@@ -202,6 +202,14 @@ export function useDashboardState(
       .toLowerCase()
       .includes(query);
   });
+
+  // Focus management — move focus to <main> when the view changes
+  const changeView = useCallback((view: ActiveView) => {
+    setActiveView(view);
+    requestAnimationFrame(() => {
+      document.getElementById("main-content")?.focus();
+    });
+  }, []);
 
   // Session restore
   useEffect(() => {
@@ -687,7 +695,7 @@ export function useDashboardState(
   const actions: DashboardActions = {
     setUsername,
     setPassword,
-    setActiveView,
+    setActiveView: changeView,
     setSearchQuery,
     handleLogin,
     handleLogout,
