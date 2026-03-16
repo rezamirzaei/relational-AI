@@ -51,4 +51,3 @@ async def test_ping_database_returns_false_on_failure() -> None:
 
     result = await ping_database(factory)  # type: ignore[arg-type]
     assert result is False
-
