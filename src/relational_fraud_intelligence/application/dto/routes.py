@@ -107,6 +107,9 @@ class DatasetResponse(AppModel):
 
 class DatasetListResponse(AppModel):
     datasets: list[DatasetResponse]
+    total: int
+    page: int
+    page_size: int
 
 
 class TransactionIngestBody(AppModel):
