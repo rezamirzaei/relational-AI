@@ -1199,23 +1199,23 @@
             "type": "array"
           },
           "page": {
-            "default": 1,
             "title": "Page",
             "type": "integer"
           },
           "page_size": {
-            "default": 20,
             "title": "Page Size",
             "type": "integer"
           },
           "total": {
-            "default": 0,
             "title": "Total",
             "type": "integer"
           }
         },
         "required": [
-          "datasets"
+          "datasets",
+          "total",
+          "page",
+          "page_size"
         ],
         "title": "DatasetListResponse",
         "type": "object"
@@ -2660,6 +2660,10 @@
         "description": "Lightweight readiness probe response for orchestrators.",
         "properties": {
           "database": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
             "title": "Database",
             "type": "string"
           },
