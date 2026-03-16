@@ -35,8 +35,8 @@ async def test_prepare_database_url_ignores_in_memory_sqlite_path(
 
 async def test_ping_database_returns_false_on_failure() -> None:
     """ping_database must return False (not raise) when the DB is unreachable."""
-    from contextlib import asynccontextmanager
     from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
     from typing import Any
 
     mock_session = AsyncMock()
@@ -51,5 +51,4 @@ async def test_ping_database_returns_false_on_failure() -> None:
 
     result = await ping_database(factory)  # type: ignore[arg-type]
     assert result is False
-
 
