@@ -51,8 +51,14 @@ async def upload_dataset(
     request.state.current_principal = principal
     request.state.audit_action = "upload-dataset"
     request.state.audit_resource_type = "dataset"
+    max_size = container.settings.max_upload_size_bytes
     try:
         content = await file.read()
+        if len(content) > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum upload size of {max_size // (1024 * 1024)} MB.",
+            )
         dataset = await container.dataset_service.upload_csv(
             filename=file.filename or "upload.csv",
             content=content,
@@ -297,3 +303,14 @@ async def get_analysis_explanation(
         return GetAnalysisExplanationResult(explanation=explanation)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+
+
+
+
+
+
+
+
+

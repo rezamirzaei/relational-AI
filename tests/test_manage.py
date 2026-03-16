@@ -137,7 +137,7 @@ async def test_main_dispatches_seed_command(
             return 3
 
     monkeypatch.setattr(manage, "AppSettings", lambda: fake_settings)
-    monkeypatch.setattr(manage, "build_engine", lambda database_url, echo: fake_engine)
+    monkeypatch.setattr(manage, "build_engine", lambda database_url, **kw: fake_engine)
     monkeypatch.setattr(manage, "build_session_factory", lambda engine: "session-factory")
     monkeypatch.setattr(manage, "build_seed_scenarios", lambda: ["scenario"])
     monkeypatch.setattr(manage, "DatabaseInitializer", FakeInitializer)
@@ -196,7 +196,7 @@ async def test_main_dispatches_create_operator_command(
             return "hashed-password"
 
     monkeypatch.setattr(manage, "AppSettings", lambda: fake_settings)
-    monkeypatch.setattr(manage, "build_engine", lambda database_url, echo: fake_engine)
+    monkeypatch.setattr(manage, "build_engine", lambda database_url, **kw: fake_engine)
     monkeypatch.setattr(manage, "build_session_factory", lambda engine: "session-factory")
     monkeypatch.setattr(manage, "build_seed_scenarios", lambda: [])
     monkeypatch.setattr(manage, "DatabaseInitializer", lambda **kwargs: SimpleNamespace())
@@ -244,7 +244,7 @@ async def test_main_dispatches_prune_audit_command(
             return 7
 
     monkeypatch.setattr(manage, "AppSettings", lambda: fake_settings)
-    monkeypatch.setattr(manage, "build_engine", lambda database_url, echo: fake_engine)
+    monkeypatch.setattr(manage, "build_engine", lambda database_url, **kw: fake_engine)
     monkeypatch.setattr(manage, "build_session_factory", lambda engine: "session-factory")
     monkeypatch.setattr(manage, "build_seed_scenarios", lambda: [])
     monkeypatch.setattr(manage, "DatabaseInitializer", lambda **kwargs: SimpleNamespace())

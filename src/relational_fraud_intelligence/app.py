@@ -142,8 +142,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=settings.cors_allowed_methods,
+        allow_headers=settings.cors_allowed_headers,
     )
     app.add_middleware(RequestContextMiddleware, request_id_header=settings.request_id_header)
     app.add_middleware(SecurityHeadersMiddleware)
@@ -162,6 +162,7 @@ _STATUS_TO_ERROR_CODE: dict[int, ErrorCode] = {
     403: ErrorCode.INSUFFICIENT_PERMISSIONS,
     404: ErrorCode.RESOURCE_NOT_FOUND,
     409: ErrorCode.INVALID_STATUS_TRANSITION,
+    413: ErrorCode.VALIDATION_ERROR,
     422: ErrorCode.VALIDATION_ERROR,
     429: ErrorCode.RATE_LIMIT_EXCEEDED,
     500: ErrorCode.INTERNAL_ERROR,

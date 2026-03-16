@@ -22,11 +22,21 @@ class AppSettings(BaseSettings):
     cors_allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3001", "http://localhost:3000"]
     )
+    cors_allowed_methods: list[str] = Field(
+        default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    )
+    cors_allowed_headers: list[str] = Field(
+        default_factory=lambda: ["Authorization", "Content-Type", "X-Request-ID"]
+    )
     database_url: str = "sqlite+pysqlite:///./data/rfi.db"
     database_echo: bool = False
     database_auto_create_schema: bool = True
+    database_pool_size: int = 5
+    database_max_overflow: int = 10
+    database_pool_pre_ping: bool = True
     seed_scenarios_on_startup: bool = True
     request_id_header: str = "X-Request-ID"
+    max_upload_size_bytes: int = 50 * 1024 * 1024  # 50 MB
     jwt_access_token_ttl_minutes: int = 60
     jwt_algorithm: str = "HS256"
     jwt_secret: str = DEFAULT_LOCAL_JWT_SECRET

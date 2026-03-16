@@ -132,7 +132,13 @@ class ApplicationContainer:
 async def build_container(settings: AppSettings | None = None) -> ApplicationContainer:
     app_settings = settings or AppSettings()
 
-    engine = build_engine(app_settings.database_url, echo=app_settings.database_echo)
+    engine = build_engine(
+        app_settings.database_url,
+        echo=app_settings.database_echo,
+        pool_size=app_settings.database_pool_size,
+        max_overflow=app_settings.database_max_overflow,
+        pool_pre_ping=app_settings.database_pool_pre_ping,
+    )
     session_factory = build_session_factory(engine)
     initializer = DatabaseInitializer(
         engine=engine,

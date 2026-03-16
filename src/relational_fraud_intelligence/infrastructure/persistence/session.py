@@ -24,8 +24,17 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
+_logger = __import__("logging").getLogger(__name__)
 
-def build_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
+
+def build_engine(
+    database_url: str,
+    *,
+    echo: bool = False,
+    pool_size: int = 5,
+    max_overflow: int = 10,
+    pool_pre_ping: bool = True,
+) -> AsyncEngine:
     database_url = _normalise_url_for_async(database_url)
     prepare_database_url(database_url)
 
@@ -34,6 +43,12 @@ def build_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
         engine_kwargs["connect_args"] = {"check_same_thread": False}
     if database_url.endswith(":memory:"):
         engine_kwargs["poolclass"] = StaticPool
+
+    # Connection pool tuning for non-SQLite databases (e.g. Postgres)
+    if not database_url.startswith("sqlite"):
+        engine_kwargs["pool_size"] = pool_size
+        engine_kwargs["max_overflow"] = max_overflow
+        engine_kwargs["pool_pre_ping"] = pool_pre_ping
 
     engine = create_async_engine(database_url, **engine_kwargs)
     if database_url.startswith("sqlite"):
@@ -46,9 +61,13 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
 
 
 async def ping_database(session_factory: async_sessionmaker[AsyncSession]) -> bool:
-    async with session_factory() as session:
-        await session.execute(text("SELECT 1"))
-    return True
+    try:
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))
+        return True
+    except Exception:  # noqa: BLE001
+        _logger.warning("Database health-check failed", exc_info=True)
+        return False
 
 
 def prepare_database_url(database_url: str) -> None:

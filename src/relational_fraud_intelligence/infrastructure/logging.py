@@ -21,6 +21,8 @@ class JsonLogFormatter(logging.Formatter):
             payload["status_code"] = record.status_code
         if hasattr(record, "actor_username"):
             payload["actor_username"] = record.actor_username
+        if hasattr(record, "actor_user_id"):
+            payload["actor_user_id"] = record.actor_user_id
 
         # Inject OpenTelemetry trace context when available
         try:
