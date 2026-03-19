@@ -28,7 +28,7 @@ dependencies = [
     "redis==5.2.1",
     "sqlalchemy==2.0.43",
     "uvicorn[standard]==0.41.0",
-    "networkx==3.4.2",
+    "networkx==3.6.1",
     "scipy>=1.14.0",
 ]
 
