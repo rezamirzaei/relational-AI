@@ -25,7 +25,7 @@ dependencies = [
     "pydantic-settings==2.13.1",
     "psycopg[binary]==3.2.10",
     "python-multipart==0.0.22",
-    "redis==5.2.1",
+    "redis==7.3.0",
     "sqlalchemy==2.0.43",
     "uvicorn[standard]==0.41.0",
     "networkx==3.4.2",
