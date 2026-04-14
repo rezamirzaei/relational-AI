@@ -56,6 +56,7 @@ export function InvestigateView({
 }: InvestigateViewProps) {
   const reasoningProvider = activeInvestigation?.provider_summary.active_reasoning_provider ?? "";
   const isRelationalAIShowcaseActive = reasoningProvider.includes("relationalai");
+  const semanticModel = activeInvestigation?.provider_summary.semantic_model ?? null;
 
   return (
     <section className="dashboard-view-stack">
@@ -270,6 +271,48 @@ export function InvestigateView({
                     ))}
                   </div>
                 </section>
+
+                {semanticModel ? (
+                  <section className="content-card emphasis-card">
+                    <div className="mini-header">
+                      <span>RelationalAI Semantic Model</span>
+                      <span>Showcase schema</span>
+                    </div>
+                    <div className="metrics-grid" style={{ marginTop: 12 }}>
+                      <MetricCard label="Concepts" tone="good" value={String(semanticModel.concept_names.length)} />
+                      <MetricCard label="Relationships" tone="neutral" value={String(semanticModel.relationship_names.length)} />
+                      <MetricCard label="Derived rules" tone="warning" value={String(semanticModel.derived_rule_names.length)} />
+                      <MetricCard label="Seeded facts" tone="critical" value={String(semanticModel.seeded_fact_count)} />
+                    </div>
+                    <div className="stack" style={{ marginTop: 12 }}>
+                      <p className="provider-note">{semanticModel.execution_posture}</p>
+                      <p className="eyebrow" style={{ marginBottom: 8 }}>Concepts</p>
+                      <div className="tag-row">
+                        {semanticModel.concept_names.map((concept) => (
+                          <span key={concept} className="tag-pill">{concept}</span>
+                        ))}
+                      </div>
+                      <p className="eyebrow" style={{ marginBottom: 8 }}>Relationships</p>
+                      <div className="tag-row">
+                        {semanticModel.relationship_names.map((relationship) => (
+                          <span key={relationship} className="tag-pill">{relationship}</span>
+                        ))}
+                      </div>
+                      <p className="eyebrow" style={{ marginBottom: 8 }}>Query blueprints</p>
+                      <div className="stack">
+                        {semanticModel.query_blueprints.map((blueprint) => (
+                          <article key={blueprint.code} className="signal-card">
+                            <div className="signal-card-top">
+                              <strong>{blueprint.code}</strong>
+                              <span className="weight-pill">RelationalAI</span>
+                            </div>
+                            <p>{blueprint.description}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
               </div>
 
               <div className="content-grid">

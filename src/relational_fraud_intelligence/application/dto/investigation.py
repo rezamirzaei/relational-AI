@@ -6,6 +6,7 @@ from relational_fraud_intelligence.domain.models import (
     GraphLink,
     InvestigationCase,
     InvestigationMetrics,
+    RelationalAISemanticModelSummary,
     RiskLevel,
     RuleHit,
     ScenarioOverview,
@@ -54,6 +55,7 @@ class ReasonAboutRiskResult(AppModel):
     requested_provider: str
     active_provider: str
     provider_notes: list[str] = Field(default_factory=list)
+    semantic_model: RelationalAISemanticModelSummary | None = None
     risk_level: RiskLevel
     total_risk_score: int
     summary: str

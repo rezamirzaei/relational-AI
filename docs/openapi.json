@@ -2644,6 +2644,16 @@
           "requested_text_provider": {
             "title": "Requested Text Provider",
             "type": "string"
+          },
+          "semantic_model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelationalAISemanticModelSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2677,6 +2687,85 @@
           "database"
         ],
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RelationalAIQueryBlueprint": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "description"
+        ],
+        "title": "RelationalAIQueryBlueprint",
+        "type": "object"
+      },
+      "RelationalAISemanticModelSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "compiled_relation_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Compiled Relation Count",
+            "type": "integer"
+          },
+          "compiled_type_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Compiled Type Count",
+            "type": "integer"
+          },
+          "concept_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Concept Names",
+            "type": "array"
+          },
+          "derived_rule_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived Rule Names",
+            "type": "array"
+          },
+          "execution_posture": {
+            "title": "Execution Posture",
+            "type": "string"
+          },
+          "query_blueprints": {
+            "items": {
+              "$ref": "#/components/schemas/RelationalAIQueryBlueprint"
+            },
+            "title": "Query Blueprints",
+            "type": "array"
+          },
+          "relationship_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relationship Names",
+            "type": "array"
+          },
+          "seeded_fact_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Seeded Fact Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "execution_posture"
+        ],
+        "title": "RelationalAISemanticModelSummary",
         "type": "object"
       },
       "RiskLevel": {

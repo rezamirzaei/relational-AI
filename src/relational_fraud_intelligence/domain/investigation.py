@@ -44,12 +44,29 @@ class InvestigationMetrics(AppModel):
     linked_customer_count: int = Field(ge=0)
 
 
+class RelationalAIQueryBlueprint(AppModel):
+    code: str
+    description: str
+
+
+class RelationalAISemanticModelSummary(AppModel):
+    concept_names: list[str] = Field(default_factory=list)
+    relationship_names: list[str] = Field(default_factory=list)
+    derived_rule_names: list[str] = Field(default_factory=list)
+    query_blueprints: list[RelationalAIQueryBlueprint] = Field(default_factory=list)
+    seeded_fact_count: int = Field(ge=0, default=0)
+    compiled_type_count: int = Field(ge=0, default=0)
+    compiled_relation_count: int = Field(ge=0, default=0)
+    execution_posture: str
+
+
 class ProviderSummary(AppModel):
     requested_reasoning_provider: str
     active_reasoning_provider: str
     requested_text_provider: str
     active_text_provider: str
     notes: list[str] = Field(default_factory=list)
+    semantic_model: RelationalAISemanticModelSummary | None = None
 
 
 class GraphAnalysisResult(AppModel):

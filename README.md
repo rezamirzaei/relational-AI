@@ -189,6 +189,7 @@ This repository is not using RelationalAI as a cosmetic add-on. It is structured
 - the system models **customers, accounts, devices, merchants, and money flow as connected facts**
 - the RelationalAI path now builds an explicit **semantic fraud model** with concepts, relationships, derived rules, and a compiled metamodel summary
 - the RelationalAI path produces investigation notes that explain **which graph motifs mattered**
+- the investigation UI renders the semantic model itself so reviewers can see the concepts, relationships, and query blueprints directly
 - deterministic rules remain the operational baseline, so the showcase is credible rather than magical
 - the UI surfaces the provider posture and the reasoning trace, so reviewers can see what RelationalAI changed
 
@@ -236,7 +237,7 @@ The RelationalAI integration is now explicit and first-class:
 - `relationalai.semantics.Model` is used for both scenario projection and semantic fraud modeling
 - the semantic layer declares concepts such as `Customer`, `Account`, `Device`, `Merchant`, and `Transaction`
 - the model defines relationship facts and derived fraud motifs like shared low-trust device exposure and cross-border merchant exposure
-- the repository compiles that semantic model into a RelationalAI metamodel locally, then surfaces the resulting schema and query catalog in investigation notes
+- the repository compiles that semantic model into a RelationalAI metamodel locally, then surfaces the resulting schema and query catalog in investigation notes and the investigation workspace
 
 When a full external RelationalAI runtime is configured, that same modeling posture is ready to back richer materialized queries instead of stopping at local compilation.
 

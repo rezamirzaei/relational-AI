@@ -30,6 +30,7 @@ class InvestigationCaseAssembler:
             requested_text_provider=command.text_result.requested_provider,
             active_text_provider=command.text_result.active_provider,
             notes=command.text_result.notes + command.reasoning_result.provider_notes,
+            semantic_model=command.reasoning_result.semantic_model,
         )
         investigation_leads = _build_investigation_leads(
             rule_hits=command.reasoning_result.top_rule_hits,

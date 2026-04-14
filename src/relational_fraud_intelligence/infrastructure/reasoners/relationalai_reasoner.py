@@ -25,14 +25,16 @@ from relational_fraud_intelligence.application.dto.investigation import (
     ReasonAboutRiskResult,
 )
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
-from relational_fraud_intelligence.domain.models import RiskLevel
+from relational_fraud_intelligence.domain.models import (
+    RelationalAISemanticModelSummary,
+    RiskLevel,
+)
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk import (
     Config,
     Model,
     create_config,
 )
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_semantic_model import (
-    RelationalAISemanticModelSummary,
     build_semantic_model_summary,
 )
 from relational_fraud_intelligence.settings import AppSettings
@@ -112,6 +114,7 @@ class RelationalAIRiskReasoner:
             update={
                 "requested_provider": "relationalai",
                 "active_provider": "hybrid-relationalai",
+                "semantic_model": projection.semantic_model,
                 "total_risk_score": amplified_score,
                 "risk_level": amplified_level,
                 "summary": summary,

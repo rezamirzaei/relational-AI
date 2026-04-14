@@ -23,6 +23,7 @@ from relational_fraud_intelligence.domain.models import (
     FraudScenario,
     InvestigationMetrics,
     MerchantProfile,
+    RelationalAISemanticModelSummary,
     RiskLevel,
     ScenarioTag,
     TransactionChannel,
@@ -35,9 +36,6 @@ from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasone
     RelationalAIProjection,
     RelationalAIRiskReasoner,
     _score_to_level,
-)
-from relational_fraud_intelligence.infrastructure.reasoners.relationalai_semantic_model import (
-    RelationalAISemanticModelSummary,
 )
 from relational_fraud_intelligence.settings import AppSettings
 

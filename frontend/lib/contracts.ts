@@ -83,6 +83,22 @@ export type GraphAnalysisResult = {
   risk_amplification_factor: number;
 };
 
+export type RelationalAIQueryBlueprint = {
+  code: string;
+  description: string;
+};
+
+export type RelationalAISemanticModelSummary = {
+  concept_names: string[];
+  relationship_names: string[];
+  derived_rule_names: string[];
+  query_blueprints: RelationalAIQueryBlueprint[];
+  seeded_fact_count: number;
+  compiled_type_count: number;
+  compiled_relation_count: number;
+  execution_posture: string;
+};
+
 export type InvestigationResponse = {
   investigation: {
     scenario: ScenarioOverview;
@@ -102,6 +118,7 @@ export type InvestigationResponse = {
       requested_text_provider: string;
       active_text_provider: string;
       notes: string[];
+      semantic_model: RelationalAISemanticModelSummary | null;
     };
     top_rule_hits: RuleHit[];
     graph_links: GraphLink[];

@@ -657,6 +657,25 @@ function buildInvestigationResponse(
         requested_text_provider: "keyword",
         active_text_provider: "keyword",
         notes: ["Deterministic fraud heuristics are active."],
+        semantic_model: {
+          concept_names: ["Customer", "Device", "Merchant", "Transaction"],
+          relationship_names: [
+            "customer_uses_device",
+            "customer_transacts_with_merchant",
+          ],
+          derived_rule_names: ["shared-low-trust-device-exposure"],
+          query_blueprints: [
+            {
+              code: "shared-low-trust-devices",
+              description: "Find customers connected through low-trust devices.",
+            },
+          ],
+          seeded_fact_count: 18,
+          compiled_type_count: 10,
+          compiled_relation_count: 9,
+          execution_posture:
+            "Local showcase mode compiles the semantic fraud model into a RelationalAI metamodel without requiring remote query execution.",
+        },
       },
       top_rule_hits: [
         {
@@ -1024,6 +1043,8 @@ describe("Dashboard", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Potential shared-device coordination ring")).toBeInTheDocument();
+      expect(screen.getByText("RelationalAI Semantic Model")).toBeInTheDocument();
+      expect(screen.getByText("shared-low-trust-devices")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Create linked case from investigation" }));

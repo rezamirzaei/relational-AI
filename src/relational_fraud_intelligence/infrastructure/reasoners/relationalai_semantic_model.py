@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
-
 from relational_fraud_intelligence.application.dto.investigation import (
     ReasonAboutRiskCommand,
+)
+from relational_fraud_intelligence.domain.models import (
+    RelationalAIQueryBlueprint,
+    RelationalAISemanticModelSummary,
 )
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk import (
     Config,
@@ -15,22 +17,6 @@ from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk imp
     Number,
     String,
 )
-
-
-class RelationalAIQueryBlueprint(BaseModel):
-    code: str
-    description: str
-
-
-class RelationalAISemanticModelSummary(BaseModel):
-    concept_names: list[str]
-    relationship_names: list[str]
-    derived_rule_names: list[str]
-    query_blueprints: list[RelationalAIQueryBlueprint]
-    seeded_fact_count: int
-    compiled_type_count: int
-    compiled_relation_count: int
-    execution_posture: str
 
 
 def build_semantic_model_summary(

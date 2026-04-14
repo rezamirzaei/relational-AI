@@ -65,6 +65,8 @@ from relational_fraud_intelligence.domain.investigation import (
     InvestigationLead,
     InvestigationMetrics,
     ProviderSummary,
+    RelationalAIQueryBlueprint,
+    RelationalAISemanticModelSummary,
     RuleHit,
     TextSignal,
 )
@@ -153,6 +155,8 @@ __all__ = [
     "InvestigationLead",
     "InvestigationMetrics",
     "ProviderSummary",
+    "RelationalAIQueryBlueprint",
+    "RelationalAISemanticModelSummary",
     "RuleHit",
     "TextSignal",
     # alerts
