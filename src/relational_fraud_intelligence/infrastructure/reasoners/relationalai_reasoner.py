@@ -13,9 +13,10 @@ Knowledge Graph (Rel) relations for server-side execution.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from importlib import import_module
+from typing import Any
 
 import networkx as nx
 from pydantic import BaseModel
@@ -71,37 +72,31 @@ class RelationalAIRiskReasoner:
         # Run the full graph analysis suite
         insights = self._run_graph_analysis(command)
 
-        # Build provider notes from projection + insights
-        notes: list[str] = [
-            (
-                "Projected scenario data through RelationalAI semantics "
-                f"({projection.projected_row_count} rows across "
-                f"{', '.join(projection.projected_table_names)})."
-            ),
-        ]
-
         graph_bonus = 0
         for insight in insights:
-            notes.append(f"[{insight.category}] {insight.description}")
             graph_bonus += insight.risk_bonus
 
         # Cap bonus and compute amplified score
         graph_bonus = min(graph_bonus, self._MAX_GRAPH_BONUS)
         amplified_score = min(100, base_result.total_risk_score + graph_bonus)
         amplified_level = _score_to_level(amplified_score)
+        archetype = self._infer_case_study_archetype(insights)
+        notes = self._build_provider_notes(
+            projection=projection,
+            insights=insights,
+            base_score=base_result.total_risk_score,
+            amplified_score=amplified_score,
+            archetype=archetype,
+        )
 
-        if graph_bonus > 0:
-            notes.append(
-                f"Graph analysis amplified the risk score by +{graph_bonus} "
-                f"({base_result.total_risk_score} → {amplified_score})."
-            )
-
-        # Update summary if risk level changed
         summary = base_result.summary
+        if archetype is not None:
+            summary = _append_sentence(summary, f"RelationalAI case fit: {archetype}")
         if amplified_level != base_result.risk_level:
-            summary = (
-                f"{summary} Graph analysis elevated the risk level from "
-                f"{base_result.risk_level.value} to {amplified_level.value}."
+            summary = _append_sentence(
+                summary,
+                "Graph analysis elevated the risk level from "
+                f"{base_result.risk_level.value} to {amplified_level.value}",
             )
 
         return base_result.model_copy(
@@ -117,6 +112,51 @@ class RelationalAIRiskReasoner:
                 ],
             },
         )
+
+    def _build_provider_notes(
+        self,
+        *,
+        projection: RelationalAIProjection,
+        insights: list[GraphInsight],
+        base_score: int,
+        amplified_score: int,
+        archetype: str | None,
+    ) -> list[str]:
+        table_names = ", ".join(projection.projected_table_names)
+        notes: list[str] = [
+            (
+                "RelationalAI showcase mode projected the scenario into relational facts "
+                f"({projection.projected_row_count} rows across {table_names})."
+            ),
+            (
+                "RelationalAI mindset: treat customers, accounts, devices, merchants, and "
+                "money flows as a connected system, then score the fraud pattern that emerges."
+            ),
+        ]
+        if insights:
+            category_counts = Counter(insight.category for insight in insights)
+            category_summary = ", ".join(
+                f"{category}×{count}" for category, count in sorted(category_counts.items())
+            )
+            notes.append(
+                "Relational graph motifs evaluated and surfaced as operational evidence: "
+                f"{category_summary}."
+            )
+        else:
+            notes.append(
+                "Relational projection executed cleanly, but no graph motif justified "
+                "raising the baseline score."
+            )
+        if archetype is not None:
+            notes.append(f"RelationalAI case-study archetype: {archetype}.")
+        for insight in insights:
+            notes.append(f"[{insight.category}] {insight.description}")
+        if amplified_score > base_score:
+            notes.append(
+                "Graph analysis amplified the risk score by "
+                f"+{amplified_score - base_score} ({base_score} → {amplified_score})."
+            )
+        return notes
 
     # -- graph analysis orchestrator -----------------------------------------
 
@@ -135,6 +175,92 @@ class RelationalAIRiskReasoner:
         insights.extend(self._detect_money_mule_paths(money_flow, command))
 
         return insights
+
+    @staticmethod
+    def _infer_case_study_archetype(insights: list[GraphInsight]) -> str | None:
+        categories = {insight.category for insight in insights}
+        if {"community-ring", "mule-path"} <= categories:
+            return (
+                "cross-border coordination ring operating through shared "
+                "low-trust infrastructure"
+            )
+        if "circular-flow" in categories:
+            return "round-trip laundering pattern with circular money movement"
+        if "community-ring" in categories:
+            return "shared-device coordination ring with low-trust devices"
+        if "mule-path" in categories:
+            return "cross-border mule corridor using shared intermediaries"
+        if "hub-centrality" in categories:
+            return "central facilitator pattern anchored around a dominant device or merchant"
+        return None
+
+    @staticmethod
+    def _build_projection_payloads(
+        command: ReasonAboutRiskCommand,
+    ) -> dict[str, list[dict[str, Any]]]:
+        scenario = command.scenario
+        return {
+            "transactions": [
+                {
+                    "transaction_id": transaction.transaction_id,
+                    "customer_id": transaction.customer_id,
+                    "account_id": transaction.account_id,
+                    "device_id": transaction.device_id,
+                    "merchant_id": transaction.merchant_id,
+                    "amount": transaction.amount,
+                    "currency": transaction.currency,
+                }
+                for transaction in scenario.transactions
+            ],
+            "customers": [
+                {
+                    "customer_id": customer.customer_id,
+                    "country_code": customer.country_code,
+                    "segment": customer.segment,
+                    "linked_account_count": len(customer.linked_account_ids),
+                    "linked_device_count": len(customer.linked_device_ids),
+                }
+                for customer in scenario.customers
+            ],
+            "accounts": [
+                {
+                    "account_id": account.account_id,
+                    "customer_id": account.customer_id,
+                    "current_balance": account.current_balance,
+                    "average_monthly_inflow": account.average_monthly_inflow,
+                    "chargeback_count": account.chargeback_count,
+                    "manual_review_count": account.manual_review_count,
+                }
+                for account in scenario.accounts
+            ],
+            "devices": [
+                {
+                    "device_id": device.device_id,
+                    "ip_country_code": device.ip_country_code,
+                    "linked_customer_count": len(device.linked_customer_ids),
+                    "trust_score": device.trust_score,
+                }
+                for device in scenario.devices
+            ],
+            "merchants": [
+                {
+                    "merchant_id": merchant.merchant_id,
+                    "country_code": merchant.country_code,
+                    "category": merchant.category,
+                }
+                for merchant in scenario.merchants
+            ],
+            "customer_account_links": [
+                {"customer_id": customer.customer_id, "account_id": account_id}
+                for customer in scenario.customers
+                for account_id in customer.linked_account_ids
+            ],
+            "customer_device_links": [
+                {"customer_id": customer.customer_id, "device_id": device_id}
+                for customer in scenario.customers
+                for device_id in customer.linked_device_ids
+            ],
+        }
 
     # -- graph builders ------------------------------------------------------
 
@@ -416,14 +542,18 @@ class RelationalAIRiskReasoner:
     # -- RelationalAI SDK projection (unchanged) -----------------------------
 
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
+        projection_payloads = self._build_projection_payloads(command)
+        projected_table_names = [
+            table_name for table_name, rows in projection_payloads.items() if rows
+        ]
+        projected_row_count = sum(len(rows) for rows in projection_payloads.values())
         try:
             config_module = import_module("relationalai.config")
             semantics_module = import_module("relationalai.semantics")
         except ModuleNotFoundError:
             return RelationalAIProjection(
-                projected_row_count=len(command.scenario.transactions)
-                + len(command.scenario.devices),
-                projected_table_names=["transactions", "devices"],
+                projected_row_count=projected_row_count,
+                projected_table_names=projected_table_names,
             )
         Config = config_module.Config
         create_config = config_module.create_config
@@ -441,43 +571,13 @@ class RelationalAIRiskReasoner:
             )
 
         model = Model(name="fraud-projection", config=config)
-        transaction_rows = model.data(
-            [
-                {
-                    "transaction_id": transaction.transaction_id,
-                    "account_id": transaction.account_id,
-                    "device_id": transaction.device_id,
-                    "merchant_id": transaction.merchant_id,
-                    "amount": transaction.amount,
-                }
-                for transaction in command.scenario.transactions
-            ]
-        )
-        device_rows = model.data(
-            [
-                {
-                    "device_id": device.device_id,
-                    "linked_customer_count": len(device.linked_customer_ids),
-                    "trust_score": device.trust_score,
-                }
-                for device in command.scenario.devices
-            ]
-        )
-
-        transaction_frame = model.select(
-            transaction_rows.transaction_id,
-            transaction_rows.account_id,
-            transaction_rows.amount,
-        ).to_df()
-        device_frame = model.select(
-            device_rows.device_id,
-            device_rows.linked_customer_count,
-            device_rows.trust_score,
-        ).to_df()
+        for rows in projection_payloads.values():
+            if rows:
+                model.data(rows)
 
         return RelationalAIProjection(
-            projected_row_count=len(transaction_frame) + len(device_frame),
-            projected_table_names=["transactions", "devices"],
+            projected_row_count=projected_row_count,
+            projected_table_names=projected_table_names,
         )
 
 
@@ -494,3 +594,12 @@ def _score_to_level(total_risk_score: int) -> RiskLevel:
     if total_risk_score >= 35:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
+
+
+def _append_sentence(text: str, sentence: str) -> str:
+    stripped = text.rstrip()
+    if not stripped:
+        return f"{sentence}."
+    if stripped.endswith((".", "!", "?")):
+        return f"{stripped} {sentence}."
+    return f"{stripped}. {sentence}."

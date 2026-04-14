@@ -14,6 +14,9 @@ Relational Fraud Intelligence is a dataset-first fraud triage platform for uploa
 - [Full container stack](#full-container-stack)
 - [Daily operator workflow](#daily-operator-workflow)
 - [Runtime modes](#runtime-modes)
+- [Why this is a RelationalAI showcase](#why-this-is-a-relationalai-showcase)
+- [RelationalAI mindset](#relationalai-mindset)
+- [RelationalAI case study](#relationalai-case-study)
 - [Architecture](#architecture)
 - [Deployment topology](#deployment-topology)
 - [Startup model](#startup-model)
@@ -167,6 +170,61 @@ The compose stack starts Postgres, Redis, the FastAPI backend, and the Next.js f
 
 If an optional provider cannot start cleanly, the platform records the fallback in runtime notes and continues serving with deterministic defaults.
 
+Run the product in dedicated RelationalAI showcase mode:
+
+```bash
+export RFI_REASONING_PROVIDER=relationalai
+export RFI_RELATIONALAI_USE_EXTERNAL_CONFIG=false
+export RFI_RELATIONALAI_DUCKDB_PATH=data/relationalai-showcase.duckdb
+rfi-api
+```
+
+The investigation workspace will then expose `Hybrid RelationalAI` as the active reasoning provider whenever the relational adapter is contributing to the decision.
+
+## Why this is a RelationalAI showcase
+
+This repository is not using RelationalAI as a cosmetic add-on. It is structured to show the **mindset** behind relational reasoning in a production-shaped application:
+
+- the product contract stays stable while the reasoning provider changes
+- the system models **customers, accounts, devices, merchants, and money flow as connected facts**
+- the RelationalAI path produces investigation notes that explain **which graph motifs mattered**
+- deterministic rules remain the operational baseline, so the showcase is credible rather than magical
+- the UI surfaces the provider posture and the reasoning trace, so reviewers can see what RelationalAI changed
+
+That combination makes the project useful as:
+
+- a **showcase** for hybrid RelationalAI integration behind a real workflow
+- a **case study** in turning fraud rows into relationship-first evidence
+- a **mindset example** for keeping AI/reasoning providers behind clean application ports
+
+## RelationalAI mindset
+
+The core idea is simple: **fraud is usually not a row problem; it is a relationship problem**.
+
+In this codebase, the RelationalAI path follows five rules:
+
+1. **Project facts, not just transactions.** The reasoner projects customers, accounts, devices, merchants, and relationship links so the scenario can be evaluated as a graph of interacting entities.
+2. **Ask structure-first questions.** The reasoning layer looks for circular flows, facilitator hubs, low-trust communities, and mule paths before it escalates workflow decisions.
+3. **Separate reasoning from workflow.** Alerts, cases, dashboards, and explanations do not depend on a specific provider implementation.
+4. **Keep deterministic ground truth.** Local rules remain the baseline score so the RelationalAI path is an amplifier, not an excuse to hide logic.
+5. **Explain the relational story.** Provider notes describe the projected facts, the graph motifs, and the likely fraud archetype so the output reads like an investigation artifact.
+
+## RelationalAI case study
+
+### Cross-border shared-device mule ring
+
+This repo is strongest when you read it as a worked example of a relational fraud problem:
+
+1. Two or more customers transact through the same low-trust device.
+2. Their accounts connect to overlapping merchants or transfer rails.
+3. The graph exposes a path between accounts that would look harmless in isolated row-level review.
+4. The RelationalAI path identifies the scenario as a **coordination ring**, a **mule corridor**, or a **central facilitator** pattern.
+5. The product turns that reasoning into alerts, case creation, provider notes, and operator actions.
+
+That is the intended showcase story: not "we called a library", but "we modeled the investigation as relationships, then used RelationalAI to explain why the network is suspicious."
+
+The current hybrid implementation deliberately keeps the product runnable offline. It uses RelationalAI semantics for projection and preserves a deterministic local fallback, while still making the relational reasoning steps visible in the investigation result. That makes the repository practical for demos, code review, and architecture discussion without weakening the RelationalAI narrative.
+
 ---
 
 ## Architecture
@@ -246,6 +304,7 @@ graph TB
 - Reference scenarios are persistent seed data used for validation and controlled investigations.
 - Scoring logic is deterministic by default and remains the source of truth.
 - Optional AI integrations sit behind stable ports and fall back instead of taking the platform down.
+- The RelationalAI path is intentionally hybrid: it projects relational facts, scores graph motifs, and leaves workflow orchestration unchanged.
 - Alerts and cases are durable workflow state, not transient derived views.
 - Cases persist an immutable evidence snapshot so historical investigations stay stable.
 

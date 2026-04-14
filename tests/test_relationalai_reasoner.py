@@ -189,6 +189,78 @@ class TestProjectionFallback:
         assert projection.projected_row_count == 3
         assert projection.projected_table_names == ["transactions", "devices"]
 
+    def test_projects_relational_context_tables_when_entities_are_present(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reasoner, _ = _build_reasoner()
+        command = ReasonAboutRiskCommand(
+            scenario=_make_scenario(
+                customers=[
+                    CustomerProfile(
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=["d1"],
+                    ),
+                ],
+                accounts=[
+                    AccountProfile(
+                        account_id="a1",
+                        customer_id="c1",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=1500.0,
+                        average_monthly_inflow=2400.0,
+                        chargeback_count=0,
+                        manual_review_count=0,
+                    ),
+                ],
+                devices=[
+                    DeviceProfile(
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1"],
+                        trust_score=0.8,
+                    ),
+                ],
+                merchants=[
+                    MerchantProfile(
+                        merchant_id="m1",
+                        display_name="Gift Card World",
+                        country_code="US",
+                        category="digital_goods",
+                        description="Gift cards",
+                    ),
+                ],
+                transactions=[
+                    _make_txn("t1", "c1", "a1", "d1", "m1", 100.0),
+                ],
+            ),
+            text_signals=[],
+        )
+
+        def _missing_module(name: str) -> object:
+            raise ModuleNotFoundError(name)
+
+        monkeypatch.setattr(relationalai_reasoner, "import_module", _missing_module)
+
+        projection = RelationalAIRiskReasoner._project_scenario(reasoner, command)
+
+        assert projection.projected_row_count == 7
+        assert projection.projected_table_names == [
+            "transactions",
+            "customers",
+            "accounts",
+            "devices",
+            "merchants",
+            "customer_account_links",
+            "customer_device_links",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Unit tests for individual graph analysis methods
@@ -593,6 +665,85 @@ class TestReasonIntegration:
         # Provider notes should contain graph findings
         graph_notes = [n for n in result.provider_notes if "[" in n]
         assert len(graph_notes) >= 1  # at least one graph insight
+
+    def test_reason_emits_showcase_and_case_study_notes(self) -> None:
+        reasoner, local = _build_reasoner()
+        base = _make_base_result(score=58)
+        local.reason.return_value = base
+
+        cmd = ReasonAboutRiskCommand(
+            scenario=_make_scenario(
+                customers=[
+                    CustomerProfile(
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=["d1"],
+                    ),
+                    CustomerProfile(
+                        customer_id="c2",
+                        full_name="Bob",
+                        country_code="NG",
+                        segment="consumer",
+                        declared_income_band="$30k",
+                        linked_account_ids=["a2"],
+                        linked_device_ids=["d1"],
+                    ),
+                ],
+                accounts=[
+                    AccountProfile(
+                        account_id="a1",
+                        customer_id="c1",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=5000.0,
+                        average_monthly_inflow=3000.0,
+                        chargeback_count=0,
+                        manual_review_count=0,
+                    ),
+                    AccountProfile(
+                        account_id="a2",
+                        customer_id="c2",
+                        opened_at=datetime(2026, 1, 1),
+                        current_balance=2000.0,
+                        average_monthly_inflow=1500.0,
+                        chargeback_count=0,
+                        manual_review_count=0,
+                    ),
+                ],
+                devices=[
+                    DeviceProfile(
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1", "c2"],
+                        trust_score=0.2,
+                    ),
+                ],
+                merchants=[
+                    MerchantProfile(
+                        merchant_id="m1",
+                        display_name="Wire Hub",
+                        country_code="US",
+                        category="money_transfer",
+                        description="Transfers",
+                    ),
+                ],
+                transactions=[
+                    _make_txn("t1", "c1", "a1", "d1", "m1", 3000.0),
+                    _make_txn("t2", "c2", "a2", "d1", "m1", 2800.0, 5),
+                ],
+            ),
+            text_signals=[],
+        )
+
+        result = reasoner.reason(cmd)
+
+        assert any("RelationalAI showcase mode projected" in note for note in result.provider_notes)
+        assert any("RelationalAI mindset:" in note for note in result.provider_notes)
+        assert any("RelationalAI case-study archetype:" in note for note in result.provider_notes)
 
     def test_graph_bonus_capped_at_max(self) -> None:
         reasoner, local = _build_reasoner()

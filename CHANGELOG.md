@@ -21,12 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SECURITY.md` vulnerability reporting policy.
 - `.env.example` with all configuration variables documented.
 - `py.typed` PEP 561 marker for downstream type consumers.
+- Dedicated RelationalAI showcase documentation covering mindset, hybrid reasoning, and a worked fraud case study.
 
 ### Changed
 - Version source of truth consolidated to `__init__.__version__` (was mismatched).
 - `.dockerignore` expanded to exclude tests, docs, and build artifacts.
 - Backend Dockerfile converted from single-stage to multi-stage.
 - Pre-commit config now includes `detect-secrets` hook.
+- RelationalAI reasoning now projects richer relational context, emits clearer case-study notes, and surfaces the active reasoning provider more explicitly in the investigation UI.
 
 ### Fixed
 - `__init__.py` version mismatch (was `0.1.0`, now `1.0.0` matching `pyproject.toml`).

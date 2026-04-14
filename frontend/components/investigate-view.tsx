@@ -9,6 +9,17 @@ import type {
   TextSignal,
 } from "@/lib/contracts";
 
+function formatProviderName(provider: string): string {
+  const lookup: Record<string, string> = {
+    relationalai: "RelationalAI",
+    "hybrid-relationalai": "Hybrid RelationalAI",
+    "local-rule-engine": "Local rule engine",
+    keyword: "Keyword",
+    huggingface: "Hugging Face",
+  };
+  return lookup[provider] ?? provider;
+}
+
 type InvestigateViewProps = {
   isPending: boolean;
   scenarios: ScenarioOverview[];
@@ -43,6 +54,9 @@ export function InvestigateView({
   onScenarioSelection,
   onCreateCase,
 }: InvestigateViewProps) {
+  const reasoningProvider = activeInvestigation?.provider_summary.active_reasoning_provider ?? "";
+  const isRelationalAIShowcaseActive = reasoningProvider.includes("relationalai");
+
   return (
     <section className="dashboard-view-stack">
       <section className="content-card overview-hero">
@@ -232,16 +246,25 @@ export function InvestigateView({
                     <span>Platform</span>
                   </div>
                   <div className="provider-grid">
-                    <span>Analysis engine</span>
-                    <strong>{activeInvestigation.provider_summary.active_reasoning_provider ? "Active ✓" : "Unavailable"}</strong>
-                    <span>Text analysis</span>
-                    <strong>{activeInvestigation.provider_summary.active_text_provider ? "Active ✓" : "Unavailable"}</strong>
+                    <span>Requested reasoning</span>
+                    <strong>{formatProviderName(activeInvestigation.provider_summary.requested_reasoning_provider)}</strong>
+                    <span>Active reasoning</span>
+                    <strong>{formatProviderName(activeInvestigation.provider_summary.active_reasoning_provider)}</strong>
+                    <span>Requested text analysis</span>
+                    <strong>{formatProviderName(activeInvestigation.provider_summary.requested_text_provider)}</strong>
+                    <span>Active text analysis</span>
+                    <strong>{formatProviderName(activeInvestigation.provider_summary.active_text_provider)}</strong>
                     <span>Database</span>
                     <strong>{backendHealth?.database_status === "ready" ? "Ready ✓" : "Unavailable"}</strong>
                     <span>Rate limiting</span>
                     <strong>{backendHealth?.rate_limit_status === "ready" ? "Ready ✓" : "Degraded"}</strong>
                   </div>
                   <div className="stack">
+                    {isRelationalAIShowcaseActive ? (
+                      <p className="provider-note">
+                        RelationalAI showcase mode is active: deterministic rules stay the baseline, while relational motifs can amplify the investigation when the network structure is suspicious.
+                      </p>
+                    ) : null}
                     {activeInvestigation.provider_summary.notes.map((note) => (
                       <p key={note} className="provider-note">{note}</p>
                     ))}
