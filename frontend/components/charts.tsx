@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { cloneElement, useEffect, useState, type ReactElement } from "react";
 import {
   Bar,
   BarChart,
@@ -74,6 +74,40 @@ function tooltipStyle(t: ChartTheme): React.CSSProperties {
   };
 }
 
+const TEST_CHART_WIDTH = 640;
+const IS_JSDOM = typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent);
+
+type ChartElementProps = {
+  width?: number;
+  height?: number;
+};
+
+function ResponsiveChartFrame({
+  height,
+  children,
+}: {
+  height: number;
+  children: ReactElement<ChartElementProps>;
+}) {
+  return (
+    <div className="chart-container" style={{ height }}>
+      {IS_JSDOM ? (
+        cloneElement(children, { width: TEST_CHART_WIDTH, height })
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+function formatChartLabel(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 /* ------------------------------------------------------------------ */
 /* Colour helpers                                                      */
 /* ------------------------------------------------------------------ */
@@ -111,7 +145,7 @@ type RiskDonutProps = {
 export function RiskDonutChart({ data }: RiskDonutProps) {
   const t = useChartTheme();
   const entries = Object.entries(data).map(([name, value]) => ({
-    name,
+    name: formatChartLabel(name),
     value,
     fill: RISK_COLORS[name] ?? "#7f8f92",
   }));
@@ -119,38 +153,36 @@ export function RiskDonutChart({ data }: RiskDonutProps) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="chart-container" style={{ height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={entries}
-            cx="50%"
-            cy="50%"
-            innerRadius={55}
-            outerRadius={85}
-            paddingAngle={3}
-            dataKey="value"
-            stroke="none"
-            animationDuration={800}
-          >
-            {entries.map((entry) => (
-              <Cell key={entry.name} fill={entry.fill} />
-            ))}
-          </Pie>
-          <Tooltip contentStyle={tooltipStyle(t)} />
-          <Legend
-            verticalAlign="bottom"
-            iconType="circle"
-            iconSize={8}
-            formatter={(value: any) => (
-              <span style={{ color: t.inkSoft, fontSize: "0.78rem", textTransform: "capitalize" }}>
-                {value}
-              </span>
-            )}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveChartFrame height={220}>
+      <PieChart>
+        <Pie
+          data={entries}
+          cx="50%"
+          cy="50%"
+          innerRadius={55}
+          outerRadius={85}
+          paddingAngle={3}
+          dataKey="value"
+          stroke="none"
+          animationDuration={800}
+        >
+          {entries.map((entry) => (
+            <Cell key={entry.name} fill={entry.fill} />
+          ))}
+        </Pie>
+        <Tooltip contentStyle={tooltipStyle(t)} />
+        <Legend
+          verticalAlign="bottom"
+          iconType="circle"
+          iconSize={8}
+          formatter={(value: string | number) => (
+            <span style={{ color: t.inkSoft, fontSize: "0.78rem", textTransform: "capitalize" }}>
+              {value}
+            </span>
+          )}
+        />
+      </PieChart>
+    </ResponsiveChartFrame>
   );
 }
 
@@ -167,7 +199,7 @@ type StatusBarChartProps = {
 export function StatusBarChart({ data, colorMap = STATUS_COLORS }: StatusBarChartProps) {
   const t = useChartTheme();
   const entries = Object.entries(data).map(([name, value]) => ({
-    name,
+    label: formatChartLabel(name),
     value,
     fill: colorMap[name] ?? "#7f8f92",
   }));
@@ -175,28 +207,26 @@ export function StatusBarChart({ data, colorMap = STATUS_COLORS }: StatusBarChar
   if (entries.length === 0) return null;
 
   return (
-    <div className="chart-container" style={{ height: 200 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={entries} layout="vertical" margin={{ left: 10, right: 16, top: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} horizontal={false} />
-          <XAxis type="number" tick={{ fontSize: 11, fill: t.inkMuted }} axisLine={false} tickLine={false} />
-          <YAxis
-            dataKey="name"
-            type="category"
-            tick={{ fontSize: 11, fill: t.inkSoft, textTransform: "capitalize" } as any}
-            axisLine={false}
-            tickLine={false}
-            width={90}
-          />
-          <Tooltip contentStyle={tooltipStyle(t)} />
-          <Bar dataKey="value" radius={[0, 6, 6, 0]} animationDuration={600}>
-            {entries.map((entry) => (
-              <Cell key={entry.name} fill={entry.fill} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveChartFrame height={200}>
+      <BarChart data={entries} layout="vertical" margin={{ left: 10, right: 16, top: 4, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} horizontal={false} />
+        <XAxis type="number" tick={{ fontSize: 11, fill: t.inkMuted }} axisLine={false} tickLine={false} />
+        <YAxis
+          dataKey="label"
+          type="category"
+          tick={{ fontSize: 11, fill: t.inkSoft }}
+          axisLine={false}
+          tickLine={false}
+          width={90}
+        />
+        <Tooltip contentStyle={tooltipStyle(t)} />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]} animationDuration={600}>
+          {entries.map((entry) => (
+            <Cell key={entry.label} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveChartFrame>
   );
 }
 
@@ -226,41 +256,39 @@ export function BenfordChart({ digits }: BenfordChartProps) {
   }));
 
   return (
-    <div className="chart-container" style={{ height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ left: -10, right: 12, top: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} />
-          <XAxis dataKey="digit" tick={{ fontSize: 12, fill: t.inkSoft }} axisLine={false} tickLine={false} />
-          <YAxis
-            tick={{ fontSize: 11, fill: t.inkMuted }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v: number) => `${v}%`}
-          />
-          <Tooltip
-            contentStyle={tooltipStyle(t)}
-            formatter={(value: any) => `${value}%`}
-          />
-          <Legend
-            iconType="circle"
-            iconSize={8}
-            formatter={(value: any) => (
-              <span style={{ color: t.inkSoft, fontSize: "0.78rem" }}>{value}</span>
-            )}
-          />
-          <Bar dataKey="Expected" fill="#5e8fa8" opacity={0.45} radius={[4, 4, 0, 0]} barSize={20} animationDuration={600} />
-          <Bar dataKey="Actual" fill="#d0533a" radius={[4, 4, 0, 0]} barSize={20} animationDuration={600} />
-          <Line
-            type="monotone"
-            dataKey="Expected"
-            stroke="#5e8fa8"
-            strokeWidth={2}
-            strokeDasharray="5 5"
-            dot={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveChartFrame height={240}>
+      <ComposedChart data={chartData} margin={{ left: -10, right: 12, top: 8, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} />
+        <XAxis dataKey="digit" tick={{ fontSize: 12, fill: t.inkSoft }} axisLine={false} tickLine={false} />
+        <YAxis
+          tick={{ fontSize: 11, fill: t.inkMuted }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v: number) => `${v}%`}
+        />
+        <Tooltip
+          contentStyle={tooltipStyle(t)}
+          formatter={(value) => `${String(value)}%`}
+        />
+        <Legend
+          iconType="circle"
+          iconSize={8}
+          formatter={(value: string | number) => (
+            <span style={{ color: t.inkSoft, fontSize: "0.78rem" }}>{value}</span>
+          )}
+        />
+        <Bar dataKey="Expected" fill="#5e8fa8" opacity={0.45} radius={[4, 4, 0, 0]} barSize={20} animationDuration={600} />
+        <Bar dataKey="Actual" fill="#d0533a" radius={[4, 4, 0, 0]} barSize={20} animationDuration={600} />
+        <Line
+          type="monotone"
+          dataKey="Expected"
+          stroke="#5e8fa8"
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          dot={false}
+        />
+      </ComposedChart>
+    </ResponsiveChartFrame>
   );
 }
 
@@ -285,30 +313,29 @@ export function VelocityChart({ spikes }: VelocityChartProps) {
   }));
 
   return (
-    <div className="chart-container" style={{ height: 200 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ left: -10, right: 12, top: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} />
-          <XAxis dataKey="name" tick={{ fontSize: 10, fill: t.inkMuted }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: t.inkMuted }} axisLine={false} tickLine={false} />
-          <Tooltip
-            contentStyle={tooltipStyle(t)}
-            formatter={(value: any, name: any) => {
-              if (name === "zScore") return [`${value}σ`, "Z-Score"];
-              return [String(value), String(name)];
-            }}
-          />
-          <Bar dataKey="zScore" name="Z-Score" radius={[6, 6, 0, 0]} animationDuration={600}>
-            {data.map((entry) => (
-              <Cell
-                key={entry.name}
-                fill={entry.zScore > 3 ? "#d0533a" : entry.zScore > 2 ? "#d48c28" : "#5e8fa8"}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveChartFrame height={200}>
+      <BarChart data={data} margin={{ left: -10, right: 12, top: 8, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.gridStroke} />
+        <XAxis dataKey="name" tick={{ fontSize: 10, fill: t.inkMuted }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: t.inkMuted }} axisLine={false} tickLine={false} />
+        <Tooltip
+          contentStyle={tooltipStyle(t)}
+          formatter={(value, name) => {
+            const seriesName = String(name ?? "");
+            if (seriesName === "zScore") return [`${String(value)}σ`, "Z-Score"];
+            return [String(value), formatChartLabel(seriesName)];
+          }}
+        />
+        <Bar dataKey="zScore" name="Z-Score" radius={[6, 6, 0, 0]} animationDuration={600}>
+          {data.map((entry) => (
+            <Cell
+              key={entry.name}
+              fill={entry.zScore > 3 ? "#d0533a" : entry.zScore > 2 ? "#d48c28" : "#5e8fa8"}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveChartFrame>
   );
 }
 

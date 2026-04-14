@@ -12,7 +12,9 @@ CLI is not an async context.
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from pathlib import Path
+from typing import Any, Protocol
 
 from sqlalchemy import event, text
 from sqlalchemy.engine.url import make_url
@@ -25,6 +27,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 _logger = __import__("logging").getLogger(__name__)
+
+
+class AsyncSessionFactory(Protocol):
+    def __call__(self) -> AbstractAsyncContextManager[AsyncSession]: ...
 
 
 def build_engine(
@@ -60,7 +66,7 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
     return async_sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-async def ping_database(session_factory: async_sessionmaker[AsyncSession]) -> bool:
+async def ping_database(session_factory: AsyncSessionFactory) -> bool:
     try:
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
@@ -97,7 +103,7 @@ def _normalise_url_for_async(database_url: str) -> str:
 
 def _enable_sqlite_foreign_keys(engine: AsyncEngine) -> None:
     @event.listens_for(engine.sync_engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record) -> None:  # type: ignore[no-untyped-def]
+    def set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
         del connection_record
         cursor = dbapi_connection.cursor()
         try:

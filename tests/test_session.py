@@ -49,5 +49,5 @@ async def test_ping_database_returns_false_on_failure() -> None:
     # async_sessionmaker.__call__ returns an async context manager (not a coroutine)
     factory = _fake_session
 
-    result = await ping_database(factory)  # type: ignore[arg-type]
+    result = await ping_database(factory)
     assert result is False

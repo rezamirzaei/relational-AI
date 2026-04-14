@@ -14,6 +14,12 @@ import {
 import type { HealthResponse, OperatorPrincipal } from "@/lib/contracts";
 import { useDashboardState } from "@/lib/use-dashboard-state";
 
+type SubmitEvent = React.FormEvent<HTMLFormElement>;
+
+function createSubmitEvent(): SubmitEvent {
+  return Object.assign(new Event("submit"), { preventDefault: vi.fn() }) as unknown as SubmitEvent;
+}
+
 vi.mock("@/lib/api", () => ({
   addCaseComment: vi.fn(),
   analyzeDataset: vi.fn(),
@@ -168,7 +174,7 @@ describe("useDashboardState", () => {
     expect(result.current[0].username).toBe("analyst");
     expect(result.current[0].password).toBe("AnalystPassword123!");
 
-    const fakeEvent = { preventDefault: vi.fn() } as any;
+    const fakeEvent = createSubmitEvent();
     await act(async () => {
       await result.current[1].handleLogin(fakeEvent);
     });
@@ -194,7 +200,7 @@ describe("useDashboardState", () => {
 
     const { result } = renderHook(() => useDashboardState(backendHealth, null));
 
-    const fakeEvent = { preventDefault: vi.fn() } as any;
+    const fakeEvent = createSubmitEvent();
     await act(async () => {
       result.current[1].setUsername("analyst");
       result.current[1].setPassword("test");
@@ -224,7 +230,7 @@ describe("useDashboardState", () => {
       result.current[1].setPassword("bad");
     });
 
-    const fakeEvent = { preventDefault: vi.fn() } as any;
+    const fakeEvent = createSubmitEvent();
     await act(async () => {
       await result.current[1].handleLogin(fakeEvent);
     });
@@ -280,7 +286,7 @@ describe("useDashboardState", () => {
 
     const { result } = renderHook(() => useDashboardState(backendHealth, null));
 
-    const fakeEvent = { preventDefault: vi.fn() } as any;
+    const fakeEvent = createSubmitEvent();
     await act(async () => {
       result.current[1].setUsername("analyst");
       result.current[1].setPassword("test");
