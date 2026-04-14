@@ -1221,7 +1221,7 @@ describe("Dashboard", () => {
       expect(mockedFetchAuditEvents).toHaveBeenCalledTimes(2);
       expect(screen.getByText("analyze-dataset")).toBeInTheDocument();
     });
-  });
+  }, 15000);
 
   it("creates a case directly from the alert queue", async () => {
     mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));

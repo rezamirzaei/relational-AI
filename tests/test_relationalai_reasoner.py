@@ -156,7 +156,7 @@ class TestScoreToLevel:
 
 
 class TestProjectionFallback:
-    def test_returns_local_projection_when_sdk_is_unavailable(
+    def test_projects_through_explicit_relationalai_imports(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         reasoner, _ = _build_reasoner()
@@ -179,19 +179,31 @@ class TestProjectionFallback:
             text_signals=[],
         )
 
-        def _missing_module(name: str) -> object:
-            raise ModuleNotFoundError(name)
+        projected_rows: list[list[dict[str, object]]] = []
 
-        monkeypatch.setattr(relationalai_reasoner, "import_module", _missing_module)
+        class _FakeModel:
+            def __init__(self, *, name: str, config: object) -> None:
+                assert name == "fraud-projection"
+                assert config == {"kind": "explicit-config"}
+
+            def data(self, rows: list[dict[str, object]]) -> None:
+                projected_rows.append(rows)
+
+        monkeypatch.setattr(
+            relationalai_reasoner,
+            "Config",
+            lambda **_: {"kind": "explicit-config"},
+        )
+        monkeypatch.setattr(relationalai_reasoner, "Model", _FakeModel)
 
         projection = RelationalAIRiskReasoner._project_scenario(reasoner, command)
 
         assert projection.projected_row_count == 3
         assert projection.projected_table_names == ["transactions", "devices"]
+        assert len(projected_rows) == 2
 
     def test_projects_relational_context_tables_when_entities_are_present(
         self,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         reasoner, _ = _build_reasoner()
         command = ReasonAboutRiskCommand(
@@ -243,11 +255,6 @@ class TestProjectionFallback:
             text_signals=[],
         )
 
-        def _missing_module(name: str) -> object:
-            raise ModuleNotFoundError(name)
-
-        monkeypatch.setattr(relationalai_reasoner, "import_module", _missing_module)
-
         projection = RelationalAIRiskReasoner._project_scenario(reasoner, command)
 
         assert projection.projected_row_count == 7
@@ -260,6 +267,43 @@ class TestProjectionFallback:
             "customer_account_links",
             "customer_device_links",
         ]
+
+    def test_uses_external_relationalai_config_when_requested(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        settings = AppSettings(
+            database_url="sqlite:///:memory:",
+            jwt_secret="test-secret-key-for-unit-tests-0001",
+            reasoning_provider="relationalai",
+            relationalai_use_external_config=True,
+        )
+        reasoner = RelationalAIRiskReasoner(settings, MagicMock())
+        command = ReasonAboutRiskCommand(
+            scenario=_make_scenario(
+                transactions=[_make_txn("t1", "c1", "a1", "d1", "m1", 100.0)],
+            ),
+            text_signals=[],
+        )
+
+        external_config = object()
+        model_configs: list[object] = []
+
+        class _FakeModel:
+            def __init__(self, *, name: str, config: object) -> None:
+                assert name == "fraud-projection"
+                model_configs.append(config)
+
+            def data(self, rows: list[dict[str, object]]) -> None:
+                _ = rows
+
+        monkeypatch.setattr(relationalai_reasoner, "create_config", lambda: external_config)
+        monkeypatch.setattr(relationalai_reasoner, "Model", _FakeModel)
+
+        projection = reasoner._project_scenario(command)
+
+        assert projection.projected_row_count == 1
+        assert model_configs == [external_config]
 
 
 # ---------------------------------------------------------------------------

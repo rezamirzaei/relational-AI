@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from importlib import import_module
 from typing import Any
 
 import networkx as nx
@@ -27,6 +26,11 @@ from relational_fraud_intelligence.application.dto.investigation import (
 )
 from relational_fraud_intelligence.application.ports.reasoner import RiskReasoner
 from relational_fraud_intelligence.domain.models import RiskLevel
+from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk import (
+    Config,
+    Model,
+    create_config,
+)
 from relational_fraud_intelligence.settings import AppSettings
 
 # ---------------------------------------------------------------------------
@@ -547,17 +551,6 @@ class RelationalAIRiskReasoner:
             table_name for table_name, rows in projection_payloads.items() if rows
         ]
         projected_row_count = sum(len(rows) for rows in projection_payloads.values())
-        try:
-            config_module = import_module("relationalai.config")
-            semantics_module = import_module("relationalai.semantics")
-        except ModuleNotFoundError:
-            return RelationalAIProjection(
-                projected_row_count=projected_row_count,
-                projected_table_names=projected_table_names,
-            )
-        Config = config_module.Config
-        create_config = config_module.create_config
-        Model = semantics_module.Model
 
         if self._settings.relationalai_use_external_config:
             config = create_config()
