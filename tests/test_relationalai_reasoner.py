@@ -36,6 +36,9 @@ from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasone
     RelationalAIRiskReasoner,
     _score_to_level,
 )
+from relational_fraud_intelligence.infrastructure.reasoners.relationalai_semantic_model import (
+    RelationalAISemanticModelSummary,
+)
 from relational_fraud_intelligence.settings import AppSettings
 
 # ---------------------------------------------------------------------------
@@ -117,6 +120,16 @@ class _StubProjectionReasoner(RelationalAIRiskReasoner):
         return RelationalAIProjection(
             projected_row_count=10,
             projected_table_names=["transactions", "devices"],
+            semantic_model=RelationalAISemanticModelSummary(
+                concept_names=["Customer", "Device"],
+                relationship_names=["customer_uses_device"],
+                derived_rule_names=["shared-low-trust-device-exposure"],
+                query_blueprints=[],
+                seeded_fact_count=10,
+                compiled_type_count=12,
+                compiled_relation_count=11,
+                execution_posture="Local showcase mode compiles the semantic fraud model.",
+            ),
         )
 
 
@@ -195,12 +208,27 @@ class TestProjectionFallback:
             lambda **_: {"kind": "explicit-config"},
         )
         monkeypatch.setattr(relationalai_reasoner, "Model", _FakeModel)
+        monkeypatch.setattr(
+            relationalai_reasoner,
+            "build_semantic_model_summary",
+            lambda *_args, **_kwargs: RelationalAISemanticModelSummary(
+                concept_names=["Customer"],
+                relationship_names=["customer_uses_device"],
+                derived_rule_names=["shared-low-trust-device-exposure"],
+                query_blueprints=[],
+                seeded_fact_count=1,
+                compiled_type_count=2,
+                compiled_relation_count=1,
+                execution_posture="stub",
+            ),
+        )
 
         projection = RelationalAIRiskReasoner._project_scenario(reasoner, command)
 
         assert projection.projected_row_count == 3
         assert projection.projected_table_names == ["transactions", "devices"]
         assert len(projected_rows) == 2
+        assert projection.semantic_model is not None
 
     def test_projects_relational_context_tables_when_entities_are_present(
         self,
@@ -267,6 +295,14 @@ class TestProjectionFallback:
             "customer_account_links",
             "customer_device_links",
         ]
+        assert projection.semantic_model is not None
+        assert projection.semantic_model.seeded_fact_count == 12
+        assert "Customer" in projection.semantic_model.concept_names
+        assert (
+            "customer_uses_device" in projection.semantic_model.relationship_names
+        )
+        assert projection.semantic_model.compiled_type_count > 0
+        assert projection.semantic_model.compiled_relation_count > 0
 
     def test_uses_external_relationalai_config_when_requested(
         self,
@@ -299,6 +335,20 @@ class TestProjectionFallback:
 
         monkeypatch.setattr(relationalai_reasoner, "create_config", lambda: external_config)
         monkeypatch.setattr(relationalai_reasoner, "Model", _FakeModel)
+        monkeypatch.setattr(
+            relationalai_reasoner,
+            "build_semantic_model_summary",
+            lambda *_args, **_kwargs: RelationalAISemanticModelSummary(
+                concept_names=["Customer"],
+                relationship_names=["customer_uses_device"],
+                derived_rule_names=["shared-low-trust-device-exposure"],
+                query_blueprints=[],
+                seeded_fact_count=1,
+                compiled_type_count=2,
+                compiled_relation_count=1,
+                execution_posture="stub",
+            ),
+        )
 
         projection = reasoner._project_scenario(command)
 
@@ -787,6 +837,12 @@ class TestReasonIntegration:
 
         assert any("RelationalAI showcase mode projected" in note for note in result.provider_notes)
         assert any("RelationalAI mindset:" in note for note in result.provider_notes)
+        assert any(
+            "RelationalAI semantics compiled a fraud model" in note
+            for note in result.provider_notes
+        )
+        assert any("Semantic schema:" in note for note in result.provider_notes)
+        assert any("RelationalAI query catalog:" in note for note in result.provider_notes)
         assert any("RelationalAI case-study archetype:" in note for note in result.provider_notes)
 
     def test_graph_bonus_capped_at_max(self) -> None:

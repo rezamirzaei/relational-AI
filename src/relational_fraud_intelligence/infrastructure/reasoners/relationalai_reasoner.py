@@ -31,6 +31,10 @@ from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk imp
     Model,
     create_config,
 )
+from relational_fraud_intelligence.infrastructure.reasoners.relationalai_semantic_model import (
+    RelationalAISemanticModelSummary,
+    build_semantic_model_summary,
+)
 from relational_fraud_intelligence.settings import AppSettings
 
 # ---------------------------------------------------------------------------
@@ -41,6 +45,7 @@ from relational_fraud_intelligence.settings import AppSettings
 class RelationalAIProjection(BaseModel):
     projected_row_count: int
     projected_table_names: list[str]
+    semantic_model: RelationalAISemanticModelSummary | None = None
 
 
 @dataclass(slots=True)
@@ -137,6 +142,38 @@ class RelationalAIRiskReasoner:
                 "money flows as a connected system, then score the fraud pattern that emerges."
             ),
         ]
+        if projection.semantic_model is not None:
+            concept_names = ", ".join(projection.semantic_model.concept_names)
+            relationship_names = ", ".join(
+                projection.semantic_model.relationship_names
+            )
+            query_codes = ", ".join(
+                blueprint.code
+                for blueprint in projection.semantic_model.query_blueprints
+            )
+            notes.extend(
+                [
+                    (
+                        "RelationalAI semantics compiled a fraud model with "
+                        f"{len(projection.semantic_model.concept_names)} concepts, "
+                        f"{len(projection.semantic_model.relationship_names)} "
+                        f"relationships, {len(projection.semantic_model.derived_rule_names)} "
+                        f"derived rules, and {projection.semantic_model.seeded_fact_count} "
+                        "seeded facts "
+                        f"({projection.semantic_model.compiled_type_count} metamodel "
+                        "types / "
+                        f"{projection.semantic_model.compiled_relation_count} "
+                        "metamodel relations)."
+                    ),
+                    (
+                        "Semantic schema: "
+                        f"concepts [{concept_names}]; "
+                        f"relationships [{relationship_names}]."
+                    ),
+                    f"RelationalAI query catalog: {query_codes}.",
+                    projection.semantic_model.execution_posture,
+                ]
+            )
         if insights:
             category_counts = Counter(insight.category for insight in insights)
             category_summary = ", ".join(
@@ -547,6 +584,10 @@ class RelationalAIRiskReasoner:
 
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
         projection_payloads = self._build_projection_payloads(command)
+        semantic_model = build_semantic_model_summary(
+            command,
+            external_config_enabled=self._settings.relationalai_use_external_config,
+        )
         projected_table_names = [
             table_name for table_name, rows in projection_payloads.items() if rows
         ]
@@ -571,6 +612,7 @@ class RelationalAIRiskReasoner:
         return RelationalAIProjection(
             projected_row_count=projected_row_count,
             projected_table_names=projected_table_names,
+            semantic_model=semantic_model,
         )
 
 

@@ -5,6 +5,10 @@ from relationalai.util.tracing import StubTracer, set_tracer  # type: ignore[imp
 
 set_tracer(StubTracer())
 
-from relationalai.semantics import Model  # type: ignore[import-untyped]  # noqa: E402
+from relationalai.semantics import (  # type: ignore[import-untyped]  # noqa: E402
+    Model,
+    Number,
+    String,
+)
 
-__all__ = ["Config", "Model", "create_config"]
+__all__ = ["Config", "Model", "Number", "String", "create_config"]
