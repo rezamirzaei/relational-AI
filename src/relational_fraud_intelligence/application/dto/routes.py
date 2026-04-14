@@ -37,6 +37,10 @@ class ProviderPostureResponse(AppModel):
     notes: list[str]
 
 
+class LivenessResponse(AppModel):
+    live: bool
+
+
 class HealthResponse(AppModel):
     status: Literal["ok", "degraded"]
     app_name: str
@@ -55,6 +59,8 @@ class ReadinessResponse(AppModel):
 
     ready: bool
     database: Literal["ok", "unavailable"]
+    rate_limit: Literal["ready", "degraded", "unavailable"]
+    providers: Literal["ready", "degraded"]
 
 
 # ---------------------------------------------------------------------------

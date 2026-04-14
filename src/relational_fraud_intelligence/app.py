@@ -47,6 +47,9 @@ def _request_id(request: Request) -> str | None:
 
 def create_app() -> FastAPI:
     settings = AppSettings()
+    docs_url = "/docs" if settings.docs_enabled else None
+    redoc_url = "/redoc" if settings.docs_enabled else None
+    openapi_url = "/openapi.json" if settings.docs_enabled else None
 
     app = FastAPI(
         title=settings.app_name,
@@ -58,8 +61,9 @@ def create_app() -> FastAPI:
             "analysis remain the source of truth, while the optional copilot layer explains the "
             "results in operator-facing language."
         ),
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
         lifespan=lifespan,
         openapi_tags=[
             {"name": "System", "description": "Health and readiness endpoints."},

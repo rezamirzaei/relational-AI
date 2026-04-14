@@ -894,11 +894,19 @@ We will acknowledge receipt within 48 hours and aim to provide a fix or mitigati
 | Setting | Requirement |
 |---------|-------------|
 | `RFI_JWT_SECRET` | ≥ 32 characters, rotated outside local/test |
-| `RFI_BOOTSTRAP_ADMIN_PASSWORD` | ≥ 12 characters |
-| `RFI_BOOTSTRAP_ANALYST_PASSWORD` | ≥ 12 characters |
 | `RFI_APP_ENV` | Set to `production` (blocks default JWT secret) |
+| `RFI_DATABASE_AUTO_CREATE_SCHEMA` | `false` outside local/test; run migrations explicitly |
 | `RFI_CORS_ALLOWED_ORIGINS` | Restrict to your actual frontend origin |
-| `RFI_RATE_LIMIT_BACKEND` | `redis` recommended for multi-instance deployments |
+| `RFI_RATE_LIMIT_BACKEND` | `redis` outside local/test |
+| `RFI_ALLOW_BOOTSTRAP_USERS_IN_PRODUCTION` | Keep `false` unless you are intentionally using one-time bootstrap credentials |
+| `RFI_API_DOCS_ENABLED` | Leave unset or `false` in production unless you explicitly want runtime docs exposed |
+| `RFI_OTEL_EXPORTER_OTLP_ENDPOINT` | Required when `RFI_OTEL_ENABLED=true` outside local/test |
+
+### Probe posture
+
+- `/api/v1/livez` is the process liveness probe.
+- `/api/v1/readyz` is the orchestrator readiness probe.
+- The container healthcheck uses `readyz`, not the broader `/health` posture endpoint.
 
 ### Management commands
 

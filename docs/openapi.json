@@ -2444,6 +2444,20 @@
         "title": "ListScenariosResult",
         "type": "object"
       },
+      "LivenessResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "live"
+        ],
+        "title": "LivenessResponse",
+        "type": "object"
+      },
       "LoginCommand": {
         "additionalProperties": false,
         "properties": {
@@ -2677,6 +2691,23 @@
             "title": "Database",
             "type": "string"
           },
+          "providers": {
+            "enum": [
+              "ready",
+              "degraded"
+            ],
+            "title": "Providers",
+            "type": "string"
+          },
+          "rate_limit": {
+            "enum": [
+              "ready",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Rate Limit",
+            "type": "string"
+          },
           "ready": {
             "title": "Ready",
             "type": "boolean"
@@ -2684,7 +2715,9 @@
         },
         "required": [
           "ready",
-          "database"
+          "database",
+          "rate_limit",
+          "providers"
         ],
         "title": "ReadinessResponse",
         "type": "object"
@@ -4567,9 +4600,31 @@
         ]
       }
     },
+    "/api/v1/livez": {
+      "get": {
+        "description": "Process-level probe for orchestrators. Returns 200 while the API process is running.",
+        "operationId": "liveness_api_v1_livez_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/api/v1/readyz": {
       "get": {
-        "description": "Lightweight check for orchestrators (Kubernetes, Docker Compose). Returns 200 if the database is reachable, 503 otherwise.",
+        "description": "Dependency-aware probe for orchestrators (Kubernetes, Docker Compose). Returns 200 when the instance is ready to receive traffic and 503 when a required dependency posture is unavailable.",
         "operationId": "readiness_api_v1_readyz_get",
         "responses": {
           "200": {

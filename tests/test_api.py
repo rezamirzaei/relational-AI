@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import cast
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from relational_fraud_intelligence.app import create_app
+from relational_fraud_intelligence.settings import AppSettings
 
 
 async def test_health_reports_database_and_rate_limit_ready() -> None:
@@ -39,6 +41,78 @@ async def test_health_reports_provider_fallback_when_huggingface_is_requested_wi
     assert payload["provider_posture"]["active_text_signal_provider"] == "keyword"
     assert payload["provider_posture"]["active_explanation_provider"] == "deterministic"
     assert payload["provider_posture"]["notes"]
+
+
+async def test_liveness_and_readiness_probes_report_runtime_status() -> None:
+    with TestClient(create_app()) as client:
+        live_response = client.get("/api/v1/livez")
+        ready_response = client.get("/api/v1/readyz")
+
+    assert live_response.status_code == 200
+    assert live_response.json() == {"live": True}
+    assert ready_response.status_code == 200
+    assert ready_response.json()["ready"] is True
+    assert ready_response.json()["database"] == "ok"
+
+
+async def test_readiness_returns_503_when_database_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeAuditService:
+        async def record_http_event(self, **_kwargs: object) -> None:
+            return None
+
+    class _FakeContainer:
+        def __init__(self) -> None:
+            self.settings = AppSettings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="production-secret-key-for-tests-0001",
+                database_auto_create_schema=False,
+                rate_limit_backend="redis",
+                cors_allowed_origins=["https://console.example.com"],
+                bootstrap_admin_username=None,
+                bootstrap_admin_password=None,
+                bootstrap_analyst_username=None,
+                bootstrap_analyst_password=None,
+            )
+            self.active_rate_limit_backend = "redis"
+            self.requested_text_signal_provider = "keyword"
+            self.active_text_signal_provider = "keyword"
+            self.requested_explanation_provider = "deterministic"
+            self.active_explanation_provider = "deterministic"
+            self.audit_service = _FakeAuditService()
+            self.engine = MagicMock()
+
+        async def is_database_ready(self) -> bool:
+            return False
+
+        def is_rate_limiter_ready(self) -> bool:
+            return True
+
+        async def shutdown(self) -> None:
+            return None
+
+    async def _build_fake_container(_settings: AppSettings) -> _FakeContainer:
+        return _FakeContainer()
+
+    monkeypatch.setattr("relational_fraud_intelligence.app.build_container", _build_fake_container)
+    monkeypatch.setenv("RFI_APP_ENV", "production")
+    monkeypatch.setenv("RFI_JWT_SECRET", "production-secret-key-for-tests-0001")
+    monkeypatch.setenv("RFI_DATABASE_AUTO_CREATE_SCHEMA", "false")
+    monkeypatch.setenv("RFI_RATE_LIMIT_BACKEND", "redis")
+    monkeypatch.setenv("RFI_CORS_ALLOWED_ORIGINS", '["https://console.example.com"]')
+    monkeypatch.delenv("RFI_BOOTSTRAP_ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("RFI_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("RFI_BOOTSTRAP_ANALYST_USERNAME", raising=False)
+    monkeypatch.delenv("RFI_BOOTSTRAP_ANALYST_PASSWORD", raising=False)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/readyz")
+
+    assert response.status_code == 503
+    assert response.json()["ready"] is False
+    assert response.json()["database"] == "unavailable"
 
 
 async def test_protected_routes_require_authentication() -> None:

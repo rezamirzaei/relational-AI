@@ -1,10 +1,11 @@
 """Health and readiness endpoints."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 
 from relational_fraud_intelligence.api._helpers import ContainerDep
 from relational_fraud_intelligence.application.dto.routes import (
     HealthResponse,
+    LivenessResponse,
     ProviderPostureResponse,
     ReadinessResponse,
 )
@@ -13,18 +14,68 @@ router = APIRouter()
 
 
 @router.get(
+    "/livez",
+    response_model=LivenessResponse,
+    tags=["System"],
+    summary="Liveness probe",
+    description=(
+        "Process-level probe for orchestrators. Returns 200 while the API "
+        "process is running."
+    ),
+)
+async def liveness() -> LivenessResponse:
+    return LivenessResponse(live=True)
+
+
+@router.get(
     "/readyz",
     response_model=ReadinessResponse,
     tags=["System"],
     summary="Readiness probe",
     description=(
-        "Lightweight check for orchestrators (Kubernetes, Docker Compose). "
-        "Returns 200 if the database is reachable, 503 otherwise."
+        "Dependency-aware probe for orchestrators (Kubernetes, Docker Compose). "
+        "Returns 200 when the instance is ready to receive traffic and 503 when a "
+        "required dependency posture is unavailable."
     ),
 )
-async def readiness(container: ContainerDep) -> ReadinessResponse:
-    db_ok = await container.is_database_ready()
-    return ReadinessResponse(ready=db_ok, database="ok" if db_ok else "unavailable")
+async def readiness(
+    container: ContainerDep,
+    response: Response,
+) -> ReadinessResponse:
+    database_ready = await container.is_database_ready()
+    rate_limiter_ready = container.is_rate_limiter_ready()
+    rate_limit_backend_degraded = (
+        container.active_rate_limit_backend != container.settings.rate_limit_backend
+    )
+    provider_fallback_degraded = (
+        container.requested_text_signal_provider != container.active_text_signal_provider
+        or container.requested_explanation_provider != container.active_explanation_provider
+    )
+
+    strict_readiness = container.settings.is_production_like
+    ready = database_ready and (
+        not strict_readiness
+        or (
+            rate_limiter_ready
+            and not rate_limit_backend_degraded
+            and not provider_fallback_degraded
+        )
+    )
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return ReadinessResponse(
+        ready=ready,
+        database="ok" if database_ready else "unavailable",
+        rate_limit=(
+            "ready"
+            if rate_limiter_ready and not rate_limit_backend_degraded
+            else "degraded"
+            if rate_limiter_ready
+            else "unavailable"
+        ),
+        providers="degraded" if provider_fallback_degraded else "ready",
+    )
 
 
 @router.get(
