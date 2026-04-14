@@ -112,22 +112,29 @@ def _make_base_result(score: int = 40) -> ReasonAboutRiskResult:
     )
 
 
+def _semantic_summary(**overrides: object) -> RelationalAISemanticModelSummary:
+    summary = RelationalAISemanticModelSummary(
+        concept_names=["Customer", "Device"],
+        relationship_names=["customer_uses_device"],
+        derived_rule_names=["shared-low-trust-device-exposure"],
+        query_blueprints=[],
+        active_rule_packs=["shared-infrastructure"],
+        semantic_findings=[],
+        seeded_fact_count=10,
+        compiled_type_count=12,
+        compiled_relation_count=11,
+        execution_posture="Local showcase mode compiles the semantic fraud model.",
+    )
+    return summary.model_copy(update=overrides)
+
+
 class _StubProjectionReasoner(RelationalAIRiskReasoner):
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
         _ = command
         return RelationalAIProjection(
             projected_row_count=10,
             projected_table_names=["transactions", "devices"],
-            semantic_model=RelationalAISemanticModelSummary(
-                concept_names=["Customer", "Device"],
-                relationship_names=["customer_uses_device"],
-                derived_rule_names=["shared-low-trust-device-exposure"],
-                query_blueprints=[],
-                seeded_fact_count=10,
-                compiled_type_count=12,
-                compiled_relation_count=11,
-                execution_posture="Local showcase mode compiles the semantic fraud model.",
-            ),
+            semantic_model=_semantic_summary(),
         )
 
 
@@ -209,11 +216,8 @@ class TestProjectionFallback:
         monkeypatch.setattr(
             relationalai_reasoner,
             "build_semantic_model_summary",
-            lambda *_args, **_kwargs: RelationalAISemanticModelSummary(
+            lambda *_args, **_kwargs: _semantic_summary(
                 concept_names=["Customer"],
-                relationship_names=["customer_uses_device"],
-                derived_rule_names=["shared-low-trust-device-exposure"],
-                query_blueprints=[],
                 seeded_fact_count=1,
                 compiled_type_count=2,
                 compiled_relation_count=1,
@@ -294,11 +298,14 @@ class TestProjectionFallback:
             "customer_device_links",
         ]
         assert projection.semantic_model is not None
-        assert projection.semantic_model.seeded_fact_count == 12
+        assert projection.semantic_model.seeded_fact_count >= 13
         assert "Customer" in projection.semantic_model.concept_names
         assert (
             "customer_uses_device" in projection.semantic_model.relationship_names
         )
+        assert "merchant-archetypes" in projection.semantic_model.active_rule_packs
+        assert projection.semantic_model.semantic_findings
+        assert projection.semantic_model.query_blueprints[0].rule_pack
         assert projection.semantic_model.compiled_type_count > 0
         assert projection.semantic_model.compiled_relation_count > 0
 
@@ -336,11 +343,8 @@ class TestProjectionFallback:
         monkeypatch.setattr(
             relationalai_reasoner,
             "build_semantic_model_summary",
-            lambda *_args, **_kwargs: RelationalAISemanticModelSummary(
+            lambda *_args, **_kwargs: _semantic_summary(
                 concept_names=["Customer"],
-                relationship_names=["customer_uses_device"],
-                derived_rule_names=["shared-low-trust-device-exposure"],
-                query_blueprints=[],
                 seeded_fact_count=1,
                 compiled_type_count=2,
                 compiled_relation_count=1,
@@ -841,6 +845,11 @@ class TestReasonIntegration:
         )
         assert any("Semantic schema:" in note for note in result.provider_notes)
         assert any("RelationalAI query catalog:" in note for note in result.provider_notes)
+        assert any("Active semantic rule packs:" in note for note in result.provider_notes)
+        assert any(
+            "Typed semantic findings promoted into the investigation:" in note
+            for note in result.provider_notes
+        )
         assert any("RelationalAI case-study archetype:" in note for note in result.provider_notes)
 
     def test_graph_bonus_capped_at_max(self) -> None:
@@ -870,7 +879,12 @@ class TestReasonIntegration:
         base = _make_base_result(score=70)
         local.reason.return_value = base
 
-        def fake_run_graph_analysis(_command: ReasonAboutRiskCommand) -> list[GraphInsight]:
+        def fake_run_graph_analysis(
+            _command: ReasonAboutRiskCommand,
+            *,
+            semantic_findings: list[object],
+        ) -> list[GraphInsight]:
+            assert semantic_findings == []
             return [GraphInsight(category="circular-flow", description="Test cycle", risk_bonus=15)]
 
         monkeypatch.setattr(reasoner, "_run_graph_analysis", fake_run_graph_analysis)
@@ -895,7 +909,7 @@ class TestRunGraphAnalysis:
             scenario=_make_scenario(transactions=[]),
             text_signals=[],
         )
-        insights = reasoner._run_graph_analysis(cmd)
+        insights = reasoner._run_graph_analysis(cmd, semantic_findings=[])
         assert insights == []
 
     def test_runs_all_four_queries(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -937,6 +951,6 @@ class TestRunGraphAnalysis:
             ),
             text_signals=[],
         )
-        reasoner._run_graph_analysis(cmd)
+        reasoner._run_graph_analysis(cmd, semantic_findings=[])
 
         assert all(called.values()), f"Not all queries were called: {called}"

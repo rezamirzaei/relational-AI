@@ -668,6 +668,61 @@ function buildInvestigationResponse(
             {
               code: "shared-low-trust-devices",
               description: "Find customers connected through low-trust devices.",
+              rule_pack: "shared-infrastructure",
+              derived_rule_paths: [
+                "customer_uses_device",
+                "Device.trust_score < 0.5",
+                "SharedLowTrustCustomer",
+              ],
+            },
+          ],
+          active_rule_packs: ["shared-infrastructure", "temporal-windows"],
+          semantic_findings: [
+            {
+              finding_id: "finding::shared-device::dev-1",
+              blueprint_code: "shared-low-trust-devices",
+              title: "Low-trust shared device dev-1 binds 2 customers",
+              narrative:
+                "Device dev-1 is shared by multiple customers and is promoted as semantic evidence.",
+              rule_pack: "shared-infrastructure",
+              derived_rule_path: [
+                "customer_uses_device",
+                "Device.trust_score < 0.5",
+                "SharedLowTrustCustomer",
+              ],
+              semantic_concepts: ["Customer", "Device", "SharedLowTrustCustomer"],
+              matched_entities: [
+                {
+                  entity_type: "device",
+                  entity_id: "dev-1",
+                  display_name: "Device dev-1",
+                },
+                {
+                  entity_type: "customer",
+                  entity_id: "cust-1",
+                  display_name: "Amina Rahman",
+                },
+              ],
+              evidence_edges: [
+                {
+                  relation: "uses-low-trust-device",
+                  explanation: "Amina Rahman authenticated through low-trust device dev-1.",
+                  source: {
+                    entity_type: "customer",
+                    entity_id: "cust-1",
+                    display_name: "Amina Rahman",
+                  },
+                  target: {
+                    entity_type: "device",
+                    entity_id: "dev-1",
+                    display_name: "Device dev-1",
+                  },
+                },
+              ],
+              supporting_transaction_ids: ["txn-1"],
+              risk_contribution: 6,
+              confidence: 0.88,
+              execution_mode: "semantic-compiled",
             },
           ],
           seeded_fact_count: 18,

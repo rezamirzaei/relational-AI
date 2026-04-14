@@ -47,6 +47,24 @@ class InvestigationMetrics(AppModel):
 class RelationalAIQueryBlueprint(AppModel):
     code: str
     description: str
+    rule_pack: str
+    derived_rule_paths: list[str] = Field(default_factory=list)
+
+
+class RelationalAISemanticFinding(AppModel):
+    finding_id: str
+    blueprint_code: str
+    title: str
+    narrative: str
+    rule_pack: str
+    derived_rule_path: list[str] = Field(default_factory=list)
+    semantic_concepts: list[str] = Field(default_factory=list)
+    matched_entities: list[EntityReference] = Field(default_factory=list)
+    evidence_edges: list[GraphLink] = Field(default_factory=list)
+    supporting_transaction_ids: list[str] = Field(default_factory=list)
+    risk_contribution: int = Field(ge=0, default=0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    execution_mode: str
 
 
 class RelationalAISemanticModelSummary(AppModel):
@@ -54,6 +72,8 @@ class RelationalAISemanticModelSummary(AppModel):
     relationship_names: list[str] = Field(default_factory=list)
     derived_rule_names: list[str] = Field(default_factory=list)
     query_blueprints: list[RelationalAIQueryBlueprint] = Field(default_factory=list)
+    active_rule_packs: list[str] = Field(default_factory=list)
+    semantic_findings: list[RelationalAISemanticFinding] = Field(default_factory=list)
     seeded_fact_count: int = Field(ge=0, default=0)
     compiled_type_count: int = Field(ge=0, default=0)
     compiled_relation_count: int = Field(ge=0, default=0)

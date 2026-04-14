@@ -2729,21 +2729,127 @@
             "title": "Code",
             "type": "string"
           },
+          "derived_rule_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived Rule Paths",
+            "type": "array"
+          },
           "description": {
             "title": "Description",
+            "type": "string"
+          },
+          "rule_pack": {
+            "title": "Rule Pack",
             "type": "string"
           }
         },
         "required": [
           "code",
-          "description"
+          "description",
+          "rule_pack"
         ],
         "title": "RelationalAIQueryBlueprint",
+        "type": "object"
+      },
+      "RelationalAISemanticFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "blueprint_code": {
+            "title": "Blueprint Code",
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "derived_rule_path": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived Rule Path",
+            "type": "array"
+          },
+          "evidence_edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphLink"
+            },
+            "title": "Evidence Edges",
+            "type": "array"
+          },
+          "execution_mode": {
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "finding_id": {
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "matched_entities": {
+            "items": {
+              "$ref": "#/components/schemas/EntityReference"
+            },
+            "title": "Matched Entities",
+            "type": "array"
+          },
+          "narrative": {
+            "title": "Narrative",
+            "type": "string"
+          },
+          "risk_contribution": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Risk Contribution",
+            "type": "integer"
+          },
+          "rule_pack": {
+            "title": "Rule Pack",
+            "type": "string"
+          },
+          "semantic_concepts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Semantic Concepts",
+            "type": "array"
+          },
+          "supporting_transaction_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supporting Transaction Ids",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "blueprint_code",
+          "title",
+          "narrative",
+          "rule_pack",
+          "confidence",
+          "execution_mode"
+        ],
+        "title": "RelationalAISemanticFinding",
         "type": "object"
       },
       "RelationalAISemanticModelSummary": {
         "additionalProperties": false,
         "properties": {
+          "active_rule_packs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Rule Packs",
+            "type": "array"
+          },
           "compiled_relation_count": {
             "default": 0,
             "minimum": 0.0,
@@ -2793,6 +2899,13 @@
             "minimum": 0.0,
             "title": "Seeded Fact Count",
             "type": "integer"
+          },
+          "semantic_findings": {
+            "items": {
+              "$ref": "#/components/schemas/RelationalAISemanticFinding"
+            },
+            "title": "Semantic Findings",
+            "type": "array"
           }
         },
         "required": [

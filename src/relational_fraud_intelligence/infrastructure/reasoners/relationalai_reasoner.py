@@ -1,14 +1,9 @@
-"""RelationalAI-enhanced risk reasoner with graph-based fraud detection.
+"""RelationalAI-enhanced risk reasoner with promoted semantic findings.
 
-NOTE: This implementation supports a hybrid mode. It uses the RelationalAI SDK
-to project data into a relational knowledge graph (currently backed by a local
-DuckDB instance for development/demo purposes).
-However, the specific graph algorithms (PageRank, Cycle Detection, etc.) are
-currently executed using NetworkX in memory to allow for fully offline
-operation without requiring a cloud RelationalAI account.
-
-In a production deployment, these algorithms would be translated into Relational
-Knowledge Graph (Rel) relations for server-side execution.
+The current implementation keeps a hybrid posture: RelationalAI semantics
+compile the scenario into typed findings and rule-pack evidence, while a smaller
+residual NetworkX layer still handles generic graph motifs that are not yet
+materialized through the semantic model.
 """
 
 from __future__ import annotations
@@ -79,9 +74,19 @@ class RelationalAIRiskReasoner:
     def reason(self, command: ReasonAboutRiskCommand) -> ReasonAboutRiskResult:
         projection = self._project_scenario(command)
         base_result = self._local_reasoner.reason(command)
+        semantic_findings = (
+            projection.semantic_model.semantic_findings
+            if projection.semantic_model is not None
+            else []
+        )
 
-        # Run the full graph analysis suite
-        insights = self._run_graph_analysis(command)
+        insights = [
+            *self._semantic_insights(semantic_findings),
+            *self._run_graph_analysis(
+                command,
+                semantic_findings=semantic_findings,
+            ),
+        ]
 
         graph_bonus = 0
         for insight in insights:
@@ -106,7 +111,7 @@ class RelationalAIRiskReasoner:
         if amplified_level != base_result.risk_level:
             summary = _append_sentence(
                 summary,
-                "Graph analysis elevated the risk level from "
+                "Relational analysis elevated the risk level from "
                 f"{base_result.risk_level.value} to {amplified_level.value}",
             )
 
@@ -118,6 +123,10 @@ class RelationalAIRiskReasoner:
                 "total_risk_score": amplified_score,
                 "risk_level": amplified_level,
                 "summary": summary,
+                "graph_links": self._merge_graph_links(
+                    base_result.graph_links,
+                    semantic_findings,
+                ),
                 "provider_notes": [
                     *notes,
                     *base_result.provider_notes,
@@ -169,11 +178,19 @@ class RelationalAIRiskReasoner:
                         "metamodel relations)."
                     ),
                     (
+                        "Active semantic rule packs: "
+                        f"{', '.join(projection.semantic_model.active_rule_packs)}."
+                    ),
+                    (
                         "Semantic schema: "
                         f"concepts [{concept_names}]; "
                         f"relationships [{relationship_names}]."
                     ),
                     f"RelationalAI query catalog: {query_codes}.",
+                    (
+                        "Typed semantic findings promoted into the investigation: "
+                        f"{len(projection.semantic_model.semantic_findings)}."
+                    ),
                     projection.semantic_model.execution_posture,
                 ]
             )
@@ -197,32 +214,57 @@ class RelationalAIRiskReasoner:
             notes.append(f"[{insight.category}] {insight.description}")
         if amplified_score > base_score:
             notes.append(
-                "Graph analysis amplified the risk score by "
+                "Relational analysis amplified the risk score by "
                 f"+{amplified_score - base_score} ({base_score} → {amplified_score})."
             )
         return notes
 
     # -- graph analysis orchestrator -----------------------------------------
 
-    def _run_graph_analysis(self, command: ReasonAboutRiskCommand) -> list[GraphInsight]:
-        """Run all graph-based fraud detection queries and collect insights."""
+    def _run_graph_analysis(
+        self,
+        command: ReasonAboutRiskCommand,
+        *,
+        semantic_findings: list[Any],
+    ) -> list[GraphInsight]:
+        """Run residual graph queries that are not already covered semantically."""
         if not command.scenario.transactions:
             return []
 
         money_flow = self._build_money_flow_graph(command)
         entity_graph = self._build_entity_graph(command)
         insights: list[GraphInsight] = []
+        semantic_blueprints = {
+            finding.blueprint_code for finding in semantic_findings
+        }
 
         insights.extend(self._detect_circular_flows(money_flow))
         insights.extend(self._detect_hub_entities(entity_graph))
-        insights.extend(self._detect_suspicious_communities(entity_graph, command))
-        insights.extend(self._detect_money_mule_paths(money_flow, command))
+        if "shared-low-trust-devices" not in semantic_blueprints:
+            insights.extend(self._detect_suspicious_communities(entity_graph, command))
+        if "cross-border-merchant-exposure" not in semantic_blueprints:
+            insights.extend(self._detect_money_mule_paths(money_flow, command))
 
         return insights
 
     @staticmethod
     def _infer_case_study_archetype(insights: list[GraphInsight]) -> str | None:
         categories = {insight.category for insight in insights}
+        if {
+            "semantic-shared-infrastructure",
+            "semantic-cross-border-corridor",
+        } <= categories:
+            return (
+                "cross-border coordination ring operating through shared "
+                "low-trust infrastructure"
+            )
+        if {
+            "semantic-account-lifecycle",
+            "semantic-temporal-window",
+        } <= categories:
+            return "accelerating bust-out pattern with lifecycle pressure and temporal bursts"
+        if "semantic-merchant-archetype" in categories:
+            return "rapid liquidation rail anchored around a high-risk merchant archetype"
         if {"community-ring", "mule-path"} <= categories:
             return (
                 "cross-border coordination ring operating through shared "
@@ -237,6 +279,62 @@ class RelationalAIRiskReasoner:
         if "hub-centrality" in categories:
             return "central facilitator pattern anchored around a dominant device or merchant"
         return None
+
+    @staticmethod
+    def _semantic_insights(semantic_findings: list[Any]) -> list[GraphInsight]:
+        category_lookup = {
+            "shared-low-trust-devices": "semantic-shared-infrastructure",
+            "cross-border-merchant-exposure": "semantic-cross-border-corridor",
+            "merchant-liquidation-archetypes": "semantic-merchant-archetype",
+            "review-pressure-accounts": "semantic-account-lifecycle",
+            "rapid-high-value-windows": "semantic-temporal-window",
+            "investigator-feedback-loop": "semantic-feedback",
+        }
+        insights: list[GraphInsight] = []
+        for finding in semantic_findings:
+            insights.append(
+                GraphInsight(
+                    category=category_lookup.get(
+                        finding.blueprint_code,
+                        f"semantic-{finding.rule_pack}",
+                    ),
+                    description=(
+                        f"{finding.title}. {finding.narrative} "
+                        f"(confidence={finding.confidence:.2f}, "
+                        f"risk bonus={finding.risk_contribution})."
+                    ),
+                    risk_bonus=finding.risk_contribution,
+                )
+            )
+        return insights
+
+    @staticmethod
+    def _merge_graph_links(
+        existing_links: list[Any],
+        semantic_findings: list[Any],
+    ) -> list[Any]:
+        seen: set[tuple[str, str, str, str, str]] = set()
+        merged: list[Any] = []
+        for link in [
+            *existing_links,
+            *[
+                edge
+                for finding in semantic_findings
+                for edge in finding.evidence_edges
+            ],
+        ]:
+            key = (
+                link.relation,
+                link.source.entity_id,
+                link.target.entity_id,
+                link.source.entity_type.value,
+                link.target.entity_type.value,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(link)
+        return merged
 
     @staticmethod
     def _build_projection_payloads(

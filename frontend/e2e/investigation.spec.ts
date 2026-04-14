@@ -42,6 +42,41 @@ const investigationResponse = {
           {
             code: "shared-low-trust-devices",
             description: "Find customers connected through low-trust devices.",
+            rule_pack: "shared-infrastructure",
+            derived_rule_paths: [
+              "customer_uses_device",
+              "Device.trust_score < 0.5",
+              "SharedLowTrustCustomer",
+            ],
+          },
+        ],
+        active_rule_packs: ["shared-infrastructure", "temporal-windows"],
+        semantic_findings: [
+          {
+            finding_id: "finding::shared-device::d1",
+            blueprint_code: "shared-low-trust-devices",
+            title: "Low-trust shared device d1 binds 2 customers",
+            narrative:
+              "The semantic rule path promotes device sharing into an analyst-ready finding.",
+            rule_pack: "shared-infrastructure",
+            derived_rule_path: [
+              "customer_uses_device",
+              "Device.trust_score < 0.5",
+              "SharedLowTrustCustomer",
+            ],
+            semantic_concepts: ["Customer", "Device", "SharedLowTrustCustomer"],
+            matched_entities: [
+              {
+                entity_type: "device",
+                entity_id: "d1",
+                display_name: "Device d1",
+              },
+            ],
+            evidence_edges: [],
+            supporting_transaction_ids: ["t1", "t2"],
+            risk_contribution: 6,
+            confidence: 0.88,
+            execution_mode: "semantic-compiled",
           },
         ],
         seeded_fact_count: 18,

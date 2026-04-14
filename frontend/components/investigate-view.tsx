@@ -282,10 +282,18 @@ export function InvestigateView({
                       <MetricCard label="Concepts" tone="good" value={String(semanticModel.concept_names.length)} />
                       <MetricCard label="Relationships" tone="neutral" value={String(semanticModel.relationship_names.length)} />
                       <MetricCard label="Derived rules" tone="warning" value={String(semanticModel.derived_rule_names.length)} />
+                      <MetricCard label="Rule packs" tone="neutral" value={String(semanticModel.active_rule_packs.length)} />
+                      <MetricCard label="Semantic findings" tone={semanticModel.semantic_findings.length > 0 ? "critical" : "good"} value={String(semanticModel.semantic_findings.length)} />
                       <MetricCard label="Seeded facts" tone="critical" value={String(semanticModel.seeded_fact_count)} />
                     </div>
                     <div className="stack" style={{ marginTop: 12 }}>
                       <p className="provider-note">{semanticModel.execution_posture}</p>
+                      <p className="eyebrow" style={{ marginBottom: 8 }}>Active rule packs</p>
+                      <div className="tag-row">
+                        {semanticModel.active_rule_packs.map((rulePack) => (
+                          <span key={rulePack} className="tag-pill">{rulePack}</span>
+                        ))}
+                      </div>
                       <p className="eyebrow" style={{ marginBottom: 8 }}>Concepts</p>
                       <div className="tag-row">
                         {semanticModel.concept_names.map((concept) => (
@@ -304,11 +312,52 @@ export function InvestigateView({
                           <article key={blueprint.code} className="signal-card">
                             <div className="signal-card-top">
                               <strong>{blueprint.code}</strong>
-                              <span className="weight-pill">RelationalAI</span>
+                              <span className="weight-pill">{blueprint.rule_pack}</span>
                             </div>
                             <p>{blueprint.description}</p>
+                            {blueprint.derived_rule_paths.length > 0 ? (
+                              <span className="signal-meta">
+                                {blueprint.derived_rule_paths.join(" → ")}
+                              </span>
+                            ) : null}
                           </article>
                         ))}
+                      </div>
+                      <p className="eyebrow" style={{ marginBottom: 8 }}>Semantic findings</p>
+                      <div className="stack">
+                        {semanticModel.semantic_findings.length > 0 ? (
+                          semanticModel.semantic_findings.map((finding) => (
+                            <article key={finding.finding_id} className="signal-card">
+                              <div className="signal-card-top">
+                                <strong>{finding.title}</strong>
+                                <span className="weight-pill">{finding.rule_pack}</span>
+                              </div>
+                              <p>{finding.narrative}</p>
+                              <span className="signal-meta">
+                                Confidence {(finding.confidence * 100).toFixed(0)}% · Risk +{finding.risk_contribution} · {finding.execution_mode}
+                              </span>
+                              {finding.derived_rule_path.length > 0 ? (
+                                <span className="signal-meta">
+                                  Rule path: {finding.derived_rule_path.join(" → ")}
+                                </span>
+                              ) : null}
+                              {finding.matched_entities.length > 0 ? (
+                                <span className="signal-meta">
+                                  Entities: {finding.matched_entities.map((entity) => entity.display_name).join(" · ")}
+                                </span>
+                              ) : null}
+                              {finding.supporting_transaction_ids.length > 0 ? (
+                                <span className="signal-meta">
+                                  Transactions: {finding.supporting_transaction_ids.join(" · ")}
+                                </span>
+                              ) : null}
+                            </article>
+                          ))
+                        ) : (
+                          <div className="empty-state">
+                            No semantic findings were promoted for this scenario.
+                          </div>
+                        )}
                       </div>
                     </div>
                   </section>

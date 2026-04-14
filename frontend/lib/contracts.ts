@@ -86,6 +86,24 @@ export type GraphAnalysisResult = {
 export type RelationalAIQueryBlueprint = {
   code: string;
   description: string;
+  rule_pack: string;
+  derived_rule_paths: string[];
+};
+
+export type RelationalAISemanticFinding = {
+  finding_id: string;
+  blueprint_code: string;
+  title: string;
+  narrative: string;
+  rule_pack: string;
+  derived_rule_path: string[];
+  semantic_concepts: string[];
+  matched_entities: EntityReference[];
+  evidence_edges: GraphLink[];
+  supporting_transaction_ids: string[];
+  risk_contribution: number;
+  confidence: number;
+  execution_mode: string;
 };
 
 export type RelationalAISemanticModelSummary = {
@@ -93,6 +111,8 @@ export type RelationalAISemanticModelSummary = {
   relationship_names: string[];
   derived_rule_names: string[];
   query_blueprints: RelationalAIQueryBlueprint[];
+  active_rule_packs: string[];
+  semantic_findings: RelationalAISemanticFinding[];
   seeded_fact_count: number;
   compiled_type_count: number;
   compiled_relation_count: number;
