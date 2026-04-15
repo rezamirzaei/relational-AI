@@ -57,6 +57,11 @@ export function InvestigateView({
   const reasoningProvider = activeInvestigation?.provider_summary.active_reasoning_provider ?? "";
   const isRelationalAIShowcaseActive = reasoningProvider.includes("relationalai");
   const semanticModel = activeInvestigation?.provider_summary.semantic_model ?? null;
+  const externalQueryAugmentedFindingCount = semanticModel
+    ? semanticModel.semantic_findings.filter(
+        (finding) => finding.execution_mode === "external-query-augmented",
+      ).length
+    : 0;
 
   return (
     <section className="dashboard-view-stack">
@@ -264,6 +269,11 @@ export function InvestigateView({
                     {isRelationalAIShowcaseActive ? (
                       <p className="provider-note">
                         RelationalAI showcase mode is active: deterministic rules stay the baseline, while relational motifs can amplify the investigation when the network structure is suspicious.
+                      </p>
+                    ) : null}
+                    {externalQueryAugmentedFindingCount > 0 ? (
+                      <p className="provider-note">
+                        Executed RelationalAI concept queries externally confirmed {externalQueryAugmentedFindingCount} promoted semantic finding{externalQueryAugmentedFindingCount === 1 ? "" : "s"}.
                       </p>
                     ) : null}
                     {activeInvestigation.provider_summary.notes.map((note) => (

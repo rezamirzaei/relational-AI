@@ -194,6 +194,16 @@ class RelationalAIRiskReasoner:
                     projection.semantic_model.execution_posture,
                 ]
             )
+            externally_augmented_findings = sum(
+                1
+                for finding in projection.semantic_model.semantic_findings
+                if finding.execution_mode == "external-query-augmented"
+            )
+            if externally_augmented_findings:
+                notes.append(
+                    "Executed RelationalAI concept queries externally confirmed "
+                    f"{externally_augmented_findings} semantic finding(s)."
+                )
         if insights:
             category_counts = Counter(insight.category for insight in insights)
             category_summary = ", ".join(
@@ -685,15 +695,6 @@ class RelationalAIRiskReasoner:
 
     def _project_scenario(self, command: ReasonAboutRiskCommand) -> RelationalAIProjection:
         projection_payloads = self._build_projection_payloads(command)
-        semantic_model = build_semantic_model_summary(
-            command,
-            external_config_enabled=self._settings.relationalai_use_external_config,
-        )
-        projected_table_names = [
-            table_name for table_name, rows in projection_payloads.items() if rows
-        ]
-        projected_row_count = sum(len(rows) for rows in projection_payloads.values())
-
         if self._settings.relationalai_use_external_config:
             config = create_config()
         else:
@@ -704,6 +705,16 @@ class RelationalAIRiskReasoner:
                 default_connection="local",
                 install_mode=True,
             )
+
+        semantic_model = build_semantic_model_summary(
+            command,
+            external_config_enabled=self._settings.relationalai_use_external_config,
+            model_config=config,
+        )
+        projected_table_names = [
+            table_name for table_name, rows in projection_payloads.items() if rows
+        ]
+        projected_row_count = sum(len(rows) for rows in projection_payloads.values())
 
         model = Model(name="fraud-projection", config=config)
         for rows in projection_payloads.values():

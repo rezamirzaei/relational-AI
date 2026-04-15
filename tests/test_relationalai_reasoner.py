@@ -23,6 +23,7 @@ from relational_fraud_intelligence.domain.models import (
     FraudScenario,
     InvestigationMetrics,
     MerchantProfile,
+    RelationalAISemanticFinding,
     RelationalAISemanticModelSummary,
     RiskLevel,
     ScenarioTag,
@@ -30,12 +31,19 @@ from relational_fraud_intelligence.domain.models import (
     TransactionRecord,
     TransactionStatus,
 )
-from relational_fraud_intelligence.infrastructure.reasoners import relationalai_reasoner
+from relational_fraud_intelligence.infrastructure.reasoners import (
+    relationalai_reasoner,
+    relationalai_semantic_model,
+)
 from relational_fraud_intelligence.infrastructure.reasoners.relationalai_reasoner import (
     GraphInsight,
     RelationalAIProjection,
     RelationalAIRiskReasoner,
     _score_to_level,
+)
+from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk import Config
+from relational_fraud_intelligence.infrastructure.reasoners.relationalai_semantic_model import (
+    build_semantic_model_summary,
 )
 from relational_fraud_intelligence.settings import AppSettings
 
@@ -329,6 +337,7 @@ class TestProjectionFallback:
 
         external_config = object()
         model_configs: list[object] = []
+        semantic_configs: list[object] = []
 
         class _FakeModel:
             def __init__(self, *, name: str, config: object) -> None:
@@ -340,22 +349,116 @@ class TestProjectionFallback:
 
         monkeypatch.setattr(relationalai_reasoner, "create_config", lambda: external_config)
         monkeypatch.setattr(relationalai_reasoner, "Model", _FakeModel)
-        monkeypatch.setattr(
-            relationalai_reasoner,
-            "build_semantic_model_summary",
-            lambda *_args, **_kwargs: _semantic_summary(
+
+        def _build_summary(*_args: object, **kwargs: object) -> RelationalAISemanticModelSummary:
+            semantic_configs.append(kwargs["model_config"])
+            return _semantic_summary(
                 concept_names=["Customer"],
                 seeded_fact_count=1,
                 compiled_type_count=2,
                 compiled_relation_count=1,
                 execution_posture="stub",
-            ),
+            )
+
+        monkeypatch.setattr(
+            relationalai_reasoner,
+            "build_semantic_model_summary",
+            _build_summary,
         )
 
         projection = reasoner._project_scenario(command)
 
         assert projection.projected_row_count == 1
         assert model_configs == [external_config]
+        assert semantic_configs == [external_config]
+
+
+class TestSemanticModelExternalQueries:
+    def test_external_query_execution_augments_semantic_findings(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        query_results = iter(
+            [
+                {"c1", "c2"},
+                set(),
+                set(),
+                set(),
+                set(),
+                set(),
+                set(),
+                set(),
+            ]
+        )
+        monkeypatch.setattr(
+            relationalai_semantic_model,
+            "_query_identifier_values",
+            lambda _fragment: next(query_results),
+        )
+        monkeypatch.setattr(
+            relationalai_semantic_model,
+            "_query_two_column_mapping",
+            lambda _fragment: {"t1": 100.0, "t2": 200.0},
+        )
+
+        command = ReasonAboutRiskCommand(
+            scenario=_make_scenario(
+                customers=[
+                    CustomerProfile(
+                        customer_id="c1",
+                        full_name="Alice",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$50k",
+                        linked_account_ids=["a1"],
+                        linked_device_ids=["d1"],
+                    ),
+                    CustomerProfile(
+                        customer_id="c2",
+                        full_name="Bob",
+                        country_code="US",
+                        segment="consumer",
+                        declared_income_band="$30k",
+                        linked_account_ids=["a2"],
+                        linked_device_ids=["d1"],
+                    ),
+                ],
+                devices=[
+                    DeviceProfile(
+                        device_id="d1",
+                        fingerprint="fp1",
+                        ip_country_code="US",
+                        linked_customer_ids=["c1", "c2"],
+                        trust_score=0.2,
+                    ),
+                ],
+                transactions=[
+                    _make_txn("t1", "c1", "a1", "d1", "m1", 100.0),
+                    _make_txn("t2", "c2", "a2", "d1", "m1", 200.0, minutes_offset=5),
+                ],
+            ),
+            text_signals=[],
+        )
+
+        summary = build_semantic_model_summary(
+            command,
+            external_config_enabled=True,
+            model_config=Config(
+                connections={"local": {"type": "duckdb", "path": ":memory:"}},
+                default_connection="local",
+                install_mode=False,
+            ),
+        )
+
+        assert summary.execution_posture.startswith(
+            "External RelationalAI config is enabled for projection and semantic query"
+        )
+        assert summary.semantic_findings
+        finding = summary.semantic_findings[0]
+        assert finding.execution_mode == "external-query-augmented"
+        assert finding.risk_contribution == 7
+        assert finding.confidence > 0.8
+        assert "External RelationalAI query confirmed" in finding.narrative
 
 
 # ---------------------------------------------------------------------------
@@ -851,6 +954,63 @@ class TestReasonIntegration:
             for note in result.provider_notes
         )
         assert any("RelationalAI case-study archetype:" in note for note in result.provider_notes)
+
+    def test_reason_notes_external_query_confirmations(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reasoner, local = _build_reasoner()
+        local.reason.return_value = _make_base_result(score=40)
+
+        semantic_model = _semantic_summary(
+            active_rule_packs=["shared-infrastructure"],
+            semantic_findings=[
+                RelationalAISemanticFinding(
+                    finding_id="finding::shared-device::d1",
+                    blueprint_code="shared-low-trust-devices",
+                    title="Low-trust shared device d1 binds 2 customers",
+                    narrative="External query already confirmed the low-trust device cluster.",
+                    rule_pack="shared-infrastructure",
+                    derived_rule_path=[],
+                    semantic_concepts=["Customer", "Device"],
+                    matched_entities=[],
+                    evidence_edges=[],
+                    supporting_transaction_ids=[],
+                    risk_contribution=6,
+                    confidence=0.9,
+                    execution_mode="external-query-augmented",
+                )
+            ],
+            execution_posture="External execution is enabled.",
+        )
+
+        monkeypatch.setattr(
+            reasoner,
+            "_project_scenario",
+            MagicMock(
+            return_value=RelationalAIProjection(
+                projected_row_count=2,
+                projected_table_names=["transactions"],
+                semantic_model=semantic_model,
+            ),
+            ),
+        )
+        monkeypatch.setattr(reasoner, "_run_graph_analysis", MagicMock(return_value=[]))
+
+        result = reasoner.reason(
+            ReasonAboutRiskCommand(
+                scenario=_make_scenario(
+                    transactions=[_make_txn("t1", "c1", "a1", "d1", "m1", 100.0)],
+                ),
+                text_signals=[],
+            )
+        )
+
+        assert any(
+            "Executed RelationalAI concept queries externally confirmed 1 semantic finding(s)."
+            in note
+            for note in result.provider_notes
+        )
 
     def test_graph_bonus_capped_at_max(self) -> None:
         reasoner, local = _build_reasoner()

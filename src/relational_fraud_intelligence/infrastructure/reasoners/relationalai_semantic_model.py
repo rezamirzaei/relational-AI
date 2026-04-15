@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 from relational_fraud_intelligence.application.dto.investigation import (
@@ -22,21 +23,42 @@ from relational_fraud_intelligence.infrastructure.reasoners.relationalai_sdk imp
     Model,
     Number,
     String,
+    create_config,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _SemanticHandles:
+    Account: Any
+    CrossBorderCustomer: Any
+    HighValueTransaction: Any
+    InvestigatorAssertion: Any
+    LiquidationMerchant: Any
+    RapidWindowTransaction: Any
+    RecentAccount: Any
+    ReviewPressureAccount: Any
+    SharedLowTrustCustomer: Any
+    Transaction: Any
 
 
 def build_semantic_model_summary(
     command: ReasonAboutRiskCommand,
     *,
     external_config_enabled: bool,
+    model_config: Any | None = None,
 ) -> RelationalAISemanticModelSummary:
-    model = Model(
-        name="fraud-semantics",
-        config=Config(
+    config = model_config or (
+        create_config()
+        if external_config_enabled
+        else Config(
             connections={"local": {"type": "duckdb", "path": ":memory:"}},
             default_connection="local",
             install_mode=False,
-        ),
+        )
+    )
+    model = Model(
+        name="fraud-semantics",
+        config=config,
     )
 
     active_rule_packs = _active_rule_packs(command)
@@ -174,6 +196,18 @@ def build_semantic_model_summary(
     RapidWindowTransaction = model.Concept(
         "RapidWindowTransaction",
         extends=[Transaction],
+    )
+    handles = _SemanticHandles(
+        Account=Account,
+        CrossBorderCustomer=CrossBorderCustomer,
+        HighValueTransaction=HighValueTransaction,
+        InvestigatorAssertion=InvestigatorAssertion,
+        LiquidationMerchant=LiquidationMerchant,
+        RapidWindowTransaction=RapidWindowTransaction,
+        RecentAccount=RecentAccount,
+        ReviewPressureAccount=ReviewPressureAccount,
+        SharedLowTrustCustomer=SharedLowTrustCustomer,
+        Transaction=Transaction,
     )
 
     definitions: list[Any] = []
@@ -339,11 +373,17 @@ def build_semantic_model_summary(
         active_rule_packs=active_rule_packs,
         external_config_enabled=external_config_enabled,
     )
+    if external_config_enabled:
+        findings = _augment_findings_with_external_queries(
+            model=model,
+            handles=handles,
+            findings=findings,
+        )
 
     execution_posture = (
-        "External RelationalAI config is enabled for projection. Semantic rule packs "
-        "are compiled locally and promoted into typed findings that are ready for "
-        "deeper external query execution."
+        "External RelationalAI config is enabled for projection and semantic query "
+        "execution. Typed findings are promoted from compiled rule packs and then "
+        "checked against executed RelationalAI concept queries."
         if external_config_enabled
         else "Local showcase mode compiles the semantic fraud model into a "
         "RelationalAI metamodel and promotes rule-pack findings without requiring "
@@ -498,6 +538,161 @@ def _semantic_findings(
     return [
         finding for finding in findings if finding.rule_pack in active
     ]
+
+
+def _augment_findings_with_external_queries(
+    *,
+    model: Model,
+    handles: _SemanticHandles,
+    findings: list[RelationalAISemanticFinding],
+) -> list[RelationalAISemanticFinding]:
+    if not findings:
+        return findings
+
+    shared_low_trust_customer_ids = _query_identifier_values(
+        model.select(handles.SharedLowTrustCustomer.customer_id)
+    )
+    cross_border_customer_ids = _query_identifier_values(
+        model.select(handles.CrossBorderCustomer.customer_id)
+    )
+    review_pressure_account_ids = _query_identifier_values(
+        model.select(handles.ReviewPressureAccount.account_id)
+    )
+    recent_account_ids = _query_identifier_values(
+        model.select(handles.RecentAccount.account_id)
+    )
+    high_value_transaction_ids = _query_identifier_values(
+        model.select(handles.HighValueTransaction.transaction_id)
+    )
+    rapid_window_transaction_ids = _query_identifier_values(
+        model.select(handles.RapidWindowTransaction.transaction_id)
+    )
+    liquidation_merchant_ids = _query_identifier_values(
+        model.select(handles.LiquidationMerchant.merchant_id)
+    )
+    investigator_assertion_ids = _query_identifier_values(
+        model.select(handles.InvestigatorAssertion.note_id)
+    )
+    transaction_amounts = _query_two_column_mapping(
+        model.select(handles.Transaction.transaction_id, handles.Transaction.amount)
+    )
+
+    augmented_findings: list[RelationalAISemanticFinding] = []
+    for finding in findings:
+        confirmed_anchor_ids = _confirmed_anchor_ids(
+            finding,
+            shared_low_trust_customer_ids=shared_low_trust_customer_ids,
+            cross_border_customer_ids=cross_border_customer_ids,
+            review_pressure_account_ids=review_pressure_account_ids,
+            recent_account_ids=recent_account_ids,
+            high_value_transaction_ids=high_value_transaction_ids,
+            rapid_window_transaction_ids=rapid_window_transaction_ids,
+            liquidation_merchant_ids=liquidation_merchant_ids,
+            investigator_assertion_ids=investigator_assertion_ids,
+        )
+        supporting_volume = round(
+            sum(
+                transaction_amounts.get(transaction_id, 0.0)
+                for transaction_id in finding.supporting_transaction_ids
+            ),
+            2,
+        )
+        if confirmed_anchor_ids:
+            confirmation_note = (
+                "External RelationalAI query confirmed "
+                f"{len(confirmed_anchor_ids)} semantic anchor(s)"
+            )
+            if supporting_volume > 0:
+                confirmation_note += (
+                    f" across ${supporting_volume:,.2f} of supporting transaction volume"
+                )
+            augmented_findings.append(
+                finding.model_copy(
+                    update={
+                        "execution_mode": "external-query-augmented",
+                        "narrative": _append_sentence(
+                            finding.narrative,
+                            f"{confirmation_note}.",
+                        ),
+                        "confidence": min(
+                            0.99,
+                            finding.confidence + 0.06,
+                        ),
+                        "risk_contribution": min(
+                            10,
+                            finding.risk_contribution + 1,
+                        ),
+                    }
+                )
+            )
+            continue
+        augmented_findings.append(
+            finding.model_copy(update={"execution_mode": "external-query-executed"})
+        )
+    return augmented_findings
+
+
+def _confirmed_anchor_ids(
+    finding: RelationalAISemanticFinding,
+    *,
+    shared_low_trust_customer_ids: set[str],
+    cross_border_customer_ids: set[str],
+    review_pressure_account_ids: set[str],
+    recent_account_ids: set[str],
+    high_value_transaction_ids: set[str],
+    rapid_window_transaction_ids: set[str],
+    liquidation_merchant_ids: set[str],
+    investigator_assertion_ids: set[str],
+) -> set[str]:
+    if finding.blueprint_code == "shared-low-trust-devices":
+        return _entity_ids(finding, EntityType.CUSTOMER) & shared_low_trust_customer_ids
+    if finding.blueprint_code == "cross-border-merchant-exposure":
+        return _entity_ids(finding, EntityType.CUSTOMER) & cross_border_customer_ids
+    if finding.blueprint_code == "merchant-liquidation-archetypes":
+        return _entity_ids(finding, EntityType.MERCHANT) & liquidation_merchant_ids
+    if finding.blueprint_code == "review-pressure-accounts":
+        return _entity_ids(finding, EntityType.ACCOUNT) & (
+            review_pressure_account_ids | recent_account_ids
+        )
+    if finding.blueprint_code == "rapid-high-value-windows":
+        return set(finding.supporting_transaction_ids) & (
+            high_value_transaction_ids | rapid_window_transaction_ids
+        )
+    if finding.blueprint_code == "investigator-feedback-loop":
+        return _entity_ids(finding, EntityType.NOTE) & investigator_assertion_ids
+    return set()
+
+
+def _entity_ids(
+    finding: RelationalAISemanticFinding,
+    entity_type: EntityType,
+) -> set[str]:
+    return {
+        entity.entity_id
+        for entity in finding.matched_entities
+        if entity.entity_type == entity_type
+    }
+
+
+def _query_identifier_values(fragment: Any) -> set[str]:
+    dataframe = fragment.to_df()
+    values: set[str] = set()
+    for record in dataframe.to_dict(orient="records"):
+        row = tuple(record.values())
+        if row and row[0] is not None:
+            values.add(str(row[0]))
+    return values
+
+
+def _query_two_column_mapping(fragment: Any) -> dict[str, float]:
+    dataframe = fragment.to_df()
+    values: dict[str, float] = {}
+    for record in dataframe.to_dict(orient="records"):
+        row = tuple(record.values())
+        if len(row) < 2 or row[0] is None or row[1] is None:
+            continue
+        values[str(row[0])] = float(row[1])
+    return values
 
 
 def _shared_device_findings(
@@ -988,6 +1183,15 @@ def _is_liquidation_merchant(category: str, description: str) -> bool:
         token in normalized
         for token in ("digital_goods", "money_transfer", "gift", "crypto", "wire")
     )
+
+
+def _append_sentence(text: str, sentence: str) -> str:
+    stripped = text.rstrip()
+    if not stripped:
+        return sentence
+    if stripped.endswith((".", "!", "?")):
+        return f"{stripped} {sentence}"
+    return f"{stripped}. {sentence}"
 
 
 def _customer_ref(customer_id: str, display_name: str) -> EntityReference:

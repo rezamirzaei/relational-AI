@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `py.typed` PEP 561 marker for downstream type consumers.
 - Dedicated RelationalAI showcase documentation covering mindset, hybrid reasoning, and a worked fraud case study.
 - Typed RelationalAI semantic findings with active rule packs, derived rule paths, evidence edges, confidence, and risk contribution.
+- External RelationalAI concept-query confirmation for promoted semantic findings when runtime config is enabled.
 
 ### Changed
 - Version source of truth consolidated to `__init__.__version__` (was mismatched).
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit config now includes `detect-secrets` hook.
 - RelationalAI reasoning now projects richer relational context, emits clearer case-study notes, and surfaces the active reasoning provider more explicitly in the investigation UI.
 - RelationalAI reasoning now promotes semantic rule packs into analyst-ready findings, uses them to amplify scoring, and renders drill-downs for them in the investigation workspace.
+- RelationalAI reasoning now reuses the same config for projection and semantic modeling, and surfaces when executed external queries confirmed specific findings.
 
 ### Fixed
 - `__init__.py` version mismatch (was `0.1.0`, now `1.0.0` matching `pyproject.toml`).
