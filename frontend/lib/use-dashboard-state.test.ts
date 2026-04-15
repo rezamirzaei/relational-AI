@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fetchCurrentOperator,
   fetchScenarioCatalog,
+  fetchScenarioDetail,
   fetchAuditEvents,
   fetchDashboardStats,
   fetchCases,
   fetchAlerts,
   fetchDatasets,
+  runDraftInvestigation,
   loginOperator,
 } from "@/lib/api";
 import type { HealthResponse, OperatorPrincipal } from "@/lib/contracts";
@@ -38,7 +40,9 @@ vi.mock("@/lib/api", () => ({
   fetchDatasets: vi.fn(),
   fetchInvestigationClient: vi.fn(),
   fetchScenarioCatalog: vi.fn(),
+  fetchScenarioDetail: vi.fn(),
   loginOperator: vi.fn(),
+  runDraftInvestigation: vi.fn(),
   updateAlertStatus: vi.fn(),
   updateCaseStatus: vi.fn(),
   uploadDataset: vi.fn(),
@@ -47,11 +51,13 @@ vi.mock("@/lib/api", () => ({
 const mockedLoginOperator = vi.mocked(loginOperator);
 const mockedFetchCurrentOperator = vi.mocked(fetchCurrentOperator);
 const mockedFetchScenarioCatalog = vi.mocked(fetchScenarioCatalog);
+const mockedFetchScenarioDetail = vi.mocked(fetchScenarioDetail);
 const mockedFetchAuditEvents = vi.mocked(fetchAuditEvents);
 const mockedFetchDashboardStats = vi.mocked(fetchDashboardStats);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedFetchAlerts = vi.mocked(fetchAlerts);
 const mockedFetchDatasets = vi.mocked(fetchDatasets);
+const mockedRunDraftInvestigation = vi.mocked(runDraftInvestigation);
 
 const backendHealth: HealthResponse = {
   status: "ok",
@@ -113,6 +119,62 @@ describe("useDashboardState", () => {
     mockedFetchCases.mockResolvedValue({ cases: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchAlerts.mockResolvedValue({ alerts: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
+    mockedFetchScenarioDetail.mockResolvedValue({
+      scenario: {
+        scenario_id: "draft-scenario",
+        title: "Draft scenario",
+        industry: "finance",
+        summary: "summary",
+        hypothesis: "hypothesis",
+        tags: ["fraud"],
+        customers: [],
+        accounts: [],
+        devices: [],
+        merchants: [],
+        transactions: [],
+        investigator_notes: [],
+      },
+    });
+    mockedRunDraftInvestigation.mockResolvedValue({
+      investigation: {
+        scenario: {
+          scenario_id: "draft-scenario",
+          title: "Draft scenario",
+          industry: "finance",
+          summary: "summary",
+          hypothesis: "hypothesis",
+          tags: ["fraud"],
+          transaction_count: 0,
+          total_volume: 0,
+          baseline_risk: "medium",
+        },
+        risk_level: "medium",
+        total_risk_score: 40,
+        summary: "Draft scenario reviewed.",
+        metrics: {
+          total_transaction_volume: 0,
+          suspicious_transaction_volume: 0,
+          suspicious_transaction_count: 0,
+          shared_device_count: 0,
+          linked_customer_count: 0,
+        },
+        provider_summary: {
+          requested_reasoning_provider: "local-rule-engine",
+          active_reasoning_provider: "local-rule-engine",
+          requested_text_provider: "keyword",
+          active_text_provider: "keyword",
+          notes: [],
+          semantic_model: null,
+        },
+        top_rule_hits: [],
+        graph_links: [],
+        text_signals: [],
+        suspicious_transactions: [],
+        recommended_actions: [],
+        investigation_leads: [],
+        graph_analysis: null,
+      },
+    });
   });
 
   it("returns correct initial state shape", () => {

@@ -15,6 +15,7 @@ from relational_fraud_intelligence.application.dto.investigation import (
     GetScenarioQuery,
     GetScenarioResult,
     InvestigateScenarioCommand,
+    InvestigateScenarioDraftCommand,
     InvestigateScenarioResult,
     ListScenariosQuery,
     ListScenariosResult,
@@ -107,6 +108,29 @@ async def investigate_scenario(
         return result
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/investigations/draft",
+    response_model=InvestigateScenarioResult,
+    tags=["Investigations"],
+    summary="Run an ad hoc fraud investigation",
+    description=(
+        "Executes a full fraud investigation on a caller-supplied scenario draft so "
+        "analysts can define or edit scenarios without persisting them first."
+    ),
+)
+async def investigate_draft_scenario(
+    command: InvestigateScenarioDraftCommand,
+    request: Request,
+    container: ContainerDep,
+    principal: AnalystDep,
+) -> InvestigateScenarioResult:
+    request.state.current_principal = principal
+    request.state.audit_action = "investigate-draft-scenario"
+    request.state.audit_resource_type = "draft-fraud-scenario"
+    request.state.audit_resource_id = command.scenario.scenario_id
+    return await container.investigation_service.execute_draft(command)
 
 
 @router.post(

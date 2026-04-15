@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { RiskGauge } from "@/components/charts";
 import { MetricCard } from "@/components/dashboard-sections";
 import type {
+  FraudScenario,
   HealthResponse,
   InvestigationResponse,
   ScenarioOverview,
@@ -20,6 +23,29 @@ function formatProviderName(provider: string): string {
   return lookup[provider] ?? provider;
 }
 
+function parseDraftScenario(draftScenarioJson: string): {
+  scenario: FraudScenario | null;
+  message: string;
+} {
+  try {
+    const scenario = JSON.parse(draftScenarioJson) as FraudScenario;
+    if (
+      !scenario ||
+      typeof scenario !== "object" ||
+      !Array.isArray(scenario.transactions) ||
+      !Array.isArray(scenario.customers)
+    ) {
+      return {
+        scenario: null,
+        message: "Draft JSON must contain scenario fields like customers and transactions.",
+      };
+    }
+    return { scenario, message: "Draft scenario is ready to run." };
+  } catch {
+    return { scenario: null, message: "Draft JSON has a syntax error." };
+  }
+}
+
 type InvestigateViewProps = {
   isPending: boolean;
   scenarios: ScenarioOverview[];
@@ -30,16 +56,24 @@ type InvestigateViewProps = {
   visibleScenarios: ScenarioOverview[];
   searchQuery: string;
   deferredSignals: TextSignal[];
+  draftScenarioJson: string;
+  draftScenarioError: string | null;
+  activeInvestigationCanCreateCase: boolean;
   backendHealth: HealthResponse | null;
   currencyFormatter: Intl.NumberFormat;
   dateFormatter: Intl.DateTimeFormat;
   onSearchQueryChange: (query: string) => void;
+  onDraftScenarioJsonChange: (json: string) => void;
   onScenarioSelection: (scenarioId: string) => void;
+  onRunSelectedScenario: () => void;
+  onRunDraftScenario: () => void;
+  onLoadScenarioIntoDraft: () => void;
   onCreateCase: () => void;
 };
 
 export function InvestigateView({
   isPending,
+  scenarios,
   selectedScenarioId,
   selectedScenario,
   activeInvestigation,
@@ -47,11 +81,18 @@ export function InvestigateView({
   visibleScenarios,
   searchQuery,
   deferredSignals,
+  draftScenarioJson,
+  draftScenarioError,
+  activeInvestigationCanCreateCase,
   backendHealth,
   currencyFormatter,
   dateFormatter,
   onSearchQueryChange,
+  onDraftScenarioJsonChange,
   onScenarioSelection,
+  onRunSelectedScenario,
+  onRunDraftScenario,
+  onLoadScenarioIntoDraft,
   onCreateCase,
 }: InvestigateViewProps) {
   const reasoningProvider = activeInvestigation?.provider_summary.active_reasoning_provider ?? "";
@@ -62,20 +103,34 @@ export function InvestigateView({
         (finding) => finding.execution_mode === "external-query-augmented",
       ).length
     : 0;
+  const activeInvestigationTitle = activeInvestigation?.scenario.title ?? selectedScenario?.title ?? "Scenario";
+  const draftPreview = useMemo(() => parseDraftScenario(draftScenarioJson), [draftScenarioJson]);
+  const isDraftInvestigationActive =
+    activeInvestigation !== null && !activeInvestigationMatchesSelection && !activeInvestigationCanCreateCase;
 
   return (
     <section className="dashboard-view-stack">
       <section className="content-card overview-hero">
         <div>
-          <p className="eyebrow">Fraud scenarios</p>
-          <h2>Run structured fraud scenarios to surface investigation leads.</h2>
-        </div>
-        <div className="llm-note compact">
-          <strong>How it works</strong>
-          <p>
-            Each scenario contains a set of realistic transactions. Select one to run
-            the analysis engine, review generated leads, and decide whether to open a case.
+          <p className="eyebrow">Investigations</p>
+          <h2>Choose a library scenario or define your own draft, then run one clear investigation.</h2>
+          <p className="muted-copy">
+            This workspace is now organized around three steps: pick or draft a scenario,
+            run the investigation, then review the highest-signal findings.
           </p>
+        </div>
+        <div className="metrics-grid" style={{ minWidth: 320 }}>
+          <MetricCard label="Library scenarios" tone="neutral" value={String(scenarios.length)} />
+          <MetricCard
+            label="Draft transactions"
+            tone={draftPreview.scenario?.transactions.length ? "warning" : "neutral"}
+            value={String(draftPreview.scenario?.transactions.length ?? 0)}
+          />
+          <MetricCard
+            label="Latest result"
+            tone={activeInvestigation ? "critical" : "good"}
+            value={activeInvestigation ? activeInvestigation.risk_level : "not run"}
+          />
         </div>
       </section>
 
@@ -83,7 +138,7 @@ export function InvestigateView({
         <aside className="surface scenario-rail">
           <div className="rail-toolbar">
             <div className="section-header">
-              <span>Scenarios</span>
+              <span>Scenario library</span>
               <span>{visibleScenarios.length}</span>
             </div>
             <label className="search-shell">
@@ -92,7 +147,7 @@ export function InvestigateView({
                 aria-label="Search scenarios"
                 className="search-input"
                 onChange={(event) => onSearchQueryChange(event.target.value)}
-                placeholder="Search industry, tag, or narrative"
+                placeholder="Search title, tag, or summary"
                 type="search"
                 value={searchQuery}
               />
@@ -110,9 +165,7 @@ export function InvestigateView({
                     type="button"
                   >
                     <div className="scenario-card-top">
-                      <span className={`risk-chip ${scenario.baseline_risk}`}>
-                        {scenario.baseline_risk}
-                      </span>
+                      <span className={`risk-chip ${scenario.baseline_risk}`}>{scenario.baseline_risk}</span>
                       <span className="scenario-industry">{scenario.industry}</span>
                     </div>
                     <h2>{scenario.title}</h2>
@@ -136,207 +189,292 @@ export function InvestigateView({
         </aside>
 
         <section className="surface investigation-panel">
-          {selectedScenario && activeInvestigation && activeInvestigationMatchesSelection ? (
-            <>
-              <div className="section-header">
-                <span>Active Investigation</span>
-                <span>{isPending ? "Loading..." : "Investigation results"}</span>
+          <div className="stack">
+            <section className="content-card emphasis-card">
+              <div className="mini-header">
+                <span>1. Choose a scenario</span>
+                <span>{selectedScenario ? "Selected" : "Pick one"}</span>
               </div>
-
-              <div className="headline-row">
-                <div className="headline-copy">
-                  <p className="eyebrow">Scenario hypothesis</p>
-                  <h2>{selectedScenario.title}</h2>
-                  <p className="muted-copy">{selectedScenario.hypothesis}</p>
-                  <p className="summary-lead">{activeInvestigation.summary}</p>
-                </div>
-                <div className="risk-meter-shell">
-                  <RiskGauge
-                    score={activeInvestigation.total_risk_score}
-                    level={activeInvestigation.risk_level}
-                    label="Priority Score"
-                  />
-                </div>
-              </div>
-
-              <div className="metrics-grid">
-                <MetricCard label="Investigation leads" tone={activeInvestigation.investigation_leads.length > 0 ? "critical" : "neutral"} value={String(activeInvestigation.investigation_leads.length)} />
-                <MetricCard label="Suspicious volume" tone="critical" value={currencyFormatter.format(activeInvestigation.metrics.suspicious_transaction_volume)} />
-                <MetricCard label="Flagged transactions" tone="warning" value={String(activeInvestigation.metrics.suspicious_transaction_count)} />
-                <MetricCard label="Shared devices" tone="neutral" value={String(activeInvestigation.metrics.shared_device_count)} />
-                <MetricCard label="Linked customers" tone="warning" value={String(activeInvestigation.metrics.linked_customer_count)} />
-              </div>
-
-              {activeInvestigation.graph_analysis ? (
-                <section className="content-card emphasis-card">
-                  <div className="mini-header">
-                    <span>Graph Analysis</span>
-                    <span>Relationship network</span>
-                  </div>
-                  <div className="metrics-grid" style={{ marginTop: 12 }}>
-                    <MetricCard label="Components" tone="neutral" value={String(activeInvestigation.graph_analysis.connected_components)} />
-                    <MetricCard label="Density" tone={activeInvestigation.graph_analysis.density > 0.3 ? "warning" : "neutral"} value={activeInvestigation.graph_analysis.density.toFixed(3)} />
-                    <MetricCard label="Communities" tone="neutral" value={String(activeInvestigation.graph_analysis.community_count)} />
-                    <MetricCard label="Risk amplifier" tone={activeInvestigation.graph_analysis.risk_amplification_factor > 1.3 ? "critical" : "good"} value={`${activeInvestigation.graph_analysis.risk_amplification_factor}x`} />
-                  </div>
-                  {activeInvestigation.graph_analysis.hub_entities.length > 0 ? (
-                    <div style={{ marginTop: 12 }}>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Hub entities</p>
-                      <div className="tag-row">
-                        {activeInvestigation.graph_analysis.hub_entities.map((hub) => (
-                          <span key={hub.entity_id} className="tag-pill">
-                            {hub.entity_type}: {hub.display_name}
-                          </span>
-                        ))}
-                      </div>
+              {selectedScenario ? (
+                <div className="stack" style={{ marginTop: 12 }}>
+                  <div className="signal-card">
+                    <div className="signal-card-top">
+                      <strong>{selectedScenario.title}</strong>
+                      <span className={`risk-chip ${selectedScenario.baseline_risk}`}>{selectedScenario.baseline_risk}</span>
                     </div>
+                    <p>{selectedScenario.summary}</p>
+                    <span className="signal-meta">{selectedScenario.hypothesis}</span>
+                    <span className="signal-meta">
+                      {selectedScenario.transaction_count} transactions · {currencyFormatter.format(selectedScenario.total_volume)}
+                    </span>
+                  </div>
+                  <div className="action-bar">
+                    <button className="primary-button" onClick={onRunSelectedScenario} type="button">
+                      Run selected scenario
+                    </button>
+                    <button className="secondary-button" onClick={onLoadScenarioIntoDraft} type="button">
+                      Load selected scenario into draft editor
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  Select one library scenario to review its summary and run it.
+                </div>
+              )}
+            </section>
+
+            <section className="content-card">
+              <div className="mini-header">
+                <span>2. Define or edit a draft</span>
+                <span>{draftPreview.scenario ? "Ready" : "Needs fixes"}</span>
+              </div>
+              <p className="provider-note" style={{ marginTop: 12 }}>
+                Use this editor for ad hoc scenarios. Draft investigations run through the full
+                engine, but they stay temporary and do not create linked cases automatically.
+              </p>
+              <div className="metrics-grid" style={{ marginTop: 12 }}>
+                <MetricCard
+                  label="Customers"
+                  tone="neutral"
+                  value={String(draftPreview.scenario?.customers.length ?? 0)}
+                />
+                <MetricCard
+                  label="Transactions"
+                  tone="warning"
+                  value={String(draftPreview.scenario?.transactions.length ?? 0)}
+                />
+                <MetricCard
+                  label="Devices"
+                  tone="neutral"
+                  value={String(draftPreview.scenario?.devices.length ?? 0)}
+                />
+                <MetricCard
+                  label="Validation"
+                  tone={draftPreview.scenario ? "good" : "critical"}
+                  value={draftPreview.scenario ? "ready" : "invalid"}
+                />
+              </div>
+              <label className="auth-field" style={{ marginTop: 12 }}>
+                <span>Draft scenario JSON</span>
+                <textarea
+                  aria-label="Draft scenario JSON"
+                  className="search-input"
+                  data-testid="draft-scenario-json"
+                  onChange={(event) => onDraftScenarioJsonChange(event.target.value)}
+                  rows={18}
+                  style={{ fontFamily: "monospace", minHeight: 320, resize: "vertical" }}
+                  value={draftScenarioJson}
+                />
+              </label>
+              <div className="stack" style={{ marginTop: 12 }}>
+                <p className="provider-note">{draftScenarioError ?? draftPreview.message}</p>
+                <div className="action-bar">
+                  <button className="primary-button" onClick={onRunDraftScenario} type="button">
+                    Run draft scenario
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="content-card emphasis-card">
+              <div className="mini-header">
+                <span>3. Review the result</span>
+                <span>{isPending ? "Running..." : activeInvestigation ? "Available" : "Not run"}</span>
+              </div>
+              {!activeInvestigation ? (
+                <div className="empty-state">
+                  Run a selected or draft scenario to see a single investigation summary,
+                  the main reasons it was flagged, and the operational status behind it.
+                </div>
+              ) : (
+                <div className="stack" style={{ marginTop: 12 }}>
+                  <div className="headline-row">
+                    <div className="headline-copy">
+                      <p className="eyebrow">
+                        {isDraftInvestigationActive ? "Draft investigation" : "Active investigation"}
+                      </p>
+                      <h2>{activeInvestigationTitle}</h2>
+                      <p className="summary-lead">{activeInvestigation.summary}</p>
+                    </div>
+                    <div className="risk-meter-shell">
+                      <RiskGauge
+                        score={activeInvestigation.total_risk_score}
+                        level={activeInvestigation.risk_level}
+                        label="Priority Score"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="metrics-grid">
+                    <MetricCard
+                      label="Investigation leads"
+                      tone={activeInvestigation.investigation_leads.length > 0 ? "critical" : "neutral"}
+                      value={String(activeInvestigation.investigation_leads.length)}
+                    />
+                    <MetricCard
+                      label="Suspicious volume"
+                      tone="critical"
+                      value={currencyFormatter.format(activeInvestigation.metrics.suspicious_transaction_volume)}
+                    />
+                    <MetricCard
+                      label="Flagged transactions"
+                      tone="warning"
+                      value={String(activeInvestigation.metrics.suspicious_transaction_count)}
+                    />
+                    <MetricCard
+                      label="Shared devices"
+                      tone="neutral"
+                      value={String(activeInvestigation.metrics.shared_device_count)}
+                    />
+                  </div>
+
+                  <div className="action-bar">
+                    <button
+                      className="primary-button"
+                      disabled={!activeInvestigationCanCreateCase}
+                      onClick={onCreateCase}
+                      type="button"
+                    >
+                      Create linked case from investigation
+                    </button>
+                  </div>
+                  {!activeInvestigationCanCreateCase ? (
+                    <p className="provider-note">
+                      Draft investigations are temporary. Load them into the scenario catalog flow
+                      before creating a linked case.
+                    </p>
                   ) : null}
-                </section>
-              ) : null}
 
-              <div className="action-bar">
-                <button className="primary-button" onClick={onCreateCase} type="button">
-                  Create linked case from investigation
-                </button>
-              </div>
-
-              <div className="insight-grid">
-                <section className="content-card emphasis-card">
-                  <div className="mini-header">
-                    <span>Investigation Leads</span>
-                    <span>{activeInvestigation.investigation_leads.length}</span>
-                  </div>
-                  {activeInvestigation.investigation_leads.length > 0 ? (
-                    <div className="stack">
-                      {activeInvestigation.investigation_leads.map((lead) => (
-                        <article key={lead.lead_id} className="signal-card">
-                          <div className="signal-card-top">
-                            <strong>{lead.title}</strong>
-                            <span className={`risk-chip ${lead.severity}`}>{lead.severity}</span>
-                          </div>
-                          <p>{lead.hypothesis}</p>
-                          <p className="muted-copy">{lead.narrative}</p>
-                          {lead.entities.length > 0 ? (
-                            <span className="signal-meta">
-                              {lead.entities.slice(0, 4).map((entity) => entity.display_name).join(" · ")}
-                            </span>
-                          ) : null}
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      No investigation leads were generated. Review the rule hits below for details.
-                    </div>
-                  )}
-                </section>
-
-                <section className="content-card emphasis-card">
-                  <div className="mini-header">
-                    <span>Recommended Actions</span>
-                    <span>Next steps</span>
-                  </div>
-                  <div className="action-stack">
-                    {activeInvestigation.recommended_actions.map((action) => (
-                      <article key={action} className="action-item">
-                        <span className="action-marker" />
-                        <p>{action}</p>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="content-card">
-                  <div className="mini-header">
-                    <span>System Status</span>
-                    <span>Platform</span>
-                  </div>
-                  <div className="provider-grid">
-                    <span>Requested reasoning</span>
-                    <strong>{formatProviderName(activeInvestigation.provider_summary.requested_reasoning_provider)}</strong>
-                    <span>Active reasoning</span>
-                    <strong>{formatProviderName(activeInvestigation.provider_summary.active_reasoning_provider)}</strong>
-                    <span>Requested text analysis</span>
-                    <strong>{formatProviderName(activeInvestigation.provider_summary.requested_text_provider)}</strong>
-                    <span>Active text analysis</span>
-                    <strong>{formatProviderName(activeInvestigation.provider_summary.active_text_provider)}</strong>
-                    <span>Database</span>
-                    <strong>{backendHealth?.database_status === "ready" ? "Ready ✓" : "Unavailable"}</strong>
-                    <span>Rate limiting</span>
-                    <strong>{backendHealth?.rate_limit_status === "ready" ? "Ready ✓" : "Degraded"}</strong>
-                  </div>
-                  <div className="stack">
-                    {isRelationalAIShowcaseActive ? (
-                      <p className="provider-note">
-                        RelationalAI showcase mode is active: deterministic rules stay the baseline, while relational motifs can amplify the investigation when the network structure is suspicious.
-                      </p>
-                    ) : null}
-                    {externalQueryAugmentedFindingCount > 0 ? (
-                      <p className="provider-note">
-                        Executed RelationalAI concept queries externally confirmed {externalQueryAugmentedFindingCount} promoted semantic finding{externalQueryAugmentedFindingCount === 1 ? "" : "s"}.
-                      </p>
-                    ) : null}
-                    {activeInvestigation.provider_summary.notes.map((note) => (
-                      <p key={note} className="provider-note">{note}</p>
-                    ))}
-                  </div>
-                </section>
-
-                {semanticModel ? (
-                  <section className="content-card emphasis-card">
-                    <div className="mini-header">
-                      <span>RelationalAI Semantic Model</span>
-                      <span>Showcase schema</span>
-                    </div>
-                    <div className="metrics-grid" style={{ marginTop: 12 }}>
-                      <MetricCard label="Concepts" tone="good" value={String(semanticModel.concept_names.length)} />
-                      <MetricCard label="Relationships" tone="neutral" value={String(semanticModel.relationship_names.length)} />
-                      <MetricCard label="Derived rules" tone="warning" value={String(semanticModel.derived_rule_names.length)} />
-                      <MetricCard label="Rule packs" tone="neutral" value={String(semanticModel.active_rule_packs.length)} />
-                      <MetricCard label="Semantic findings" tone={semanticModel.semantic_findings.length > 0 ? "critical" : "good"} value={String(semanticModel.semantic_findings.length)} />
-                      <MetricCard label="Seeded facts" tone="critical" value={String(semanticModel.seeded_fact_count)} />
-                    </div>
-                    <div className="stack" style={{ marginTop: 12 }}>
-                      <p className="provider-note">{semanticModel.execution_posture}</p>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Active rule packs</p>
-                      <div className="tag-row">
-                        {semanticModel.active_rule_packs.map((rulePack) => (
-                          <span key={rulePack} className="tag-pill">{rulePack}</span>
-                        ))}
+                  <div className="insight-grid">
+                    <section className="content-card emphasis-card">
+                      <div className="mini-header">
+                        <span>Why it was flagged</span>
+                        <span>
+                          {activeInvestigation.investigation_leads.length + activeInvestigation.top_rule_hits.length}
+                        </span>
                       </div>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Concepts</p>
-                      <div className="tag-row">
-                        {semanticModel.concept_names.map((concept) => (
-                          <span key={concept} className="tag-pill">{concept}</span>
-                        ))}
-                      </div>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Relationships</p>
-                      <div className="tag-row">
-                        {semanticModel.relationship_names.map((relationship) => (
-                          <span key={relationship} className="tag-pill">{relationship}</span>
-                        ))}
-                      </div>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Query blueprints</p>
-                      <div className="stack">
-                        {semanticModel.query_blueprints.map((blueprint) => (
-                          <article key={blueprint.code} className="signal-card">
+                      <div className="stack" style={{ marginTop: 12 }}>
+                        {activeInvestigation.investigation_leads.map((lead) => (
+                          <article key={lead.lead_id} className="signal-card">
                             <div className="signal-card-top">
-                              <strong>{blueprint.code}</strong>
-                              <span className="weight-pill">{blueprint.rule_pack}</span>
+                              <strong>{lead.title}</strong>
+                              <span className={`risk-chip ${lead.severity}`}>{lead.severity}</span>
                             </div>
-                            <p>{blueprint.description}</p>
-                            {blueprint.derived_rule_paths.length > 0 ? (
-                              <span className="signal-meta">
-                                {blueprint.derived_rule_paths.join(" → ")}
-                              </span>
-                            ) : null}
+                            <p>{lead.hypothesis}</p>
+                            <p className="muted-copy">{lead.narrative}</p>
                           </article>
                         ))}
+                        {activeInvestigation.top_rule_hits.map((hit) => (
+                          <article key={hit.rule_code} className="signal-card">
+                            <div className="signal-card-top">
+                              <strong>{hit.title}</strong>
+                              <span className="weight-pill">{hit.weight}</span>
+                            </div>
+                            <p>{hit.narrative}</p>
+                          </article>
+                        ))}
+                        {activeInvestigation.investigation_leads.length === 0 &&
+                        activeInvestigation.top_rule_hits.length === 0 ? (
+                          <div className="empty-state">No major findings were generated.</div>
+                        ) : null}
                       </div>
-                      <p className="eyebrow" style={{ marginBottom: 8 }}>Semantic findings</p>
-                      <div className="stack">
-                        {semanticModel.semantic_findings.length > 0 ? (
-                          semanticModel.semantic_findings.map((finding) => (
+                    </section>
+
+                    <section className="content-card emphasis-card">
+                      <div className="mini-header">
+                        <span>Next actions</span>
+                        <span>{activeInvestigation.recommended_actions.length}</span>
+                      </div>
+                      <div className="action-stack" style={{ marginTop: 12 }}>
+                        {activeInvestigation.recommended_actions.map((action) => (
+                          <article key={action} className="action-item">
+                            <span className="action-marker" />
+                            <p>{action}</p>
+                          </article>
+                        ))}
+                        {activeInvestigation.recommended_actions.length === 0 ? (
+                          <div className="empty-state">No follow-up actions were generated.</div>
+                        ) : null}
+                      </div>
+                    </section>
+
+                    <section className="content-card">
+                      <div className="mini-header">
+                        <span>How it ran</span>
+                        <span>Platform</span>
+                      </div>
+                      <div className="provider-grid" style={{ marginTop: 12 }}>
+                        <span>Requested reasoning</span>
+                        <strong>{formatProviderName(activeInvestigation.provider_summary.requested_reasoning_provider)}</strong>
+                        <span>Active reasoning</span>
+                        <strong>{formatProviderName(activeInvestigation.provider_summary.active_reasoning_provider)}</strong>
+                        <span>Requested text analysis</span>
+                        <strong>{formatProviderName(activeInvestigation.provider_summary.requested_text_provider)}</strong>
+                        <span>Active text analysis</span>
+                        <strong>{formatProviderName(activeInvestigation.provider_summary.active_text_provider)}</strong>
+                        <span>Database</span>
+                        <strong>{backendHealth?.database_status === "ready" ? "Ready" : "Unavailable"}</strong>
+                        <span>Rate limiting</span>
+                        <strong>{backendHealth?.rate_limit_status === "ready" ? "Ready" : "Degraded"}</strong>
+                      </div>
+                      <div className="stack" style={{ marginTop: 12 }}>
+                        {isRelationalAIShowcaseActive ? (
+                          <p className="provider-note">
+                            RelationalAI showcase mode is active: deterministic rules stay the baseline,
+                            while relational motifs amplify the investigation when the structure is suspicious.
+                          </p>
+                        ) : null}
+                        {externalQueryAugmentedFindingCount > 0 ? (
+                          <p className="provider-note">
+                            Executed RelationalAI concept queries externally confirmed {externalQueryAugmentedFindingCount} promoted semantic finding{externalQueryAugmentedFindingCount === 1 ? "" : "s"}.
+                          </p>
+                        ) : null}
+                        {activeInvestigation.provider_summary.notes.slice(0, 4).map((note) => (
+                          <p key={note} className="provider-note">{note}</p>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  {semanticModel ? (
+                    <section className="content-card emphasis-card">
+                      <div className="mini-header">
+                        <span>RelationalAI Semantic Model</span>
+                        <span>Drill-down</span>
+                      </div>
+                      <div className="metrics-grid" style={{ marginTop: 12 }}>
+                        <MetricCard label="Rule packs" tone="neutral" value={String(semanticModel.active_rule_packs.length)} />
+                        <MetricCard label="Semantic findings" tone={semanticModel.semantic_findings.length > 0 ? "critical" : "good"} value={String(semanticModel.semantic_findings.length)} />
+                        <MetricCard label="Relationships" tone="neutral" value={String(semanticModel.relationship_names.length)} />
+                        <MetricCard label="Seeded facts" tone="critical" value={String(semanticModel.seeded_fact_count)} />
+                      </div>
+                      <div className="stack" style={{ marginTop: 12 }}>
+                        <p className="provider-note">{semanticModel.execution_posture}</p>
+                        <div className="tag-row">
+                          {semanticModel.active_rule_packs.map((rulePack) => (
+                            <span key={rulePack} className="tag-pill">{rulePack}</span>
+                          ))}
+                        </div>
+                        <div className="stack">
+                          {semanticModel.query_blueprints.map((blueprint) => (
+                            <article key={blueprint.code} className="signal-card">
+                              <div className="signal-card-top">
+                                <strong>{blueprint.code}</strong>
+                                <span className="weight-pill">{blueprint.rule_pack}</span>
+                              </div>
+                              <p>{blueprint.description}</p>
+                              {blueprint.derived_rule_paths.length > 0 ? (
+                                <span className="signal-meta">
+                                  {blueprint.derived_rule_paths.join(" -> ")}
+                                </span>
+                              ) : null}
+                            </article>
+                          ))}
+                        </div>
+                        <p className="eyebrow">Semantic findings</p>
+                        <div className="stack">
+                          {semanticModel.semantic_findings.map((finding) => (
                             <article key={finding.finding_id} className="signal-card">
                               <div className="signal-card-top">
                                 <strong>{finding.title}</strong>
@@ -348,132 +486,82 @@ export function InvestigateView({
                               </span>
                               {finding.derived_rule_path.length > 0 ? (
                                 <span className="signal-meta">
-                                  Rule path: {finding.derived_rule_path.join(" → ")}
-                                </span>
-                              ) : null}
-                              {finding.matched_entities.length > 0 ? (
-                                <span className="signal-meta">
-                                  Entities: {finding.matched_entities.map((entity) => entity.display_name).join(" · ")}
-                                </span>
-                              ) : null}
-                              {finding.supporting_transaction_ids.length > 0 ? (
-                                <span className="signal-meta">
-                                  Transactions: {finding.supporting_transaction_ids.join(" · ")}
+                                  Rule path: {finding.derived_rule_path.join(" -> ")}
                                 </span>
                               ) : null}
                             </article>
-                          ))
-                        ) : (
-                          <div className="empty-state">
-                            No semantic findings were promoted for this scenario.
-                          </div>
-                        )}
+                          ))}
+                          {semanticModel.semantic_findings.length === 0 ? (
+                            <div className="empty-state">No semantic findings were promoted for this run.</div>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                ) : null}
-              </div>
+                    </section>
+                  ) : null}
 
-              <div className="content-grid">
-                <section className="content-card">
-                  <div className="mini-header">
-                    <span>Top Rule Hits</span>
-                    <span>{activeInvestigation.top_rule_hits.length}</span>
-                  </div>
-                  <div className="stack">
-                    {activeInvestigation.top_rule_hits.map((hit) => (
-                      <article key={hit.rule_code} className="signal-card">
-                        <div className="signal-card-top">
-                          <strong>{hit.title}</strong>
-                          <span className="weight-pill">{hit.weight}</span>
+                  <div className="content-grid">
+                    {activeInvestigation.suspicious_transactions.length > 0 ? (
+                      <section className="content-card">
+                        <div className="mini-header">
+                          <span>Suspicious transactions</span>
+                          <span>{activeInvestigation.suspicious_transactions.length}</span>
                         </div>
-                        <p>{hit.narrative}</p>
-                      </article>
-                    ))}
-                  </div>
-                </section>
+                        <div className="stack" style={{ marginTop: 12 }}>
+                          {activeInvestigation.suspicious_transactions.map((txn) => (
+                            <article key={txn.transaction_id} className="transaction-row">
+                              <div>
+                                <strong>{txn.transaction_id}</strong>
+                                <p>{txn.merchant_id} via {txn.channel}</p>
+                              </div>
+                              <div className="transaction-meta">
+                                <strong>{currencyFormatter.format(txn.amount)}</strong>
+                                <span>{dateFormatter.format(new Date(txn.occurred_at))}</span>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
 
-                <section className="content-card">
-                  <div className="mini-header">
-                    <span>Suspicious Transactions</span>
-                    <span>{activeInvestigation.suspicious_transactions.length}</span>
-                  </div>
-                  <div className="stack">
-                    {activeInvestigation.suspicious_transactions.map((txn) => (
-                      <article key={txn.transaction_id} className="transaction-row">
-                        <div>
-                          <strong>{txn.transaction_id}</strong>
-                          <p>{txn.merchant_id} via {txn.channel}</p>
+                    {deferredSignals.length > 0 ? (
+                      <section className="content-card">
+                        <div className="mini-header">
+                          <span>Text signals</span>
+                          <span>{deferredSignals.length}</span>
                         </div>
-                        <div className="transaction-meta">
-                          <strong>{currencyFormatter.format(txn.amount)}</strong>
-                          <span>{dateFormatter.format(new Date(txn.occurred_at))}</span>
+                        <div className="stack" style={{ marginTop: 12 }}>
+                          {deferredSignals.map((signal) => (
+                            <article key={signal.signal_id} className="signal-card">
+                              <div className="signal-card-top">
+                                <strong>{signal.label}</strong>
+                                <span className="weight-pill">{Math.round(signal.confidence * 100)}%</span>
+                              </div>
+                              <p>{signal.rationale}</p>
+                            </article>
+                          ))}
                         </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
+                      </section>
+                    ) : null}
 
-                <section className="content-card">
-                  <div className="mini-header">
-                    <span>Entity Graph</span>
-                    <span>{activeInvestigation.graph_links.length}</span>
-                  </div>
-                  <div className="stack">
-                    {activeInvestigation.graph_links.map((link, index) => (
-                      <article key={`${link.relation}-${index}`} className="graph-card">
-                        <div className="graph-card-nodes">
-                          <span>{link.source.display_name}</span>
-                          <span className="graph-relation">{link.relation}</span>
-                          <span>{link.target.display_name}</span>
+                    {activeInvestigation.graph_analysis ? (
+                      <section className="content-card">
+                        <div className="mini-header">
+                          <span>Graph analysis</span>
+                          <span>{activeInvestigation.graph_analysis.risk_amplification_factor}x</span>
                         </div>
-                        <p>{link.explanation}</p>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="content-card">
-                  <div className="mini-header">
-                    <span>Text Signals</span>
-                    <span>{deferredSignals.length}</span>
-                  </div>
-                  <div className="stack">
-                    {deferredSignals.map((signal) => (
-                      <article key={signal.signal_id} className="signal-card">
-                        <div className="signal-card-top">
-                          <strong>{signal.label}</strong>
-                          <span className="weight-pill">{(signal.confidence * 100).toFixed(0)}%</span>
+                        <div className="metrics-grid" style={{ marginTop: 12 }}>
+                          <MetricCard label="Components" tone="neutral" value={String(activeInvestigation.graph_analysis.connected_components)} />
+                          <MetricCard label="Communities" tone="neutral" value={String(activeInvestigation.graph_analysis.community_count)} />
+                          <MetricCard label="Density" tone="warning" value={activeInvestigation.graph_analysis.density.toFixed(3)} />
+                          <MetricCard label="Risk amplifier" tone="critical" value={`${activeInvestigation.graph_analysis.risk_amplification_factor}x`} />
                         </div>
-                        <p>{signal.rationale}</p>
-                      </article>
-                    ))}
+                      </section>
+                    ) : null}
                   </div>
-                </section>
-              </div>
-            </>
-          ) : selectedScenario ? (
-            <div className="empty-state">
-              <p style={{ marginBottom: 12 }}>
-                <strong>{selectedScenario.title}</strong>
-              </p>
-              <p className="muted-copy" style={{ marginBottom: 16 }}>
-                {selectedScenario.summary}
-              </p>
-              <button
-                className="primary-button"
-                disabled={isPending}
-                onClick={() => onScenarioSelection(selectedScenario.scenario_id)}
-                type="button"
-              >
-                {isPending ? "Running investigation..." : "Run investigation"}
-              </button>
-            </div>
-          ) : (
-            <div className="empty-state">
-              Select a scenario to run the investigation engine.
-            </div>
-          )}
+                </div>
+              )}
+            </section>
+          </div>
         </section>
       </section>
     </section>

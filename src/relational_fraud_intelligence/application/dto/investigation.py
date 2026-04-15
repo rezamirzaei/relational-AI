@@ -35,6 +35,10 @@ class InvestigateScenarioCommand(AppModel):
     scenario_id: str
 
 
+class InvestigateScenarioDraftCommand(AppModel):
+    scenario: FraudScenario
+
+
 class ScoreTextSignalsCommand(AppModel):
     scenario: FraudScenario
 

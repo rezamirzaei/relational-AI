@@ -2,6 +2,7 @@ from relational_fraud_intelligence.application.dto.investigation import (
     AssembleInvestigationCommand,
     GetScenarioQuery,
     InvestigateScenarioCommand,
+    InvestigateScenarioDraftCommand,
     InvestigateScenarioResult,
     ReasonAboutRiskCommand,
     ScoreTextSignalsCommand,
@@ -15,6 +16,7 @@ from relational_fraud_intelligence.application.services.case_assembler import (
 from relational_fraud_intelligence.application.services.scenario_overview_factory import (
     build_scenario_overview,
 )
+from relational_fraud_intelligence.domain.models import FraudScenario
 from relational_fraud_intelligence.infrastructure.graph.analyzer import analyze_scenario_graph
 
 
@@ -35,22 +37,34 @@ class InvestigationService:
         scenario_result = await self._scenario_repository.get_scenario(
             GetScenarioQuery(scenario_id=command.scenario_id)
         )
+        return self._investigate_scenario(scenario_result.scenario)
+
+    async def execute_draft(
+        self,
+        command: InvestigateScenarioDraftCommand,
+    ) -> InvestigateScenarioResult:
+        return self._investigate_scenario(command.scenario)
+
+    def _investigate_scenario(
+        self,
+        scenario: FraudScenario,
+    ) -> InvestigateScenarioResult:
         text_result = self._text_signal_service.score(
-            ScoreTextSignalsCommand(scenario=scenario_result.scenario)
+            ScoreTextSignalsCommand(scenario=scenario)
         )
         reasoning_result = self._risk_reasoner.reason(
             ReasonAboutRiskCommand(
-                scenario=scenario_result.scenario,
+                scenario=scenario,
                 text_signals=text_result.signals,
             )
         )
 
         # Run graph analysis on the scenario relationship network
-        graph_analysis = analyze_scenario_graph(scenario_result.scenario)
+        graph_analysis = analyze_scenario_graph(scenario)
 
         return self._case_assembler.assemble(
             AssembleInvestigationCommand(
-                scenario_overview=build_scenario_overview(scenario_result.scenario),
+                scenario_overview=build_scenario_overview(scenario),
                 text_result=text_result,
                 reasoning_result=reasoning_result,
             ),

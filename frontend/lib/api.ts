@@ -10,7 +10,9 @@ import type {
   DashboardStatsResponse,
   DatasetInfo,
   DatasetListResponse,
+  FraudScenario,
   GetCaseResponse,
+  GetScenarioResponse,
   HealthResponse,
   InvestigationResponse,
   ListAlertsResponse,
@@ -97,6 +99,13 @@ export async function fetchScenarioCatalog(
   return fetchJson<ScenarioCatalogResponse>(`${browserApiBaseUrl}/scenarios`, undefined, token);
 }
 
+export async function fetchScenarioDetail(
+  token: string,
+  scenarioId: string,
+): Promise<GetScenarioResponse> {
+  return fetchJson<GetScenarioResponse>(`${browserApiBaseUrl}/scenarios/${scenarioId}`, undefined, token);
+}
+
 export async function fetchInvestigationClient(
   token: string,
   scenarioId: string,
@@ -106,6 +115,20 @@ export async function fetchInvestigationClient(
     {
       method: "POST",
       body: JSON.stringify({ scenario_id: scenarioId }),
+    },
+    token,
+  );
+}
+
+export async function runDraftInvestigation(
+  token: string,
+  scenario: FraudScenario,
+): Promise<InvestigationResponse> {
+  return fetchJson<InvestigationResponse>(
+    `${browserApiBaseUrl}/investigations/draft`,
+    {
+      method: "POST",
+      body: JSON.stringify({ scenario }),
     },
     token,
   );

@@ -63,6 +63,9 @@ export function Dashboard({
     visibleScenarios,
     searchQuery,
     deferredSignals,
+    draftScenarioJson,
+    draftScenarioError,
+    activeInvestigationCanCreateCase,
     cases,
     selectedCaseId,
     activeCaseDetail,
@@ -89,9 +92,13 @@ export function Dashboard({
     setPassword,
     setActiveView,
     setSearchQuery,
+    setDraftScenarioJson,
     handleLogin,
     handleLogout,
     handleScenarioSelection,
+    handleRunSelectedScenario,
+    handleRunDraftScenario,
+    handleLoadScenarioIntoDraft,
     handleCreateCase,
     handleAcknowledgeAlert,
     handleCaseSelection,
@@ -188,11 +195,18 @@ export function Dashboard({
               visibleScenarios={visibleScenarios}
               searchQuery={searchQuery}
               deferredSignals={deferredSignals}
+              draftScenarioJson={draftScenarioJson}
+              draftScenarioError={draftScenarioError}
+              activeInvestigationCanCreateCase={activeInvestigationCanCreateCase}
               backendHealth={backendHealth}
               currencyFormatter={currencyFormatter}
               dateFormatter={dateFormatter}
               onSearchQueryChange={setSearchQuery}
+              onDraftScenarioJsonChange={setDraftScenarioJson}
               onScenarioSelection={handleScenarioSelection}
+              onRunSelectedScenario={handleRunSelectedScenario}
+              onRunDraftScenario={handleRunDraftScenario}
+              onLoadScenarioIntoDraft={handleLoadScenarioIntoDraft}
               onCreateCase={handleCreateCase}
             />
           )}

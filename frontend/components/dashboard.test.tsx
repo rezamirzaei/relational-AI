@@ -25,7 +25,9 @@ import {
   fetchDatasets,
   fetchInvestigationClient,
   fetchScenarioCatalog,
+  fetchScenarioDetail,
   loginOperator,
+  runDraftInvestigation,
   updateCaseStatus,
 } from "@/lib/api";
 import type {
@@ -65,7 +67,9 @@ vi.mock("@/lib/api", () => ({
   fetchDatasets: vi.fn(),
   fetchInvestigationClient: vi.fn(),
   fetchScenarioCatalog: vi.fn(),
+  fetchScenarioDetail: vi.fn(),
   loginOperator: vi.fn(),
+  runDraftInvestigation: vi.fn(),
   updateAlertStatus: vi.fn(),
   updateCaseStatus: vi.fn(),
   uploadDataset: vi.fn(),
@@ -87,7 +91,9 @@ const mockedFetchDatasets = vi.mocked(fetchDatasets);
 const mockedFetchDashboardStats = vi.mocked(fetchDashboardStats);
 const mockedFetchInvestigationClient = vi.mocked(fetchInvestigationClient);
 const mockedFetchScenarioCatalog = vi.mocked(fetchScenarioCatalog);
+const mockedFetchScenarioDetail = vi.mocked(fetchScenarioDetail);
 const mockedLoginOperator = vi.mocked(loginOperator);
+const mockedRunDraftInvestigation = vi.mocked(runDraftInvestigation);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 
 const backendHealth: HealthResponse = {
@@ -918,7 +924,9 @@ describe("Dashboard", () => {
     mockedFetchDashboardStats.mockReset();
     mockedFetchInvestigationClient.mockReset();
     mockedFetchScenarioCatalog.mockReset();
+    mockedFetchScenarioDetail.mockReset();
     mockedLoginOperator.mockReset();
+    mockedRunDraftInvestigation.mockReset();
     mockedUpdateCaseStatus.mockReset();
 
     // Default implementations for new APIs
@@ -947,6 +955,23 @@ describe("Dashboard", () => {
     mockedFetchCases.mockResolvedValue({ cases: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchAlerts.mockResolvedValue({ alerts: [], total_count: 0, page: 1, page_size: 20 });
     mockedFetchDatasets.mockResolvedValue({ datasets: [] });
+    mockedFetchScenarioDetail.mockResolvedValue({
+      scenario: {
+        scenario_id: "draft-scenario",
+        title: "Draft scenario",
+        industry: "finance",
+        summary: "summary",
+        hypothesis: "hypothesis",
+        tags: ["fraud"],
+        customers: [],
+        accounts: [],
+        devices: [],
+        merchants: [],
+        transactions: [],
+        investigator_notes: [],
+      },
+    });
+    mockedRunDraftInvestigation.mockResolvedValue(buildInvestigationResponse(scenarios[0]));
     mockedFetchAnalysisResult.mockResolvedValue(datasetAnalysisResponse);
     mockedFetchAnalysisExplanation.mockResolvedValue(datasetAnalysisExplanation);
     mockedFetchCase.mockResolvedValue(caseDetailFromAlertResponse);
@@ -1012,6 +1037,7 @@ describe("Dashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Scenarios/i }));
     fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Run selected scenario" }));
 
     await waitFor(() => {
       expect(mockedFetchInvestigationClient).toHaveBeenCalledWith(
@@ -1036,6 +1062,7 @@ describe("Dashboard", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /travel account takeover/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Run selected scenario" }));
 
     await waitFor(() => {
       expect(mockedFetchInvestigationClient).toHaveBeenCalledWith(
@@ -1095,6 +1122,7 @@ describe("Dashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Scenarios/i }));
     fireEvent.click(screen.getByRole("button", { name: /synthetic identity gift card ring/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Run selected scenario" }));
 
     await waitFor(() => {
       expect(screen.getByText("Potential shared-device coordination ring")).toBeInTheDocument();
@@ -1117,6 +1145,61 @@ describe("Dashboard", () => {
           "Synthetic Identity Gift Card Ring: Potential shared-device coordination ring",
         ),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("runs an ad hoc draft scenario from the editor", async () => {
+    mockedLoginOperator.mockResolvedValue(buildLoginResponse(analystPrincipal));
+    mockedFetchScenarioCatalog.mockResolvedValue({ scenarios });
+
+    render(
+      <Dashboard
+        backendHealth={backendHealth}
+        bootstrapError={null}
+        workspaceGuide={workspaceGuide}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "AnalystPassword123!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Scenarios/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Scenarios/i }));
+    fireEvent.change(screen.getByLabelText("Draft scenario JSON"), {
+      target: {
+        value: JSON.stringify(
+          {
+            scenario_id: "draft-scenario",
+            title: "Draft scenario",
+            industry: "finance",
+            summary: "summary",
+            hypothesis: "hypothesis",
+            tags: ["fraud"],
+            customers: [],
+            accounts: [],
+            devices: [],
+            merchants: [],
+            transactions: [],
+            investigator_notes: [],
+          },
+          null,
+          2,
+        ),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run draft scenario" }));
+
+    await waitFor(() => {
+      expect(mockedRunDraftInvestigation).toHaveBeenCalled();
+      expect(screen.getByText("Draft investigations are temporary. Load them into the scenario catalog flow before creating a linked case.")).toBeInTheDocument();
     });
   });
 

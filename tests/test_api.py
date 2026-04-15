@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from relational_fraud_intelligence.app import create_app
+from relational_fraud_intelligence.infrastructure.seed.scenarios import build_seed_scenarios
 from relational_fraud_intelligence.settings import AppSettings
 
 
@@ -150,6 +151,29 @@ async def test_investigate_scenario_returns_case_payload_for_authenticated_opera
     assert payload["investigation"]["scenario"]["scenario_id"] == "travel-ato-escalation"
     assert payload["investigation"]["provider_summary"]["active_text_provider"] == "keyword"
     assert payload["investigation"]["investigation_leads"]
+
+
+async def test_investigate_draft_scenario_accepts_ad_hoc_payload() -> None:
+    draft_scenario = build_seed_scenarios()[0].model_copy(
+        update={
+            "scenario_id": "draft-synthetic-identity-ring",
+            "title": "Draft Synthetic Identity Ring",
+        }
+    )
+
+    with TestClient(create_app()) as client:
+        access_token = authenticate(client, username="analyst", password="AnalystPassword123!")
+        response = client.post(
+            "/api/v1/investigations/draft",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"scenario": draft_scenario.model_dump(mode="json")},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["investigation"]["scenario"]["scenario_id"] == "draft-synthetic-identity-ring"
+    assert payload["investigation"]["summary"]
+    assert payload["investigation"]["provider_summary"]["active_reasoning_provider"]
 
 
 async def test_scenario_investigation_can_create_a_linked_case() -> None:

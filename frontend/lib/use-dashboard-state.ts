@@ -25,7 +25,9 @@ import {
   fetchDatasets,
   fetchInvestigationClient,
   fetchScenarioCatalog,
+  fetchScenarioDetail,
   loginOperator,
+  runDraftInvestigation,
   updateAlertStatus,
   updateCaseStatus,
   uploadDataset,
@@ -38,6 +40,7 @@ import type {
   DatasetInfo,
   FraudAlert,
   FraudCase,
+  FraudScenario,
   GetCaseResponse,
   HealthResponse,
   InvestigationResponse,
@@ -83,6 +86,9 @@ export type DashboardState = {
   visibleScenarios: ScenarioOverview[];
   searchQuery: string;
   deferredSignals: InvestigationResponse["investigation"]["text_signals"];
+  draftScenarioJson: string;
+  draftScenarioError: string | null;
+  activeInvestigationCanCreateCase: boolean;
 
   // Cases & Alerts
   cases: FraudCase[];
@@ -116,9 +122,13 @@ export type DashboardActions = {
   setPassword: (v: string) => void;
   setActiveView: (v: ActiveView) => void;
   setSearchQuery: (v: string) => void;
+  setDraftScenarioJson: (v: string) => void;
   handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleLogout: () => void;
-  handleScenarioSelection: (scenarioId: string) => Promise<void>;
+  handleScenarioSelection: (scenarioId: string) => void;
+  handleRunSelectedScenario: () => Promise<void>;
+  handleRunDraftScenario: () => Promise<void>;
+  handleLoadScenarioIntoDraft: () => Promise<void>;
   handleCreateCase: () => Promise<void>;
   handleAcknowledgeAlert: (alertId: string) => Promise<void>;
   handleCaseSelection: (caseId: string) => Promise<void>;
@@ -136,6 +146,77 @@ export type DashboardActions = {
 // ---------------------------------------------------------------------------
 
 const tokenStorageKey = "rfi.operator-token";
+
+function createDraftScenarioTemplate(): string {
+  return JSON.stringify(
+    {
+      scenario_id: "draft-scenario",
+      title: "Draft scenario",
+      industry: "finance",
+      summary: "Describe the suspicious pattern you want to investigate.",
+      hypothesis: "State what coordination, fraud pattern, or risk you expect to surface.",
+      tags: ["fraud", "device-ring"],
+      customers: [
+        {
+          customer_id: "cust-1",
+          full_name: "Alex Morgan",
+          country_code: "US",
+          segment: "consumer",
+          declared_income_band: "$50k-$75k",
+          linked_account_ids: ["acct-1"],
+          linked_device_ids: ["dev-1"],
+          watchlist_tags: [],
+        },
+      ],
+      accounts: [
+        {
+          account_id: "acct-1",
+          customer_id: "cust-1",
+          opened_at: "2026-03-01T09:00:00Z",
+          current_balance: 1250,
+          average_monthly_inflow: 2400,
+          chargeback_count: 0,
+          manual_review_count: 0,
+        },
+      ],
+      devices: [
+        {
+          device_id: "dev-1",
+          fingerprint: "fp-1",
+          ip_country_code: "US",
+          linked_customer_ids: ["cust-1"],
+          trust_score: 0.45,
+        },
+      ],
+      merchants: [
+        {
+          merchant_id: "merch-1",
+          display_name: "Gift Card World",
+          country_code: "US",
+          category: "digital_goods",
+          description: "Gift card marketplace",
+        },
+      ],
+      transactions: [
+        {
+          transaction_id: "txn-1",
+          customer_id: "cust-1",
+          account_id: "acct-1",
+          device_id: "dev-1",
+          merchant_id: "merch-1",
+          occurred_at: "2026-03-14T10:05:00Z",
+          amount: 980,
+          currency: "USD",
+          channel: "wallet",
+          status: "review",
+        },
+      ],
+      investigator_notes: [],
+    },
+    null,
+    2,
+  );
+}
 
 function defaultViewForRole(role: OperatorPrincipal["role"]): ActiveView {
   return role === "admin" ? "overview" : "analyze";
@@ -178,8 +259,11 @@ export function useDashboardState(
   const [analysisDetailError, setAnalysisDetailError] = useState<string | null>(null);
   const [analysisExplanationError, setAnalysisExplanationError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [draftScenarioJson, setDraftScenarioJson] = useState(createDraftScenarioTemplate);
+  const [draftScenarioError, setDraftScenarioError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [activeInvestigationMode, setActiveInvestigationMode] = useState<"catalog" | "draft" | null>(null);
 
   // Derived values
   const deferredQuery = useDeferredValue(searchQuery);
@@ -190,7 +274,10 @@ export function useDashboardState(
     scenarios.find((s) => s.scenario_id === selectedScenarioId) ?? scenarios[0] ?? null;
   const activeInvestigation = investigation?.investigation ?? null;
   const activeInvestigationMatchesSelection =
+    activeInvestigationMode === "catalog" &&
     activeInvestigation?.scenario.scenario_id === selectedScenarioId;
+  const activeInvestigationCanCreateCase =
+    activeInvestigationMode === "catalog" && activeInvestigation !== null;
   const selectedDataset =
     datasets.find((d) => d.dataset_id === selectedDatasetId) ?? null;
   const activeAnalysisMatchesSelection = activeAnalysis?.dataset_id === selectedDatasetId;
@@ -271,6 +358,9 @@ export function useDashboardState(
     setScenarios(scenarioCatalog.scenarios);
     setSelectedScenarioId(firstScenarioId);
     setInvestigation(null);
+    setActiveInvestigationMode(null);
+    setDraftScenarioJson(createDraftScenarioTemplate());
+    setDraftScenarioError(null);
     setAuditEvents(nextAuditEvents);
     setDashboardStats(nextStats);
     setCases(nextCases);
@@ -331,13 +421,28 @@ export function useDashboardState(
     if (statsResult.status === "fulfilled" && statsResult.value) setDashboardStats(statsResult.value.stats);
   }
 
-  async function loadInvestigation(token: string, scenarioId: string) {
+  async function loadInvestigation(
+    token: string,
+    scenarioId: string,
+    mode: "catalog" | "draft" = "catalog",
+  ) {
     try {
       const nextInvestigation = await fetchInvestigationClient(token, scenarioId);
       setInvestigation(nextInvestigation);
+      setActiveInvestigationMode(mode);
       await refreshWorkspaceSlices(token, { alerts: true, audit: true, stats: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not load investigation.");
+    }
+  }
+
+  async function loadDraftInvestigation(token: string, scenario: FraudScenario) {
+    try {
+      const nextInvestigation = await runDraftInvestigation(token, scenario);
+      setInvestigation(nextInvestigation);
+      setActiveInvestigationMode("draft");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not run the draft scenario.");
     }
   }
 
@@ -414,6 +519,9 @@ export function useDashboardState(
     setScenarios([]);
     setSelectedScenarioId(null);
     setInvestigation(null);
+    setActiveInvestigationMode(null);
+    setDraftScenarioJson(createDraftScenarioTemplate());
+    setDraftScenarioError(null);
     setAuditEvents([]);
     setCases([]);
     setSelectedCaseId(null);
@@ -463,19 +571,59 @@ export function useDashboardState(
     clearSessionState(null);
   }
 
-  async function handleScenarioSelection(scenarioId: string) {
-    if (!authToken) return;
+  function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
     setActiveView("investigate");
     setErrorMessage(null);
+  }
+
+  async function handleRunSelectedScenario() {
+    if (!authToken || !selectedScenarioId) return;
+    setActiveView("investigate");
+    setErrorMessage(null);
     setInvestigation(null);
+    setActiveInvestigationMode(null);
     startTransition(() => {
-      void loadInvestigation(authToken, scenarioId);
+      void loadInvestigation(authToken, selectedScenarioId, "catalog");
+    });
+  }
+
+  async function handleLoadScenarioIntoDraft() {
+    if (!authToken || !selectedScenarioId) return;
+    setActiveView("investigate");
+    setErrorMessage(null);
+    setDraftScenarioError(null);
+    try {
+      const result = await fetchScenarioDetail(authToken, selectedScenarioId);
+      setDraftScenarioJson(JSON.stringify(result.scenario, null, 2));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not load scenario details.");
+    }
+  }
+
+  async function handleRunDraftScenario() {
+    if (!authToken) return;
+    setActiveView("investigate");
+    setErrorMessage(null);
+    setDraftScenarioError(null);
+
+    let parsedScenario: FraudScenario;
+    try {
+      parsedScenario = JSON.parse(draftScenarioJson) as FraudScenario;
+    } catch {
+      setDraftScenarioError("Draft scenario JSON is invalid. Fix the syntax and try again.");
+      return;
+    }
+
+    setInvestigation(null);
+    setActiveInvestigationMode(null);
+    startTransition(() => {
+      void loadDraftInvestigation(authToken, parsedScenario);
     });
   }
 
   async function handleCreateCase() {
-    if (!authToken || !activeInvestigation) return;
+    if (!authToken || !activeInvestigation || !activeInvestigationCanCreateCase) return;
     try {
       const result = await createCaseFromInvestigation(
         authToken,
@@ -670,6 +818,9 @@ export function useDashboardState(
     visibleScenarios,
     searchQuery,
     deferredSignals,
+    draftScenarioJson,
+    draftScenarioError,
+    activeInvestigationCanCreateCase,
     cases,
     selectedCaseId,
     activeCaseDetail,
@@ -697,9 +848,13 @@ export function useDashboardState(
     setPassword,
     setActiveView: changeView,
     setSearchQuery,
+    setDraftScenarioJson,
     handleLogin,
     handleLogout,
     handleScenarioSelection,
+    handleRunSelectedScenario,
+    handleRunDraftScenario,
+    handleLoadScenarioIntoDraft,
     handleCreateCase,
     handleAcknowledgeAlert,
     handleCaseSelection,

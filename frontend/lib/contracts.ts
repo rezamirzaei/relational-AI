@@ -29,6 +29,43 @@ export type ScenarioOverview = {
   baseline_risk: RiskLevel;
 };
 
+export type CustomerProfile = {
+  customer_id: string;
+  full_name: string;
+  country_code: string;
+  segment: string;
+  declared_income_band: string;
+  linked_account_ids: string[];
+  linked_device_ids: string[];
+  watchlist_tags: string[];
+};
+
+export type AccountProfile = {
+  account_id: string;
+  customer_id: string;
+  opened_at: string;
+  current_balance: number;
+  average_monthly_inflow: number;
+  chargeback_count: number;
+  manual_review_count: number;
+};
+
+export type DeviceProfile = {
+  device_id: string;
+  fingerprint: string;
+  ip_country_code: string;
+  linked_customer_ids: string[];
+  trust_score: number;
+};
+
+export type MerchantProfile = {
+  merchant_id: string;
+  display_name: string;
+  country_code: string;
+  category: string;
+  description: string;
+};
+
 export type RuleHit = {
   rule_code: string;
   title: string;
@@ -152,6 +189,25 @@ export type InvestigationResponse = {
 
 export type ScenarioCatalogResponse = {
   scenarios: ScenarioOverview[];
+};
+
+export type FraudScenario = {
+  scenario_id: string;
+  title: string;
+  industry: string;
+  summary: string;
+  hypothesis: string;
+  tags: ScenarioTag[];
+  customers: CustomerProfile[];
+  accounts: AccountProfile[];
+  devices: DeviceProfile[];
+  merchants: MerchantProfile[];
+  transactions: TransactionRecord[];
+  investigator_notes: InvestigatorNote[];
+};
+
+export type GetScenarioResponse = {
+  scenario: FraudScenario;
 };
 
 export type OperatorPrincipal = {

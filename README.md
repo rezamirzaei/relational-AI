@@ -595,6 +595,11 @@ stateDiagram-v2
 
 Reference scenarios are useful for rule validation, demos, graph testing, and deterministic fraud narratives. They are not the main data-entry path.
 
+The investigation workspace now supports two simpler paths:
+
+- **Library mode** for seeded scenarios you can select and run directly.
+- **Draft mode** for ad hoc scenario JSON that you can define, edit, and run without persisting first.
+
 ```mermaid
 sequenceDiagram
     participant Analyst
@@ -607,16 +612,16 @@ sequenceDiagram
     participant Alerts as AlertService
     participant Cases as CaseService
 
-    Analyst->>UI: Choose seeded scenario
-    UI->>API: POST /investigations
-    API->>Investigation: investigate(scenario_id)
+    Analyst->>UI: Choose seeded scenario or edit draft JSON
+    UI->>API: POST /investigations or POST /investigations/draft
+    API->>Investigation: investigate(scenario_id or scenario draft)
     Investigation->>Text: extract text signals
     Investigation->>Reasoner: compute rule-based risk
     Investigation->>Graph: analyze scenario relationships
     Investigation-->>API: InvestigationCase
-    API->>Alerts: create alerts when score >= 35
+    API->>Alerts: create alerts when score >= 35 for catalog scenarios
     API-->>UI: investigation result
-    Analyst->>UI: Persist as case if needed
+    Analyst->>UI: Persist catalog scenario as case if needed
     UI->>API: POST /investigations/{id}/case
     API->>Cases: create case with snapshot
 ```

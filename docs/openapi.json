@@ -1665,7 +1665,97 @@
         "title": "FraudCase",
         "type": "object"
       },
-      "FraudScenario": {
+      "FraudScenario-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountProfile"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerProfile"
+            },
+            "title": "Customers",
+            "type": "array"
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceProfile"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "industry": {
+            "title": "Industry",
+            "type": "string"
+          },
+          "investigator_notes": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigatorNote"
+            },
+            "title": "Investigator Notes",
+            "type": "array"
+          },
+          "merchants": {
+            "items": {
+              "$ref": "#/components/schemas/MerchantProfile"
+            },
+            "title": "Merchants",
+            "type": "array"
+          },
+          "scenario_id": {
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioTag"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionRecord"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "title",
+          "industry",
+          "summary",
+          "hypothesis",
+          "tags",
+          "customers",
+          "accounts",
+          "devices",
+          "merchants",
+          "transactions",
+          "investigator_notes"
+        ],
+        "title": "FraudScenario",
+        "type": "object"
+      },
+      "FraudScenario-Output": {
         "additionalProperties": false,
         "properties": {
           "accounts": {
@@ -1876,7 +1966,7 @@
         "additionalProperties": false,
         "properties": {
           "scenario": {
-            "$ref": "#/components/schemas/FraudScenario"
+            "$ref": "#/components/schemas/FraudScenario-Output"
           }
         },
         "required": [
@@ -2094,6 +2184,19 @@
           "scenario_id"
         ],
         "title": "InvestigateScenarioCommand",
+        "type": "object"
+      },
+      "InvestigateScenarioDraftCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/FraudScenario-Input"
+          }
+        },
+        "required": [
+          "scenario"
+        ],
+        "title": "InvestigateScenarioDraftCommand",
         "type": "object"
       },
       "InvestigateScenarioResult": {
@@ -4660,6 +4763,53 @@
           }
         ],
         "summary": "Run fraud investigation",
+        "tags": [
+          "Investigations"
+        ]
+      }
+    },
+    "/api/v1/investigations/draft": {
+      "post": {
+        "description": "Executes a full fraud investigation on a caller-supplied scenario draft so analysts can define or edit scenarios without persisting them first.",
+        "operationId": "investigate_draft_scenario_api_v1_investigations_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigateScenarioDraftCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigateScenarioResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run an ad hoc fraud investigation",
         "tags": [
           "Investigations"
         ]
