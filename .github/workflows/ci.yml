@@ -280,7 +280,7 @@ jobs:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
         run: npm --prefix frontend run test:e2e
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -382,7 +382,7 @@ jobs:
             --host http://localhost:8001 \
             --csv=loadtest-results
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: loadtest-results
